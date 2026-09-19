@@ -228,6 +228,11 @@ which is right:
   each, and how to verify;
 - **retrieval agents refuse to serve a `CONFLICTED` section** — they surface the conflict instead. The
   golden set (§10) carries an UNRESOLVED case proving this behavior;
+- **mark the narrowest unit that holds the disputed claim.** A `CONFLICTED` section is refused
+  *wholesale*, so a single disputed value sitting among sound facts takes its neighbours down with
+  it — an agent goes blind to correct knowledge because something nearby is in doubt. If a disputed
+  claim shares a section with undisputed ones, **split it into its own subsection** so only the
+  claim in doubt is withheld. Collateral refusal is a bug, not an abundance of caution;
 - register a one-line flag + pointer in `<domain>-contradictions.md`; the canonical note stays in the
   file that owns the topic.
 
@@ -270,9 +275,23 @@ Every retrieval agent's body states, and every agent is held to:
 - **On `CONFLICTED`:** surface the conflict, serve nothing (§8).
 - **Surface the `verified:` date** on freshness-sensitive facts.
 
-**The golden set** lives at `knowledge/golden-retrieval/<domain>.md` — YAML records of `question:`,
-`expected_file:`, `expected_excerpt:`. Every domain carries **≥2 negative cases** (must refuse to guess),
-**≥1 UNRESOLVED case**, and **≥1 cross-root case**. The golden set updates **in the same commit** as any
+**The golden set** lives at `knowledge/golden-retrieval/<domain>.md`. Each record carries:
+
+```yaml
+- case: positive | negative | unresolved | cross-root
+  question: <what is asked>
+  expected_file: <the file that must answer it>
+  expected_excerpt: <text that must appear, grep-verifiable against expected_file>
+```
+
+`case:` is required — a minimum of "≥2 negative cases" is unenforceable if nothing marks a case as
+negative. For a `negative` case, `expected_file` may be empty and `expected_excerpt` holds the
+refusal the agent must produce.
+
+Every domain carries **≥2 negative cases** (must refuse to guess) and **≥1 UNRESOLVED case**. A
+**cross-root case is required only where the domain actually links across tiers** — a domain with no
+cross-root link cannot have one without fabricating the link, and a golden case invented to satisfy a
+count is worse than an absent one. Where it does not apply, say so in the file. The golden set updates **in the same commit** as any
 file rename or split — an `organize-domain` exit criterion — or the oracle rots.
 
 Two tiers test it, and they are not interchangeable:
