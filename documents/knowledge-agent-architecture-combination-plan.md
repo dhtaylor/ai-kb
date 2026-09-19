@@ -1,9 +1,14 @@
 # Combining the Governed Knowledge Base with a Thin-Agent Fleet — Implementation Plan
 
 **Author:** Dandy Taylor (with Q)
-**Date:** 2026-09-18
-**Status:** Advisory reference design (hardened by a five-lens adversarial review — findings folded in-place
-and tagged `(hardening — <severity>)`).
+**Date:** 2026-09-18 · **Revised:** 2026-09-19
+**Status:** **Partly built.** Phases 0 and 1 complete, the behaviour layer built and tested, Phase 2
+half done. Originally hardened by a five-lens adversarial review (findings tagged
+`(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
+implementation proved, disproved and cost.
+
+> **Read §9 first if you are picking this up cold.** Three things in the sections below were wrong
+> in ways that only appeared when the thing was built, and §1 in particular has been rewritten.
 
 This is the next evolution of a governed knowledge base: turning a passive, well-curated **reference library**
 into an **actionable system** — a thin agent layer that retrieves from the KB and acts, plus a lifecycle that
@@ -48,22 +53,37 @@ exactly what the governed substrate prevents.
 
 ## 1. Target architecture
 
-```
-knowledge/  (governed substrate — the ONLY place facts live)
-  semantic/<domain>/   INDEX + single-topic files + provenance + contradictions.md
-  sources/             citation stubs for external artifacts
-  procedural/          lessons, runbooks
-  + verified: dates    (currency stamping in frontmatter)
-  + golden-retrieval/  (question -> expected-file eval set)
+> **Rewritten 2026-09-19.** The original drew one tree holding both the governed substrate and the
+> behaviour layer. Building it showed that arrangement violates §0 in the one place the separation
+> most needs to be visible. Three repository kinds, not one tree:
 
-behavior layer  (thin — NO facts, NO secrets)
-  agents/     domain workers: least-privilege tools + "load knowledge/…, descend, cite, act"
-  commands/   procedures with confirmation gates for state-changing ops
-  orchestrator (thin) -> routes to domain workers
+```
+engine  (behaviour ONLY — no domains, no facts)
+  CONVENTIONS.md        the contract every library conforms to
+  scripts/              check-kb, check-scope, check-secrets, embedded-fact lint
+  plugins/<tools>/      skills, agents, commands — registered by consumers, never
+                        inherited by directory accident
+  documents/decisions/  ADRs; reached by relative link, same repo
+  kb/                   created by the engine, NEVER tracked by it
+
+domain library  (content ONLY — one repository per domain, portable)
+  INDEX.md              the domain router IS the repo root; no tier chain above it
+  <topic files>         gestalt-sized, per-section provenance + currency
+  sources/              its own citation stubs
+  documents/            archived evidence it was folded from
+  <domain>-golden.md    its own retrieval oracle
+
+project knowledge  (repo tier — inside each project repo, travels with the clone)
 
 secrets       vault / env only, referenced by name, never inlined
-guardrails    secret scan over BOTH trees (pre-commit + server-side); least-privilege enforcement for prod ops
+guardrails    secret scan (committer-side AND server-side) + embedded-fact lint over the
+              behaviour layer; least-privilege enforcement for prod ops
 ```
+
+**The rule that makes it hold:** the engine holds no facts, a library holds no behaviour, and a
+library is self-contained enough to be cloned onto a machine with neither an engine nor a sibling
+library beside it. Anything reaching across a repository boundary uses a **repo-qualified
+reference** (`ai-kb:CONVENTIONS.md`), never a relative path — see §9.4.
 
 ---
 
@@ -533,3 +553,118 @@ drifted facts surface as a queue rather than rotting silently.
 5. **Safe to start now (non-destructive):** Phase 0 guardrails (secret scan + history plan + resolution
    acceptance test) and Phase 1 mapping (with `scope:` tiers, multi-domain flags, service-account tiers) plus
    the existing-KB scope audit.
+
+---
+
+## 9. Findings from implementation (2026-09-19)
+
+What building this proved, disproved and cost. Recorded because most of it was invisible from
+reading — including from reading this document, which was wrong in three structural ways that only
+surfaced on contact.
+
+### 9.1 The pattern, stated once
+
+**Almost nothing important was found by inspection.** Every defect below was found by running
+something and checking the result against what it claimed. Code that read correctly exited with the
+wrong status; a contract that read consistently contradicted itself; skills that read as complete
+were underspecified in ways a fresh reader hit immediately. The single highest-value technique was
+handing an artifact to someone who had not written it and asking what was ambiguous.
+
+### 9.2 The Critical assumption was wrong in the way that mattered
+
+§2 flagged as Critical that it was unproven whether a shell environment variable reaches an agent's
+execution context, and required an acceptance test. It does reach it — **and that was not the
+problem.** The **Read tool does not expand environment variables**, and its failure message
+volunteers the working directory, which invites a relative-path retry that succeeds by coincidence
+in one workspace and fails silently everywhere else. The same class of failure the test existed to
+rule out, relocated from the variable to the tool.
+
+Resolution: the variable lives in user-level settings and a **SessionStart hook injects resolved
+absolute paths** into context. No file anywhere holds a literal path; no agent handles the variable.
+
+### 9.3 Behaviour discovery stops at a repository root
+
+Absent from this plan entirely, and it determines where behaviour can live. Claude Code walks **up**
+from the working directory for agents, skills and commands, and **stops at the repository root** —
+it never descends. So behaviour placed in a workspace is reachable from exactly one directory, and
+anything that must reach elsewhere travels by explicit registration. This is why the behaviour layer
+is a **plugin**, not a folder: a plugin works identically whether the consumer sits beside the
+engine or anywhere else on disk, whereas inheritance-by-nesting works only in the layout that
+produced it.
+
+An unexpected dividend: a `directory`-sourced plugin is read **in place**, not copied to a cache. So
+behaviour and the facts it operates on are the same working tree by construction and **cannot
+drift** — which is the argument for rejecting a git source even after the engine gained a remote.
+
+### 9.4 Cross-repository citation is structural, not incidental
+
+The plan handles cross-root `[[slug]]` resolution but never addresses citing an **artifact** in
+another repository. Splitting content into per-domain libraries makes this unavoidable. Two rules,
+in order:
+
+- **Evidence travels with the domain it was folded from** — archive it in the library. Not a
+  single-canonical-home violation: **the rule is one home per fact, not per document.** A fact
+  stated twice drifts because someone edits a copy; an archived artifact does not, because if it
+  changes it is a new artifact with a new ingestion date.
+- **What cannot travel gets a repo-qualified reference** (`<repo>:<path>`), **never a relative path
+  across a boundary** — that resolves only while two repos sit in the expected layout.
+
+Extracting the first library broke eight `[[adr-…]]` links on contact, which is how the rule was
+arrived at rather than theorised.
+
+### 9.5 Contract defects found only by running the contract
+
+Each of these read as coherent and was self-contradictory in use:
+
+| Defect | Why it mattered |
+|---|---|
+| `CONFLICTED` marked at **section** granularity | Refusal is wholesale, so one disputed value took its undisputed neighbours offline — an agent blinded to correct knowledge because something nearby was in doubt |
+| Golden set required `≥1 UNRESOLVED` **unconditionally** | A domain with no contradiction could satisfy it only by manufacturing one |
+| The golden-set record schema had **no field** marking a case negative/unresolved | The minimum counts it demanded were unenforceable as written |
+| `verified:` floor undefined when **no section carries a stamp** | After a fold marked every claim disputed, frontmatter kept a date certifying nothing |
+| `CONFLICTED` carried **no date** | Its age drives escalation, and nothing recorded when the dispute began |
+| Golden sets named `<domain>.md` | **A folder name is a slug too** — so every golden set collided with its own domain folder. Guaranteed, once per domain |
+| `name` must match filename, but every folder has an `INDEX.md` | The contract violated its own rule on day one; path-addressed files needed an explicit exemption |
+
+### 9.6 Guardrail defects found only by running the guardrails
+
+- **A scanner printed every finding and exited 0.** Piping into a function put the counter in a
+  subshell. It warned, then waved the commit through — worse than no guardrail, because it reads as
+  protection.
+- **Scripts were committed non-executable.** `core.fileMode` is false on this mount, so git recorded
+  644 despite the disk showing otherwise, and **git skips a non-executable hook silently**. Every
+  guardrail was inert for anyone but the authoring working copy. Only cloning and attempting a bad
+  commit surfaced it; `ls -l` looked perfect throughout.
+- **`meditate`'s own output failed the check `meditate` mandates.** Following it literally produced a
+  queue file with no frontmatter, which the next sweep would report as an orphan.
+
+### 9.7 What the plan got right, confirmed under test
+
+- The **fold rules** hold. Against a fixture rigged with nine corruptions a fold is tempted to make,
+  all nine were resisted: values verbatim, qualifiers preserved, two behaviours not merged into one
+  generalisation, a planted contradiction flagged rather than resolved, a documented gap recorded
+  rather than filled, and a deployment fact kept out of the general tier.
+- **Detection automated, mutation gated** holds in practice: a sweep found seven planted decay modes
+  and fixed none of them, including an empty routed leaf in plain sight.
+- **Refusal discipline** holds: a distillation promoted two facts and refused six, including a
+  single-session observation it declined to promote to product tier.
+
+### 9.8 What is still not built
+
+The **entire retrieval half**. There are no thin agents, no orchestrator, no routing check and no
+answer-grounding eval. The golden set exists and has never been run against anything. **Nothing yet
+proves an agent retrieves rather than answering from memory** — which is the one claim this whole
+architecture rests on.
+
+Also absent: `check-scope`, cross-library `[[slug]]` resolution, the slug→path manifest, external
+`Source:` URL liveness checks, the Verifier, the Watcher, and the bootstrap command that would
+provision a new machine. Of §13's six checks, three are built.
+
+### 9.9 On sequence
+
+The topology changed three times in one session — one repository, then three, then engine-plus-
+libraries — each time driven by a finding rather than a preference. §6 says to settle the topology
+at Phase 1 exit, before the pilot hardcodes paths against it. That was right in spirit and
+unachievable in fact: **the topology could not be settled without building enough to discover what
+was wrong with it.** The mitigation that actually worked was keeping every decision in an ADR, so
+each change amended a recorded position rather than silently contradicting one.
