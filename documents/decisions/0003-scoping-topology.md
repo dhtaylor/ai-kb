@@ -5,6 +5,12 @@
 - **Deciders:** Dandy Taylor
 - **Phase:** 1 (inventory, map & decide)
 
+> **Amended 2026-09-19 by [ADR-0006](0006-behaviour-distribution.md).** This ADR placed the general
+> tier at `ws_v1/knowledge/` as a directory inside the workspace repository. It is now its own git
+> repository at that path, carrying the decision records, guardrails and behaviour with it. The
+> locations below are unchanged — `$KB_GENERAL_ROOT/knowledge/` still resolves identically — but the
+> repository boundary has moved, and the reasoning about what a project can reach is extended there.
+
 ## Context and problem statement
 
 Knowledge falls into tiers with different owners and different rates of change, and getting
