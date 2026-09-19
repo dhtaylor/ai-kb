@@ -45,6 +45,19 @@ Every fact carries a `scope:`. The classification test, asked when the fact is w
 | `general` | Domain fundamentals, engine/platform behavior | general root |
 | *(personal)* | An individual's working style and private lessons | `~/.claude/` — **not** team-shared, never in either KB |
 
+**`product:<vendor>` and `general` are not separated by the words above.** For a single-vendor
+engine, "that vendor's product behavior" and "domain fundamentals" describe the same sentence. The
+test that does separate them:
+
+> *Would this fact stop being true if you swapped the vendor or product?*
+
+**Yes → `product:<vendor>`** — how a specific database implements snapshot isolation.
+**No → `general`** — what serializable isolation means, or what the standard requires.
+
+They are not interchangeable: §9 applies different promotion guards, and a vendor fact filed as
+`general` is a claim about the whole world inferred from one product. Never classify from the
+vocabulary a requester happened to use.
+
 **The three homes, and the one rule that makes them work:**
 
 - **General** — `$KB_GENERAL_ROOT/knowledge/`. One copy per machine, owned by no single project.

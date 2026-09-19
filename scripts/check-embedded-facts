@@ -25,7 +25,7 @@ Exit 0 clean, 1 on any finding.
 """
 import pathlib, re, sys
 
-DEFAULT_DIRS = [".claude/agents", ".claude/commands"]
+DEFAULT_DIRS = [".claude/agents", ".claude/commands", ".claude/skills"]
 
 RULES = [
     ("absolute path",
