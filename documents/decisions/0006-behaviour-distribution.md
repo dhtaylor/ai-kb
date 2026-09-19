@@ -102,11 +102,26 @@ between that and the absent CI, the workspace is guarded by convention rather th
 holds a settings file, a gitignore and a hook, so the exposure is small; it is not zero, and it is
 recorded rather than papered over.
 
-**Open, and genuinely unknown.** The marketplace path is written relative (`./knowledge`). If Claude
-Code resolves it against the settings file's own root, the workspace is machine-independent. If it
-demands an absolute path, this becomes another hardcoded path of exactly the kind the contract §1
-forbids everywhere else, and it joins the bootstrap command that still does not exist. **Not
-tested** — it needs a session restart.
+**Verified 2026-09-19 by session restart — both open questions closed.**
+
+*The relative path resolves.* `"path": "./knowledge"` in project settings is resolved against the
+project root. The workspace settings file stays machine-independent and adds no hardcoded path. The
+plugin registered and its five skills loaded, namespaced `knowledge-tools:<skill>`, with no
+`.claude/skills` present in the workspace to supply them — so they demonstrably came from the plugin
+rather than from a directory that happened to be adjacent.
+
+*Registration materialises an absolute path in machine state, not in the repo.*
+`~/.claude/plugins/known_marketplaces.json` records the resolved
+`/mnt/c/workspaces/ws_v1/knowledge`. That is per-machine state derived at registration time — the
+same category as `KB_GENERAL_ROOT` and the hook, and the same bootstrap step. Nothing committed
+holds it.
+
+*The plugin is read in place, and this is the load-bearing detail.* Its `installLocation` is the
+knowledge repository itself, not a copy under `~/.claude/plugins/cache/`. The behaviour-versus-facts
+lockstep argued in the amendment above is therefore enforced mechanically rather than by intention:
+the skills being executed and the contract and domains they operate on are literally the same
+working tree. A `git` source would have broken that by handing the consumer a cached copy at some
+other revision.
 
 **A hazard worth naming.** Project `.claude/agents/` **shadow** same-named plugin agents. That is a
 feature — a project can override a general retrieval agent with its own — and a silent-divergence
