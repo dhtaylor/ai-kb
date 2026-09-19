@@ -275,7 +275,10 @@ Every retrieval agent's body states, and every agent is held to:
 - **On `CONFLICTED`:** surface the conflict, serve nothing (§8).
 - **Surface the `verified:` date** on freshness-sensitive facts.
 
-**The golden set** lives at `knowledge/golden-retrieval/<domain>.md`. Each record carries:
+**The golden set** lives at `knowledge/golden-retrieval/<domain>-golden.md`. The `-golden` suffix is
+load-bearing: a **folder name is a slug too** (§5), so a file named `<domain>.md` would collide with the
+`semantic/<domain>/` folder and make `[[<domain>]]` ambiguous in every domain that exists. Each record
+carries:
 
 ```yaml
 - case: positive | negative | unresolved | cross-root

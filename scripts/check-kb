@@ -60,7 +60,8 @@ def main(root: pathlib.Path) -> int:
                 defects.append(f"{f}: dead router link -> {target}")
 
         for link in re.findall(r"\[\[([^\]]+)\]\]", text):
-            if link in EXAMPLE_SLUGS:
+            # <angle brackets> mark a template placeholder, not a real link target.
+            if link in EXAMPLE_SLUGS or "<" in link or ">" in link:
                 continue
             bare = link.split(":", 1)[-1]
             if bare in {p.removesuffix(".md") for p in PATH_ADDRESSED}:
@@ -73,6 +74,16 @@ def main(root: pathlib.Path) -> int:
     for name, count in Counter(f.name for f in files).items():
         if count > 1 and name not in PATH_ADDRESSED:
             defects.append(f"filename '{name}' appears {count}x — slugs must be unique within a root")
+
+    # A folder name is a slug too (CONVENTIONS §5), so a file may not share a directory's name.
+    dir_slugs = {d.name: d for d in root.rglob("*") if d.is_dir()}
+    for f in files:
+        if f.name in PATH_ADDRESSED:
+            continue
+        if f.stem in dir_slugs:
+            defects.append(
+                f"{f}: slug '{f.stem}' collides with directory '{dir_slugs[f.stem]}' — "
+                f"a folder name is a slug too, so [[{f.stem}]] is ambiguous")
 
     for d in defects:
         print(f"FAIL {d}")
