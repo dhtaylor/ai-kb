@@ -396,12 +396,19 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 
 | Check | What it proves | Status |
 |---|---|---|
-| `check-links` | every `[[slug]]` / `Source:` backlink resolves, across both roots | **to build** |
-| `check-scope` | `scope:` values valid; cross-root slug uniqueness holds | **to build** |
-| frontmatter lint | required fields present; dates well-formed | **to build** |
-| embedded-fact lint | no facts inlined in agent/command files | **to build** |
-| routing check | golden-set questions route to the expected file | **to build** |
-| `meditate` | dead links, stale stamps, orphaned facts, index bloat | **to build** |
+| frontmatter lint | required fields present, `name` matches filename | **built** — `check-kb` |
+| `check-links` | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
+| slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
+| embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
+| secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
+| executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
+| hygiene sweep | orphans, stale and missing stamps, ageing contradictions, golden-set rot | **built** — the `meditate` skill |
+| `check-scope` | `scope:` values valid; scope agrees with the tier; no traversal out of a library | **to build** |
+| cross-library links | `[[slug]]` resolution *between* installed libraries, and the slug→path manifest | **to build** |
+| routing check | golden-set questions actually route to `expected_file` | **to build** |
+| answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
+| external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-None of this tooling exists yet in this workspace; it is Phase 0/1 work. Until it does, every check above
-is a manual review step, and a domain marked "done" on manual review only should say so.
+Seven of twelve are built. A library passing the built checks is **structurally sound within itself**
+— it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
+is what the last two rows are for.

@@ -45,6 +45,19 @@ explicitly rather than let the structure imply protection it does not provide.**
 against full history. The committer-side hook was separately verified to refuse a commit carrying a test
 credential, in a fresh clone, after the activation step. Both halves are observed working, not assumed.
 
+**Amended 2026-09-19 — the table above predates the engine/library split and is superseded.**
+Paths moved (`scripts/` is no longer under `knowledge/`), and enforcement is now per repository:
+
+| Repository | Committer-side | Server-side |
+|---|---|---|
+| **engine** (ai-kb) | exec bits, secret scan, embedded-fact lint. **Not** `check-kb` — the engine holds no knowledge, and running it here would check zero files and report success | CI: the same three |
+| **domain library** | exec bits, secret scan, `check-kb` against itself — borrowed from the engine, skipped with a clear message when no engine is reachable | none — libraries have no CI of their own |
+| **workspace** (ws_v1) | secret scan only, skipped when the knowledge repo is absent | none |
+
+A library cloned alone is unguarded until an engine is in reach. That is the price of not making a
+portable library depend on an engine it is designed to outlive, and it is a deliberate trade rather
+than an oversight.
+
 ### Written but dormant
 
 `.github/CODEOWNERS` exists and names an owner per area. It is **advisory text** until branch
