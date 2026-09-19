@@ -18,3 +18,4 @@ KB; anything already in the KB is linked directly.
 
 - [conventions-v1](conventions-v1.md) — the inherited work-system knowledge conventions, ancestor of the current contract
 - [adr-0001-kb-root-resolution](adr-0001-kb-root-resolution.md) — decision record for how agents resolve the general knowledge root
+- [adr-0002-governance-without-enforcement](adr-0002-governance-without-enforcement.md) — which guardrails are enforced, dormant, or absent, and the accepted risk
