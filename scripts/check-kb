@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""check-kb — partial implementation of the CONVENTIONS §13 check table.
+
+Covers, within a single root:
+  * frontmatter lint  — required fields present, name matches filename
+  * check-links       — [[slug]] and relative router links resolve
+  * check-scope       — within-root filename uniqueness; no [[slug]] at a path-addressed file
+
+NOT yet covered (see §13): cross-root [[general:slug]] resolution, the slug->path
+manifest, scope-value validation, date-format linting, the embedded-fact lint over
+agent/command files, and the golden-set routing check.
+
+Usage: knowledge/scripts/check-kb [knowledge-root]    (default: ./knowledge)
+Exit 0 clean, 1 on any defect.
+"""
+import pathlib, re, sys
+from collections import Counter
+
+import yaml
+
+# §5: reached by relative path, never a [[slug]] target, so exempt from the
+# filename-uniqueness and name-matches-filename rules.
+PATH_ADDRESSED = {"INDEX.md", "CONVENTIONS.md"}
+# Illustrative syntax inside the contract's own examples, not real links.
+EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}
+EXAMPLE_SLUGS = {"slug", "general:slug", "general:some-fact", "cross-link",
+                 "source", "YYYY-MM-DD-domain-notes"}
+REQUIRED = ("name", "description", "domain", "scope")
+
+
+def main(root: pathlib.Path) -> int:
+    files = sorted(root.rglob("*.md"))
+    if not files:
+        print(f"no markdown files under {root}")
+        return 1
+    slugs = {f.stem for f in files}
+    defects = []
+
+    for f in files:
+        text = f.read_text()
+        if not text.startswith("---\n"):
+            defects.append(f"{f}: no frontmatter")
+            continue
+        try:
+            fm = yaml.safe_load(text.split("---\n", 2)[1]) or {}
+        except yaml.YAMLError as e:
+            defects.append(f"{f}: unparseable frontmatter ({e})")
+            continue
+
+        for key in REQUIRED:
+            if key not in fm:
+                defects.append(f"{f}: frontmatter missing '{key}'")
+        if f.name not in PATH_ADDRESSED and fm.get("name") != f.stem:
+            defects.append(f"{f}: name '{fm.get('name')}' does not match filename '{f.stem}'")
+
+        for _, target in re.findall(r"\[([^\]]+)\]\(([^)#]+\.md)\)", text):
+            if target in EXAMPLE_LINKS or target.startswith("http"):
+                continue
+            if not (f.parent / target).resolve().exists():
+                defects.append(f"{f}: dead router link -> {target}")
+
+        for link in re.findall(r"\[\[([^\]]+)\]\]", text):
+            if link in EXAMPLE_SLUGS:
+                continue
+            bare = link.split(":", 1)[-1]
+            if bare in {p.removesuffix(".md") for p in PATH_ADDRESSED}:
+                defects.append(f"{f}: [[{link}]] targets a path-addressed file — cite it by path")
+            elif ":" in link:
+                pass  # cross-root; not resolvable from one root yet (§13)
+            elif bare not in slugs:
+                defects.append(f"{f}: dead [[{link}]]")
+
+    for name, count in Counter(f.name for f in files).items():
+        if count > 1 and name not in PATH_ADDRESSED:
+            defects.append(f"filename '{name}' appears {count}x — slugs must be unique within a root")
+
+    for d in defects:
+        print(f"FAIL {d}")
+    print(f"\n{len(files)} files checked — " + ("clean" if not defects else f"{len(defects)} defect(s)"))
+    return 1 if defects else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "knowledge")))

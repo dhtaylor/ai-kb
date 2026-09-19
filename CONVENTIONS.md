@@ -49,14 +49,25 @@ Every fact carries a `scope:`. The classification test, asked when the fact is w
 - **Repo** — `knowledge/` inside the project repo, travelling with the clone.
 - **Personal** — user-level config.
 
-**Never write a literal path.** Agent bodies reference `$KB_GENERAL_ROOT/knowledge/semantic/<domain>/`.
-A hardcoded absolute path is correct on exactly one machine and fails silently everywhere else.
+**Never write a literal path.** A hardcoded absolute path is correct on exactly one machine and fails
+silently everywhere else. But agent bodies do **not** write `$KB_GENERAL_ROOT/...` either — see below.
 
-> The resolution *mechanism* (shell env var vs. settings entry vs. session-start hook) is pending the
-> Phase 0 acceptance test: a running agent must successfully read a file under the configured root. If the
-> env var does not survive into the agent's execution context, the settings fallback is adopted **before**
-> any agent file is written. Until that test passes, treat `$KB_GENERAL_ROOT` as a convention, not a
-> working mechanism.
+**Resolution mechanism — settled by the Phase 0 acceptance test (2026-09-19), see [[adr-0001-kb-root-resolution]]:**
+
+1. `KB_GENERAL_ROOT` is defined in **user-level settings** (`~/.claude/settings.json` `env`), not a shell
+   profile and not a project file. A shell profile is not read mid-session (the shell snapshot is taken at
+   session start), and a project file is a trust-root hazard — a repo could repoint every agent's canonical
+   knowledge.
+2. A **SessionStart hook** resolves the variable and injects the **absolute path** into session context.
+   Agents use *that* path. This is required, not cosmetic: **the Read tool does not expand environment
+   variables.** Handed `$KB_GENERAL_ROOT/...` it fails with "File does not exist" and helpfully reports the
+   working directory — inviting a relative-path retry that succeeds by coincidence in one workspace and
+   breaks in every other. The hook removes the variable from the path-handling path entirely.
+3. **Absence is graceful and loud.** If the variable is unset, or points somewhere without a `knowledge/`
+   directory, the hook warns at session start and instructs agents to report the root as unconfigured —
+   never to guess a path, never to fall back to a relative one.
+
+So: no file anywhere contains a literal KB path, and no agent ever handles the variable itself.
 
 A project fact that depends on a general fact **links to it** (§5), never restates it. The
 single-canonical-home rule (§4) spans the KB boundary.
@@ -128,12 +139,13 @@ for them.
 - **Bare `[[slug]]`** resolves within the KB root it appears in. Filenames are therefore **unique within
   a root** — which is why per-domain state leaves take a domain-prefixed *filename*
   (`<domain>-contradictions.md`), not a prefixed frontmatter name.
-- **`INDEX.md` routers are the one exemption.** Every folder carries one (§3), so the basename necessarily
-  repeats. This is safe because routers are addressed by **relative path** (`subfolder/INDEX.md`) and are
-  **never `[[slug]]` link targets** — nothing resolves to them, so nothing can resolve ambiguously. A
-  router's `name:` therefore takes a descriptive scoped form (`<domain>-index`, `sources-index`) rather
-  than matching its filename; `check-scope` exempts `INDEX.md` from the uniqueness check and **fails any
-  `[[slug]]` that targets a router**.
+- **Path-addressed files are exempt.** Two kinds of file are reached by **relative path**, never by
+  `[[slug]]`: the `INDEX.md` routers (every folder carries one, §3, so the basename necessarily repeats)
+  and this contract at the KB root. Because nothing resolves *to* them, nothing can resolve ambiguously,
+  so they keep their conventional discoverable filenames and carry a descriptive `name:` instead of one
+  matching the filename (`<domain>-index`, `sources-index`, `knowledge-conventions`). `check-scope`
+  exempts them from the within-root uniqueness check and **fails any `[[slug]]` that targets one** — cite
+  the contract by path, or cite the specific fact that restates its rule.
 - **Cross-root links carry an explicit prefix:** `[[general:some-fact]]` from a repo KB into the general
   root. `check-scope` enforces **cross-root uniqueness** to prevent ambiguous duplicates. On any residual
   collision, **repo-local wins** for repo-scoped queries; the `general:` prefix is required otherwise.
@@ -264,7 +276,7 @@ Every semantic/reference file carries:
 
 ```yaml
 ---
-name: <kebab-case — matches the filename; routers excepted, see §5>
+name: <kebab-case — matches the filename; path-addressed files excepted, see §5>
 description: <one line — what this file answers, disambiguating from siblings>
 memory_type: semantic        # or: reference
 domain: <domain>
@@ -289,7 +301,8 @@ vocabulary within a domain, not ad-hoc per file.
 
 Files are kebab-case and **self-describing** (`data-model.md`, not `bnp-ontology.md`). The name should
 tell a cold reader what's inside without a parenthetical. Since the filename *is* the slug (§5), it must
-be unique within its root — per-domain state leaves take a domain prefix.
+be unique within its root — per-domain state leaves take a domain prefix. The path-addressed files of §5
+(`INDEX.md`, `CONVENTIONS.md`) keep their conventional names and are exempt.
 
 ## 13. Verifying a domain
 
