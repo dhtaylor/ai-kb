@@ -17,7 +17,7 @@ keywords: [combination plan, thin agent, governed KB, reference design, proposal
 - **Author:** Dandy Taylor (with Q)
 - **Date:** 2026-09-18
 - **Date ingested:** 2026-09-19
-- **Artifact location:** `knowledge-agent-architecture-combination-plan.md` (workspace root)
+- **Artifact location:** `documents/knowledge-agent-architecture-combination-plan.md`
 
 An advisory reference-design proposal, hardened by a five-lens adversarial review, for turning
 this knowledge base from a passive reference library into an actionable system: a thin agent
