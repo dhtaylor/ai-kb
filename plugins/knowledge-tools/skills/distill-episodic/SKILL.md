@@ -14,6 +14,11 @@ on partial information, and frustrated guesses — all in the same voice, often 
 Promote the wrong one and you have installed a guess in the place everything else treats as
 authoritative, wearing a citation that makes it look checked.
 
+**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+separate repositories: the engine holds no domains, and each library is its own repository
+holding exactly one. Write facts into a library, never into the engine.
+
 **Read the contract first.** Your session context names the general knowledge root; the contract is
 `<general-root>/knowledge/CONVENTIONS.md`. If the root is unconfigured, stop and say so.
 
@@ -94,7 +99,7 @@ Note in the episodic file that it has been distilled, and where the facts went.
 ## Step 6 — Golden set and routers
 
 - Any file you added gets a router line in the domain `INDEX.md`.
-- Extend `<root>/knowledge/golden-retrieval/<domain>-golden.md` for facts you added, records carrying a
+- Extend `<library>/<domain>-golden.md` for facts you added, records carrying a
   `case:` label. Include an `unresolved` case if you flagged a contradiction.
 - **Repair any existing record your own change invalidated, in this same change.** Marking a section
   `CONFLICTED` turns every `positive` case pointing at it into a case a correctly-behaving agent must
@@ -113,7 +118,7 @@ Present, before committing:
 - every fact promoted, against the exact line in the episodic note it came from;
 - every scope decision, with the tier test that drove it.
 
-Then run `<root>/knowledge/scripts/check-kb` and report the result and its limits.
+Then run the engine's `scripts/check-kb <library>` and report the result and its limits.
 
 ## Refusals
 

@@ -1,0 +1,5 @@
+# Domain libraries. The engine creates this directory and lays out the
+# structure of a library inside it, but each library is its own repository
+# and is never tracked here. Content and behaviour are separate by
+# construction — see documents/decisions/0007-engine-content-separation.md
+kb/

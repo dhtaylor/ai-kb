@@ -20,8 +20,10 @@ run() {
 }
 
 echo "pre-commit guardrails:"
+# This repository holds behaviour, not knowledge: there are no domains here, so
+# check-kb has nothing to run against. It is exercised by each domain library's
+# own hook instead. Running it here would check zero files and report success.
 run "secret scan"        ./scripts/check-secrets
-run "kb integrity"       ./scripts/check-kb
 run "embedded-fact lint" ./scripts/check-embedded-facts
 
 if [ "$fail" -ne 0 ]; then

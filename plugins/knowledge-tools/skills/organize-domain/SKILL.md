@@ -13,6 +13,11 @@ what a language model does by reflex. Rewrite a sentence while moving it and you
 a contradiction with a source that still says the original thing — and the provenance link will
 still look perfectly valid.
 
+**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+separate repositories: the engine holds no domains, and each library is its own repository
+holding exactly one. Write facts into a library, never into the engine.
+
 **Read the contract first.** Your session context names the general knowledge root; the contract is
 `<general-root>/knowledge/CONVENTIONS.md`. If the root is unconfigured, stop and say so.
 
@@ -105,7 +110,7 @@ the domain has no oracle at all.
 
 ## Step 7 — Verify, then show the shape change
 
-Run `<root>/knowledge/scripts/check-kb`. Then report:
+Run the engine's `scripts/check-kb <library>`. Then report:
 
 - the before and after file layout;
 - every rename, old slug to new;

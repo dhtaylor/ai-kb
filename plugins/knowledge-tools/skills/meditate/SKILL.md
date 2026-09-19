@@ -12,12 +12,17 @@ a false flag; being wrong about mutation poisons the single source of truth ever
 that helpfully tidies as it goes has silently crossed from the cheap side of that line to the
 expensive one.
 
+**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+separate repositories: the engine holds no domains, and each library is its own repository
+holding exactly one. Write facts into a library, never into the engine.
+
 **Read the contract first.** Your session context names the general knowledge root; the contract is
 `<general-root>/knowledge/CONVENTIONS.md`. If the root is unconfigured, stop and say so.
 
 ## Step 1 — Run the mechanical checks first
 
-Run `<root>/knowledge/scripts/check-kb` and report its output verbatim. It covers frontmatter
+Run the engine's `scripts/check-kb <library>` and report its output verbatim. It covers frontmatter
 completeness, `name`/filename agreement, link resolution and within-root slug uniqueness.
 
 Then state plainly what it does **not** cover, so nobody reads a clean run as a clean bill of
@@ -66,11 +71,11 @@ its own right. A rotted oracle is worse than a missing one: it reports success.
 
 ## Step 3 — Build the queue, do not fix the findings
 
-Write findings to `<root>/knowledge/needs-attention.md`. Create it only if there are findings; an
+Write findings to `<library>/needs-attention.md` — the queue belongs to the library it describes, not to the engine. Create it only if there are findings; an
 empty queue file is an empty state leaf.
 
 **The queue is a file like any other, and the sweep's own rules apply to it.** Give it full
-frontmatter, and add its router line to `<root>/knowledge/INDEX.md` — otherwise the file you just
+frontmatter, and add its router line to the library's own `INDEX.md` — otherwise the file you just
 wrote is an orphan that fails `check-kb`, and the next sweep dutifully reports your own output as a
 finding.
 

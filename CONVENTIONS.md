@@ -14,7 +14,7 @@ keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, proven
 ---
 # Knowledge Conventions
 
-**Version 2.** Supersedes [[conventions-v1]] (the inherited work-system contract, preserved at
+**Version 2.** Supersedes [knowledge-conventions-v1](documents/legacy/knowledge-conventions-v1.md) (the inherited work-system contract, preserved at
 `documents/legacy/knowledge-conventions-v1.md`). v1 governed a single-root, annotation-only KB; v2 folds in
 the scope tiers, cross-root resolution, currency stamping, and retrieval contract required by the
 knowledge-agent architecture.
@@ -31,7 +31,7 @@ facts of differing volatility.
 
 ## 1. Scope tiers — answered at capture, never retrofitted
 
-*Rationale: [[adr-0003-scoping-topology]] for the three homes and why the project nests inside the general root; [[adr-0004-scope-attribute]] for the values and what enforces them.*
+*Rationale: [0003-scoping-topology](documents/decisions/0003-scoping-topology.md) for the three homes and why the project nests inside the general root; [0004-scope-attribute](documents/decisions/0004-scope-attribute.md) for the values and what enforces them.*
 
 Every fact carries a `scope:`. The classification test, asked when the fact is written:
 
@@ -60,14 +60,22 @@ vocabulary a requester happened to use.
 
 **The three homes, and the one rule that makes them work:**
 
-- **General** — `$KB_GENERAL_ROOT/knowledge/`. One copy per machine, owned by no single project.
+- **General** — a **domain library**, installed under the engine at `<engine>/kb/<domain>/`. Each
+  library is its own repository holding exactly one domain, and is self-contained: its facts, its
+  sources, its archived evidence and its golden set travel together, so it can be cloned onto a
+  machine with no engine and no sibling libraries and still make sense.
 - **Repo** — `knowledge/` inside the project repo, travelling with the clone.
 - **Personal** — user-level config.
+
+**Behaviour is not one of the homes.** The engine (this contract, the tooling, the skills) holds no
+domains at all. Mixing them would be the very thing §0 of the design forbids — knowledge and
+behaviour in one place — and the engine is where the separation has to be observed most visibly,
+because everything else follows its example.
 
 **Never write a literal path.** A hardcoded absolute path is correct on exactly one machine and fails
 silently everywhere else. But agent bodies do **not** write `$KB_GENERAL_ROOT/...` either — see below.
 
-**Resolution mechanism — settled by the Phase 0 acceptance test (2026-09-19), see [[adr-0001-kb-root-resolution]]:**
+**Resolution mechanism — settled by the Phase 0 acceptance test (2026-09-19), see [0001-kb-root-resolution](documents/decisions/0001-kb-root-resolution.md):**
 
 1. `KB_GENERAL_ROOT` is defined in **user-level settings** (`~/.claude/settings.json` `env`), not a shell
    profile and not a project file. A shell profile is not read mid-session (the shell snapshot is taken at
@@ -89,8 +97,10 @@ single-canonical-home rule (§4) spans the KB boundary.
 
 ## 2. Domain layout
 
-- Each domain is a folder `knowledge/semantic/<domain>/` with an **`INDEX.md` router** as its entry
-  point — always the first file loaded.
+- **A domain library is a repository, and its root is the domain.** There is no `semantic/` tier
+  folder and no chain of routers above it: `INDEX.md` at the library root is the domain router and
+  the entry point, always the first file loaded. Libraries are discovered by their presence under
+  the engine's `kb/`, not by a registry that would need maintaining.
 - Content lives in **single-topic files** sized as described in §4.
 - When a domain's topic files exceed **~15**, group the overflow into a sub-folder with its own
   sub-index. Below that threshold, stay **flat** — every sub-folder adds a routing hop.
@@ -191,8 +201,25 @@ for them.
   (`[[YYYY-MM-DD-domain-notes]]`). An external artifact with no home in the KB (a spec, vendor page, PDF)
   gets a lightweight stub under **`knowledge/sources/`** so its backlink resolves. Don't create a stub for
   something already in the KB.
-- A source stub (`knowledge/sources/<slug>.md`) records: title, origin (URL / page-ID / filename),
-  date ingested, and where the artifact itself lives.
+- A source stub (`sources/<slug>.md`, inside the library) records: title, origin (URL / page-ID /
+  filename), date ingested, and where the artifact itself lives.
+
+**Citing an artifact — three cases, and only one is hard.**
+
+1. **Inside this library.** A `[[slug]]` or a relative path. Nothing special.
+2. **Never in any repository** — a vendor page, a spec, a PDF. The stub records *origin* (URL,
+   page ID, publisher, date ingested) and no filesystem path, because there is not one.
+3. **In another repository.** Two rules, in this order:
+   - **Evidence travels with the domain it was folded from.** Archive the artifact inside the
+     library, under `documents/`. This is **not** a single-canonical-home violation: the rule is
+     one home per *fact*, not per *document*. A fact stated twice drifts because someone edits a
+     copy; an archived artifact does not, because if it changes it is a new artifact with a new
+     ingestion date. A library that carries its own evidence resolves every citation on any machine.
+   - **What genuinely cannot travel gets a repo-qualified reference** — `ai-kb:CONVENTIONS.md`,
+     `<repo>:<path-within-repo>`. **Never a relative path across a repository boundary**: that
+     resolves only while two repositories happen to sit in the expected layout, and fails silently
+     everywhere else. The qualified form degrades honestly — without the other repository you still
+     know exactly what was cited and where it lives, you simply cannot open it from here.
 - **Provenance rots.** `check-links` covers internal `[[slug]]`s, not external `Source:` URLs. External
   URLs get cheap **HTTP HEAD liveness checks**; a dead URL marks dependent sections
   `provenance: BROKEN`, which the hygiene sweep treats as **unverified**. A 404 is an alert, not silence —
@@ -200,7 +227,7 @@ for them.
 
 ## 7. Currency — stamped per section, with evidence
 
-*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [[adr-0005-currency-cadence]]. None of it runs yet.*
+*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). None of it runs yet.*
 
 Provenance says where a fact came from. Currency says whether it is still true. They are different
 questions and they attach at the same granularity (§4).
@@ -365,7 +392,7 @@ be unique within its root — per-domain state leaves take a domain prefix. The 
 ## 13. Verifying a domain
 
 A domain is not "done" until these pass clean. The full rule set `check-scope` owes, marked built or
-to-build, is in [[adr-0004-scope-attribute]].
+to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.md).
 
 | Check | What it proves | Status |
 |---|---|---|

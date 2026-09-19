@@ -31,14 +31,8 @@ jobs:
         with:
           python-version: "3.x"
 
-      - name: Install check-kb dependency
-        run: pip install --quiet pyyaml
-
       - name: Secret scan (full history + worktree)
         run: ./scripts/check-secrets --all
-
-      - name: KB integrity
-        run: ./scripts/check-kb
 
       - name: Embedded-fact lint
         run: ./scripts/check-embedded-facts

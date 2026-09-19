@@ -8,6 +8,11 @@ description: Stand up a new semantic knowledge domain that does not exist yet, i
 Stands up a domain that does not exist yet. Structure only — you are building the shelf, and
 seeding it if source material was supplied. You are not inventing facts.
 
+**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+separate repositories: the engine holds no domains, and each library is its own repository
+holding exactly one. Write facts into a library, never into the engine.
+
 **Read the contract first.** Your session context names the general knowledge root; the contract
 is `<general-root>/knowledge/CONVENTIONS.md`. Load it before you create anything. If the root is
 reported unconfigured, stop and say so — never guess a path, never fall back to a relative one.
@@ -60,10 +65,26 @@ it happens to use, and prefer the shorter. If two names are genuinely equivalent
 rather than coin one**: renaming later rots the golden set and every `[[slug]]` pointing at the
 domain, so a cheap question now beats a migration later.
 
-## Step 3 — Create the domain folder and its router
+## Step 3 — Scaffold the library. It is a repository, not a folder.
 
-Create `<root>/knowledge/semantic/<domain>/INDEX.md`. Its frontmatter carries the domain's
-currency configuration, which no other file does:
+A domain library is its **own git repository**, installed under the engine at
+`<engine>/kb/<domain>/`. Create and initialise it:
+
+```
+mkdir -p <engine>/kb/<domain> && cd <engine>/kb/<domain> && git init
+```
+
+The engine **ignores** `kb/` — it creates the space, it never tracks what lives there. That is the
+separation this whole design rests on: the engine is behaviour, a library is content, and neither
+is allowed to smuggle the other into its history.
+
+Give the library a pre-commit hook at `.githooks/pre-commit` and set `core.hooksPath .githooks`.
+The hook locates the engine through `KB_ENGINE_ROOT` or the designed layout and **skips with a
+clear message when it finds neither** — a library must not depend on an engine it is designed to
+outlive, and a guardrail that crashes when the engine is absent would make it do exactly that.
+
+Then create `INDEX.md` **at the library root**. It is the domain router, the entry point, and the
+only file carrying the domain's currency configuration:
 
 ```yaml
 ---
@@ -131,46 +152,29 @@ valid result — say so.
 - **Load-bearing values are copy-pasted, never retyped or paraphrased.** An LLM fold can round a
   constant, drop a qualifier, or merge two behaviors into one generalization. Copy them.
 - Each topic section carries `Source: [[slug]]`. If the source is an artifact with no home in the
-  KB, create a stub under `<root>/knowledge/sources/` first, so the backlink resolves.
+  KB, create a stub under the library's own `sources/` first, so the backlink resolves.
 - A file is a **gestalt**, not one fact per file: right-sized when it can be loaded alone to
   answer a real question yet still holds a coherent whole. Do not over-fragment a model whose
   parts are always loaded together.
 - **Present each extracted fact to the user against its source before committing.** This is the
   step that catches a fold corrupting a value, and it is not optional.
 
-## Step 5 — Wire the router chain above the domain
+## Step 5 — Nothing to wire above it
 
-A domain nobody can route to is invisible. Working upward:
+There is no router chain above a library and no registry to update. A library is discovered by
+**being present** under the engine's `kb/`, and the session-start hook enumerates what is installed.
 
-1. `<root>/knowledge/semantic/INDEX.md` — add the domain. **Create this router if it does not
-   exist**, which is the case for the first domain in a root. It is a tier index, not a domain
-   index: it carries no `freshness_horizon` or `verifier_budget`, because those are per-domain.
+This is deliberate. A registry listing the libraries would live in the engine, which does not track
+`kb/` — so it would be either untracked state that drifts, or tracked state that lies on every
+machine with a different set of libraries installed. Presence is the registry.
 
-   ```yaml
-   ---
-   name: semantic-index
-   description: Router for the semantic tier — domains of durable, fact-level knowledge.
-   memory_type: reference
-   domain: meta
-   scope: general
-   metadata:
-     type: index
-     node_type: router
-     created: <today>
-   tags: [meta, index, semantic]
-   keywords: [semantic, domains, index, router]
-   ---
-   ```
-
-   Its body lists one hooked line per domain folder, and nothing else.
-2. `<root>/knowledge/INDEX.md` — ensure it routes to `semantic/`. Add the tier if it is absent.
-
-Each router lists only its direct children.
+What you **do** wire is inside the library: every file you create gets a hooked line in the
+library's own `INDEX.md`.
 
 ## Step 6 — Seed the golden set
 
-Create `<root>/knowledge/golden-retrieval/<domain>-golden.md` with YAML records of `question:`,
-`expected_file:`, `expected_excerpt:`. A domain with no golden set has no oracle, and a later
+Create `<domain>-golden.md` **at the library root** — the oracle travels with the domain it tests.
+Records carry `case:`, `question:`, `expected_file:`, `expected_excerpt:`. A domain with no golden set has no oracle, and a later
 rename will rot it silently.
 
 Include from the start:
@@ -181,7 +185,7 @@ Include from the start:
 
 If the domain has no content yet, the golden set is **deferred and no file is created** — not a
 placeholder. An empty golden-set file is an empty state leaf by another name, and an oracle with no
-records reads as coverage that does not exist. Do not create the `golden-retrieval/` folder either.
+records reads as coverage that does not exist.
 
 Say in your report that the golden set is deferred, and say who picks it up: **`update-domain`
 seeds it when the domain gains its first facts, in the same change.** A domain that gains content
@@ -190,7 +194,9 @@ silently.
 
 ## Step 7 — Verify. The domain is not done until this is clean.
 
-Run `<root>/knowledge/scripts/check-kb` against the root you wrote to. It checks frontmatter,
+Run the engine's `scripts/check-kb` **against the library path** — the target is required, because
+the engine holds no knowledge of its own and a silent default would report a clean run over zero
+files. It checks frontmatter,
 link resolution and slug uniqueness. Report the result.
 
 State plainly what is **not** covered: cross-root `[[general:slug]]` resolution, scope-value
@@ -204,6 +210,7 @@ Stop and say so rather than proceeding, if:
 
 - the knowledge root is unconfigured — never guess a path;
 - the domain already exists — that is `update-domain`;
+- a library of that name is already installed under `kb/`;
 - the tier is genuinely ambiguous and the user has not decided;
 - you would have to invent a fact to fill the domain. An empty, well-formed domain is a good
   outcome. A domain full of plausible guesses is contamination of the one place facts are

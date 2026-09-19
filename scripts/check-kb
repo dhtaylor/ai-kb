@@ -10,7 +10,11 @@ NOT yet covered (see §13): cross-root [[general:slug]] resolution, the slug->pa
 manifest, scope-value validation, date-format linting, the embedded-fact lint over
 agent/command files, and the golden-set routing check.
 
-Usage: scripts/check-kb [knowledge-root]    (default: the repo root, ".")
+Usage: check-kb <knowledge-root>
+
+The root is REQUIRED. This checks a domain library; the engine repository holds
+no knowledge content, so there is no sensible default and a silent one would
+report a clean run over zero files.
 Exit 0 clean, 1 on any defect.
 """
 import pathlib, re, sys
@@ -99,4 +103,7 @@ def main(root: pathlib.Path) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")))
+    if len(sys.argv) < 2:
+        print(__doc__.strip().split("\n\n")[-2], file=sys.stderr)
+        sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1])))

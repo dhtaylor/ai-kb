@@ -13,6 +13,11 @@ as trustworthy.
 
 Every rule below exists because of that. Follow them even when the paraphrase is obviously better.
 
+**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+separate repositories: the engine holds no domains, and each library is its own repository
+holding exactly one. Write facts into a library, never into the engine.
+
 **Read the contract first.** Your session context names the general knowledge root; the contract
 is `<general-root>/knowledge/CONVENTIONS.md`. If the root is reported unconfigured, stop and say
 so — never guess a path.
@@ -31,7 +36,7 @@ each time. Never fold the whole document into each domain and let the indexes so
 
 ## Step 2 — Ingest the source before extracting from it
 
-Create a stub at `<root>/knowledge/sources/<slug>.md` recording title, origin (URL, page ID, or
+Create a stub at `<library>/sources/<slug>.md` recording title, origin (URL, page ID, or
 filename), date ingested, and where the artifact itself lives. Provenance backlinks resolve to
 this stub, so it must exist before any fact cites it.
 
@@ -121,7 +126,7 @@ Resolving a contradiction is never your call. It is never automated.
   siblings. A file nothing routes to is invisible.
 - If the domain crossed roughly 15 topic files, say so — that is `organize-domain`'s trigger, not
   something to fix mid-fold.
-- **Seed or extend `<root>/knowledge/golden-retrieval/<domain>-golden.md` in this same change.** If the
+- **Seed or extend `<library>/<domain>-golden.md` in this same change.** If the
   domain had no golden set because it was empty, it has content now and this is where the
   obligation lands. Every record carries a `case:` label (§10). Include at least two `negative` cases and — if the
   fold produced a contradiction — an `unresolved` case proving the agent surfaces it rather than
@@ -146,7 +151,7 @@ Only after that review do you commit.
 
 ## Step 9 — Verify
 
-Run `<root>/knowledge/scripts/check-kb` against the root you wrote to. Report the result, and
+Run the engine's `scripts/check-kb` against the library you wrote to (the target is required). Report the result, and
 state what it does not cover: cross-root `[[general:slug]]` resolution, scope-value validation
 and golden-set routing are not built. A clean run means structurally sound within one root — not
 verified.
