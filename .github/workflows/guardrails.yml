@@ -31,6 +31,9 @@ jobs:
         with:
           python-version: "3.x"
 
+      - name: Executable bits
+        run: ./scripts/check-exec-bits
+
       - name: Secret scan (full history + worktree)
         run: ./scripts/check-secrets --all
 
