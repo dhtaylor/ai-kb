@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Phase 0 guardrail — runs before every commit.
+#
+# Lives in .githooks/ (version-controlled) rather than .git/hooks/ (which is not),
+# so it travels to every clone. Each clone must activate it once:
+#     git config core.hooksPath .githooks
+#
+# THIS HOOK IS BYPASSABLE with --no-verify. That is not a flaw to fix here — it
+# is why the enforcement boundary is the server-side gate (GitHub push
+# protection). This hook is the fast committer-side half; both are required.
+set -uo pipefail
+
+fail=0
+run() {
+  local label="$1"; shift
+  if ! "$@"; then
+    echo "  -> $label FAILED"
+    fail=1
+  fi
+}
+
+echo "pre-commit guardrails:"
+run "secret scan"        ./scripts/check-secrets
+run "kb integrity"       ./scripts/check-kb
+run "embedded-fact lint" ./scripts/check-embedded-facts
+
+if [ "$fail" -ne 0 ]; then
+  cat <<'MSG'
+
+Commit blocked. Fix the findings above, or — only if you are certain they are
+false positives — bypass with: git commit --no-verify
+A bypass is a decision you are making on the record; the server-side gate still applies.
+MSG
+  exit 1
+fi
+echo "pre-commit: all guardrails clean"

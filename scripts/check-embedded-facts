@@ -25,7 +25,9 @@ Exit 0 clean, 1 on any finding.
 """
 import pathlib, re, sys
 
-DEFAULT_DIRS = [".claude/agents", ".claude/commands", ".claude/skills"]
+DEFAULT_DIRS = ["plugins/knowledge-tools/skills",
+                "plugins/knowledge-tools/agents",
+                "plugins/knowledge-tools/commands"]
 
 RULES = [
     ("absolute path",

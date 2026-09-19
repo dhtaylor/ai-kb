@@ -10,7 +10,7 @@ NOT yet covered (see §13): cross-root [[general:slug]] resolution, the slug->pa
 manifest, scope-value validation, date-format linting, the embedded-fact lint over
 agent/command files, and the golden-set routing check.
 
-Usage: knowledge/scripts/check-kb [knowledge-root]    (default: ./knowledge)
+Usage: scripts/check-kb [knowledge-root]    (default: the repo root, ".")
 Exit 0 clean, 1 on any defect.
 """
 import pathlib, re, sys
@@ -21,6 +21,12 @@ import yaml
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
 PATH_ADDRESSED = {"INDEX.md", "CONVENTIONS.md"}
+# Directories inside the knowledge repo that are NOT part of the knowledge base:
+# decision records, the behaviour plugin, tooling and CI config. They are ordinary
+# files with no frontmatter contract, and linting them would fail every run.
+NON_KB_DIRS = {"documents", "plugins", "scripts", ".github", ".githooks",
+               ".claude-plugin", ".claude", ".git"}
+
 # Illustrative syntax inside the contract's own examples, not real links.
 EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}
 EXAMPLE_SLUGS = {"slug", "general:slug", "general:some-fact", "cross-link",
@@ -29,7 +35,8 @@ REQUIRED = ("name", "description", "domain", "scope")
 
 
 def main(root: pathlib.Path) -> int:
-    files = sorted(root.rglob("*.md"))
+    files = sorted(f for f in root.rglob("*.md")
+                   if not NON_KB_DIRS & set(f.relative_to(root).parts))
     if not files:
         print(f"no markdown files under {root}")
         return 1
@@ -92,4 +99,4 @@ def main(root: pathlib.Path) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else "knowledge")))
+    sys.exit(main(pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else ".")))

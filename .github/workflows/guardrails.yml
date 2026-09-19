@@ -1,0 +1,44 @@
+name: guardrails
+
+# Server-side half of the Phase 0 guardrails.
+#
+# WHY THIS EXISTS: the pre-commit hook is bypassable (--no-verify) and a clone
+# that never ran "git config core.hooksPath .githooks" has no hook at all. This
+# workflow runs the same checks where a developer cannot skip them.
+#
+# WHAT IT IS NOT: this is detection, not prevention. GitHub push protection
+# REJECTS a push carrying a credential; this lets the push land and then fails
+# the run. A real leak therefore still requires rotation AND a history rewrite —
+# rotation alone does not erase it from git, and every clone retains it.
+# Push protection is not available for private repositories on this plan, so
+# this is the compensating control. See documents/decisions/0002-*.md
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # check-secrets --all walks every blob in history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install check-kb dependency
+        run: pip install --quiet pyyaml
+
+      - name: Secret scan (full history + worktree)
+        run: ./scripts/check-secrets --all
+
+      - name: KB integrity
+        run: ./scripts/check-kb
+
+      - name: Embedded-fact lint
+        run: ./scripts/check-embedded-facts

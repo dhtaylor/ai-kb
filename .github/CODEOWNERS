@@ -1,0 +1,22 @@
+# Domain ownership for the general knowledge tier.
+#
+# STATUS: DORMANT. CODEOWNERS is advisory text until branch protection makes
+# owner review a required status check. See documents/decisions/0002-governance-without-enforcement.md
+#
+# The architecture requires >=2 named owners per domain so one departure does not
+# orphan it. With a single contributor that is not satisfiable; it is recorded as
+# an accepted risk, not silently ignored. Add the second owner per domain before
+# the shared tier has real consumers.
+
+# Everything, until domains exist and are owned individually.
+*                       @dhtaylor
+
+# The contract itself changes how every agent behaves — highest review bar.
+/CONVENTIONS.md             @dhtaylor
+
+# Decisions are the record; edits to them are edits to history.
+/documents/decisions/       @dhtaylor
+
+# Guardrails. A change here weakens or strengthens every other control.
+/scripts/                   @dhtaylor
+/.githooks/                 @dhtaylor

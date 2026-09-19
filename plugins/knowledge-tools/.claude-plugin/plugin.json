@@ -1,0 +1,9 @@
+{
+  "name": "knowledge-tools",
+  "description": "Maintenance and retrieval behaviour for the governed knowledge base. Skills curate domains under the conventions contract; agents and commands retrieve from them under the retrieval contract. Holds no facts — it reads them from the knowledge root at runtime.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Dandy Taylor"
+  },
+  "keywords": ["knowledge", "knowledge-base", "retrieval", "provenance", "curation"]
+}

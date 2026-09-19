@@ -1,0 +1,16 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "governed-knowledge",
+  "description": "The governed knowledge base and the behaviour that curates and queries it.",
+  "owner": {
+    "name": "Dandy Taylor"
+  },
+  "plugins": [
+    {
+      "name": "knowledge-tools",
+      "description": "Maintenance and retrieval behaviour for the governed knowledge base: create, fold, reshape, distil and sweep domains, and query them under the retrieval contract.",
+      "source": "./plugins/knowledge-tools",
+      "category": "knowledge"
+    }
+  ]
+}
