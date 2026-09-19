@@ -31,6 +31,8 @@ facts of differing volatility.
 
 ## 1. Scope tiers — answered at capture, never retrofitted
 
+*Rationale: [[adr-0003-scoping-topology]] for the three homes and why the project nests inside the general root; [[adr-0004-scope-attribute]] for the values and what enforces them.*
+
 Every fact carries a `scope:`. The classification test, asked when the fact is written:
 
 > *Is this true only of this repo/deployment, or true wherever this product/tool/concept appears?*
@@ -175,6 +177,8 @@ for them.
 
 ## 7. Currency — stamped per section, with evidence
 
+*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [[adr-0005-currency-cadence]]. None of it runs yet.*
+
 Provenance says where a fact came from. Currency says whether it is still true. They are different
 questions and they attach at the same granularity (§4).
 
@@ -306,7 +310,8 @@ be unique within its root — per-domain state leaves take a domain prefix. The 
 
 ## 13. Verifying a domain
 
-A domain is not "done" until these pass clean:
+A domain is not "done" until these pass clean. The full rule set `check-scope` owes, marked built or
+to-build, is in [[adr-0004-scope-attribute]].
 
 | Check | What it proves | Status |
 |---|---|---|
