@@ -127,6 +127,11 @@ record: unresolved items in `<domain>-open-questions.md`, the contradiction regi
 `<domain>-contradictions.md` (§8). Create these state leaves **only when they hold content** — don't
 route to an empty file.
 
+The knowledge base carries one root-level state leaf, `needs-attention.md` — the queue a sweep builds.
+It is **a file like any other**: full frontmatter (§11), routed from `knowledge/INDEX.md`, because a
+queue that is itself an orphan is the first thing the next sweep will report. Like every state leaf it
+exists only when it has content.
+
 This recursion extends to the knowledge-base root: `knowledge/INDEX.md` lists the **tier folders**
 (`semantic/`, `episodic/`, `procedural/`, `sources/`, `golden-retrieval/`), and `semantic/INDEX.md` lists
 the domains. The `episodic/` index (newest-first chronological) and the `sources/` index (a flat `[[slug]]`
@@ -177,6 +182,11 @@ for them.
   `[[slug]]` backlink.
 - **Dedup merges provenance.** When two copies of a fact collapse into one canonical home, keep
   **all** contributing `[[source]]` links — never drop a citation in a merge.
+- **Corroboration keeps its own stamp.** When a second source confirms a claim the KB already holds,
+  it is recorded as its own `Source:` line with its own `Verified:` line beneath it — the pairs
+  stack, they do not merge. Two sources checked on different dates by different methods are two
+  pieces of evidence, and flattening them into one stamp discards which was verified when.
+  (Conflicting sources are a different case entirely — §8.)
 - **Sources are `[[slug]]` backlinks.** Episodic notes already *are* sources — link straight to them
   (`[[YYYY-MM-DD-domain-notes]]`). An external artifact with no home in the KB (a spec, vendor page, PDF)
   gets a lightweight stub under **`knowledge/sources/`** so its backlink resolves. Don't create a stub for
@@ -212,8 +222,15 @@ Verified: 2026-09-19 · by: agent · method: query
 - **Trust tiers.** Agent-verified TTL is materially shorter than human-verified (**1/10th**).
   **High-blast-radius** facts — deploy targets, environment routing, credential references — require
   **human** re-verification regardless of any agent stamp.
-- **Absent ≠ fresh.** A section with no stamp is `unknown` and surfaces **first** in the attention queue;
+- **Absent ≠ fresh.** A section with no stamp is `unknown`, and ranks **ahead of a merely stale one**
+  in the attention queue — absence hides more easily than age. "Ahead of stale" is the claim, not
+  "ahead of everything": a contradiction being actively served outranks both, and the full ordering
+  belongs to the sweep that builds the queue.
   a sweep cannot flag what was never written.
+- **A floor over nothing is `unknown`.** If no section in the file carries a stamp — every claim in
+  it became `CONFLICTED`, or none was ever stamped — the frontmatter reads `verified: unknown`. It
+  never keeps a date inherited from before the stamps went away: that date now certifies nothing and
+  reads as freshness the file does not have.
 - **File frontmatter carries `verified:` as the floor** — the oldest section stamp in the file, derived
   and lint-checked. Sweeps grep one field; the sections hold the truth.
 
@@ -224,8 +241,10 @@ serves one of the conflicting values with confidence. When two sources disagree 
 which is right:
 
 - do **not** silently pick a winner, and do **not** edit a subordinate source of truth to match;
-- mark the conflicting section **inline** with `status: CONFLICTED`, stating both claims, the risk of
-  each, and how to verify;
+- mark the conflicting section **inline** with `status: CONFLICTED`, **dated on the line it is raised**
+  (`status: CONFLICTED · since: YYYY-MM-DD`), stating both claims, the risk of each, and how to
+  verify. The date is not decoration: a contradiction's age drives its escalation, and nothing else
+  in the file records when the dispute began;
 - **retrieval agents refuse to serve a `CONFLICTED` section** — they surface the conflict instead. The
   golden set (§10) carries an UNRESOLVED case proving this behavior;
 - **mark the narrowest unit that holds the disputed claim.** A `CONFLICTED` section is refused
