@@ -112,8 +112,35 @@ tested** — it needs a session restart.
 feature — a project can override a general retrieval agent with its own — and a silent-divergence
 risk, because nothing announces that the general one has been replaced.
 
+## Amended 2026-09-19 — the repository gained a remote, and the directory source stays
+
+`github.com/dhtaylor/ai-kb` now exists (private; anonymous read denied and verified), the history is
+pushed, and CI can finally run where the workflow lives. That fires this ADR's own review trigger:
+should the marketplace now be sourced from the git remote rather than from a local path?
+
+**No. The `directory` source stays, and the reason is not inertia.**
+
+A `git` source would give each consumer its own cached copy of the *behaviour*, fetched from whatever
+ref the marketplace names. But the *facts* are read from the local clone at
+`$KB_GENERAL_ROOT/knowledge/`. Those are then two independently-versioned things, and nothing keeps
+them in step: an agent could run skills from one revision against a contract and domains from
+another. Given how much of this contract has moved — v2 plus six amendments — that is not a remote
+possibility, it is the expected case.
+
+The `directory` source points at the same working tree the facts are read from, so behaviour and the
+knowledge it operates on are the same checkout by construction. They cannot drift, because there is
+only one of them.
+
+A git source becomes right for a consumer that holds **no local clone** and queries the knowledge
+base some other way. That is not this topology, and when it is, the drift problem has to be solved
+explicitly rather than inherited.
+
+The "workspace has no CI" consequence above stands unchanged — that is `ws_v1`, which still tracks
+only three files. The knowledge repository now has both a remote and a working CI.
+
 ## Review trigger
 
 Revisit if: the relative marketplace path proves unsupported; a consumer needs a pinned version of
-the behaviour rather than whatever the directory currently holds; or the knowledge repository gains
-a remote and the marketplace should be sourced from it instead of from a local path.
+the behaviour rather than whatever the directory currently holds; or a consumer appears that holds
+no local clone of the knowledge base, at which point the behaviour/facts lockstep argued above must
+be re-established by other means.
