@@ -22,3 +22,4 @@ KB; anything already in the KB is linked directly.
 - [adr-0003-scoping-topology](adr-0003-scoping-topology.md) — where each tier of knowledge lives, and why the project nests inside the general root
 - [adr-0004-scope-attribute](adr-0004-scope-attribute.md) — the scope: values, the capture-time classification test, and the check-scope rules
 - [adr-0005-currency-cadence](adr-0005-currency-cadence.md) — per-domain TTLs, verifier budgets, and the detection-vs-mutation automation gate
+- [knowledge-agent-architecture-combination-plan](knowledge-agent-architecture-combination-plan.md) — the advisory reference-design proposal the five ADRs above decided from
