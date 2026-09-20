@@ -13,8 +13,8 @@ the skills) and the **libraries** installed under it at `kb/`. Behaviour and con
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
-**Read the contract first.** Your session context names the general knowledge root; the contract
-is `<general-root>/knowledge/CONVENTIONS.md`. Load it before you create anything. If the root is
+**Read the contract first.** Your session context names the engine; the contract
+is `<engine>/CONVENTIONS.md`. Load it before you create anything. If the root is
 reported unconfigured, stop and say so — never guess a path, never fall back to a relative one.
 
 When the contract and this skill disagree, **the contract wins** and this skill is the thing
@@ -78,10 +78,46 @@ The engine **ignores** `kb/` — it creates the space, it never tracks what live
 separation this whole design rests on: the engine is behaviour, a library is content, and neither
 is allowed to smuggle the other into its history.
 
-Give the library a pre-commit hook at `.githooks/pre-commit` and set `core.hooksPath .githooks`.
-The hook locates the engine through `KB_ENGINE_ROOT` or the designed layout and **skips with a
-clear message when it finds neither** — a library must not depend on an engine it is designed to
-outlive, and a guardrail that crashes when the engine is absent would make it do exactly that.
+Give the library a pre-commit hook at `.githooks/pre-commit`, then
+`chmod +x` it, `git add` it and `git config core.hooksPath .githooks`.
+
+**Check the mode git actually recorded** — `git ls-files -s .githooks/pre-commit` must start
+`100755` <!-- lint-allow: a git file mode, not an embedded fact -->. On a filesystem where
+`core.fileMode` is false, git ignores the on-disk bit and records
+644, and then **git skips the hook silently**: the library looks guarded and is not. If it recorded
+644, fix it with `git update-index --chmod=+x .githooks/pre-commit`. This bug has occurred twice.
+
+```bash
+#!/usr/bin/env bash
+# Domain library guardrail. The checkers live in the engine, which this library
+# does NOT depend on — it is portable and may be cloned anywhere. Absence is
+# graceful: warn, never crash, never guess.
+set -uo pipefail
+
+find_engine() {
+  [ -n "${KB_ENGINE_ROOT:-}" ] && [ -x "$KB_ENGINE_ROOT/scripts/check-kb" ] && { echo "$KB_ENGINE_ROOT"; return; }
+  [ -x ../../scripts/check-kb ] && { echo "../.."; return; }   # designed layout: <engine>/kb/<library>
+}
+
+ENGINE=$(find_engine)
+if [ -z "$ENGINE" ]; then
+  echo "domain pre-commit: engine not found — structural checks SKIPPED."
+  echo "  Set KB_ENGINE_ROOT, or clone this library under an engine's kb/."
+  exit 0
+fi
+
+fail=0
+echo "domain pre-commit (engine: $ENGINE):"
+"$ENGINE/scripts/check-exec-bits" .  || fail=1
+"$ENGINE/scripts/check-secrets"      || fail=1
+"$ENGINE/scripts/check-kb"     .     || fail=1
+"$ENGINE/scripts/check-golden" .     || fail=1   # once the library has a golden set
+[ "$fail" -ne 0 ] && { echo; echo "Commit blocked."; exit 1; }
+echo "domain pre-commit: clean"
+```
+
+A library must not depend on an engine it is designed to outlive, which is why absence skips rather
+than fails.
 
 Then create `INDEX.md` **at the library root**. It is the domain router, the entry point, and the
 only file carrying the domain's currency configuration:

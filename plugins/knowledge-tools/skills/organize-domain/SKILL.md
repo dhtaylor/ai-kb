@@ -18,8 +18,8 @@ the skills) and the **libraries** installed under it at `kb/`. Behaviour and con
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
-**Read the contract first.** Your session context names the general knowledge root; the contract is
-`<general-root>/knowledge/CONVENTIONS.md`. If the root is unconfigured, stop and say so.
+**Read the contract first.** Your session context names the engine; the contract is
+`<engine>/CONVENTIONS.md`. If the root is unconfigured, stop and say so.
 
 ## Step 1 — Diagnose before touching anything
 
