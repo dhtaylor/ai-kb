@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""check-golden — the deterministic half of the retrieval eval.
+
+Verifies that a library's golden set is a working oracle: every record is
+well-formed, every expected_file exists, and every expected_excerpt is actually
+present in the file it names. No LLM, no agent, no network — it runs on every
+commit and is cheap enough to.
+
+What it CANNOT do, and this is the point of the split: it cannot tell whether an
+agent answers from the file or from its own memory. An inlined fact routes
+correctly and passes here. That is the answer-grounding eval's job, which runs an
+agent and greps its answer. This check is the fire alarm's wiring; it is not the
+fire alarm.
+
+Usage: check-golden <library-root>
+Exit 0 clean, 1 on any defect.
+"""
+import pathlib, re, sys
+
+VALID_CASES = {"positive", "negative", "unresolved", "cross-root"}
+
+
+def parse(text):
+    """Records are '- case: x' blocks with key: value lines under them."""
+    records, cur = [], None
+    for raw in text.splitlines():
+        line = raw.strip()
+        m = re.match(r"^-\s+case:\s*(\S+)", line)
+        if m:
+            if cur:
+                records.append(cur)
+            cur = {"case": m.group(1), "_line": raw}
+            continue
+        if cur is not None:
+            kv = re.match(r'^(question|expected_file|expected_excerpt):\s*"?(.*?)"?\s*$', line)
+            if kv:
+                cur[kv.group(1)] = kv.group(2)
+    if cur:
+        records.append(cur)
+    return records
+
+
+def main(root: pathlib.Path) -> int:
+    golden = sorted(root.glob("*-golden.md"))
+    if not golden:
+        print(f"check-golden: no golden set in {root} — a library with content and no oracle "
+              f"is untested by construction")
+        return 1
+    if len(golden) > 1:
+        print(f"check-golden: {len(golden)} golden sets found; expected exactly one")
+        return 1
+
+    gf = golden[0]
+    text = gf.read_text()
+    records = parse(text)
+    defects, counts = [], {c: 0 for c in VALID_CASES}
+
+    if not records:
+        defects.append(f"{gf.name}: no records parsed — the oracle is empty")
+
+    for i, r in enumerate(records, 1):
+        case, where = r.get("case"), f"{gf.name} record {i}"
+        if case not in VALID_CASES:
+            defects.append(f"{where}: case '{case}' is not one of {sorted(VALID_CASES)}")
+            continue
+        counts[case] += 1
+        if not r.get("question"):
+            defects.append(f"{where} [{case}]: no question")
+
+        ef, exc = r.get("expected_file", ""), r.get("expected_excerpt", "")
+        if case == "negative":
+            if ef:
+                defects.append(f"{where} [negative]: names expected_file '{ef}' — a refusal case "
+                               f"must name no file")
+            if not exc:
+                defects.append(f"{where} [negative]: no expected_excerpt (the refusal to produce)")
+            continue
+
+        if not ef:
+            defects.append(f"{where} [{case}]: no expected_file")
+            continue
+        target = root / ef
+        if not target.is_file():
+            defects.append(f"{where} [{case}]: expected_file '{ef}' does not exist")
+            continue
+        if not exc:
+            defects.append(f"{where} [{case}]: no expected_excerpt")
+            continue
+        # Line breaks in the source must not make a present excerpt look absent.
+        if re.sub(r"\s+", " ", exc) not in re.sub(r"\s+", " ", target.read_text()):
+            defects.append(f"{where} [{case}]: excerpt not found in {ef} — "
+                           f"the oracle tests nothing: {exc[:60]!r}")
+
+    if counts["negative"] < 2:
+        defects.append(f"{gf.name}: {counts['negative']} negative case(s); the contract requires >=2 "
+                       f"(a KB that never refuses is a KB that guesses)")
+    if counts["unresolved"] == 0 and "unresolved" not in text.lower():
+        defects.append(f"{gf.name}: no unresolved case and no stated reason for its absence")
+
+    for d in defects:
+        print(f"FAIL {d}")
+    total = len(records)
+    summary = ", ".join(f"{c}={counts[c]}" for c in sorted(VALID_CASES) if counts[c])
+    print(f"\n{total} record(s) checked ({summary}) — "
+          + ("clean" if not defects else f"{len(defects)} defect(s)"))
+    return 1 if defects else 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("usage: check-golden <library-root>", file=sys.stderr)
+        sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1])))
