@@ -344,10 +344,17 @@ refusals then prove nothing. Each record carries:
 negative. For a `negative` case, `expected_file` may be empty and `expected_excerpt` holds the
 refusal the agent must produce.
 
-Every domain carries **≥2 negative cases** (must refuse to guess) and **≥1 UNRESOLVED case**. A
-**cross-root case is required only where the domain actually links across tiers** — a domain with no
-cross-root link cannot have one without fabricating the link, and a golden case invented to satisfy a
-count is worse than an absent one. Where it does not apply, say so in the file. The golden set updates **in the same commit** as any
+Every domain carries **≥2 negative cases** — a knowledge base that never refuses is one that guesses.
+
+An **`unresolved` case is required only where the domain actually holds a `CONFLICTED` section**, and a
+**cross-root case only where the domain actually links across libraries** — a domain with no contradiction and no
+cross-library link cannot have either without fabricating one, and a golden case invented to satisfy a
+count is worse than an absent one — it tests a fiction and reports success. Where either does not
+apply, say so in the file, with the reason.
+
+**Excerpts are matched with whitespace normalised**, so an excerpt may span a hard-wrapped line in the
+source. It may **not** contain markdown markup: emphasis exists in the file and never in a spoken
+answer, so an excerpt carrying it tests formatting rather than grounding. The golden set updates **in the same commit** as any
 file rename or split — an `organize-domain` exit criterion — or the oracle rots.
 
 Two tiers test it, and they are not interchangeable:

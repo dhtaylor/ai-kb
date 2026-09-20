@@ -33,6 +33,7 @@ do not skip to the extraction.
 | **Concluded** — a diagnosis reached from observations | **Only if** the reasoning is recorded and the observations support it. Record the reasoning with it |
 | **Decided** — "we will do X" | Not a semantic fact. It is a decision — it belongs in an ADR, not the KB |
 | **Speculated** — "probably", "I think", "it might be" | **No.** This is the one that looks most like knowledge and is not |
+| **Documented** — an authoritative source says so, but nobody here ran it | **Yes, at lower evidence.** Stamp `method: doc-review`, never `query` or `manual`, and say in the prose that it was not independently verified. It sounds like fact because the source is confident; the confidence is the source's, not yours |
 | **Tried and abandoned** — an approach that did not work | Only as a documented negative result, stated as such |
 
 **One observation is not a general truth.** A thing seen once, in one environment, is an
@@ -86,7 +87,12 @@ Placement follows the same rules as a fold, and the same decision table:
 - does not state it → add it to the file where it belongs.
 
 If no domain covers the fact, **stop and say a domain must be created first** — that is
-`create-domain`. Do not improvise a home.
+`create-domain`. Do not improvise a home. An **installed library that simply has no topic files yet is
+already covered** — seeding it is this skill's job, not a reason to stop.
+
+A fact whose correct home exists in **no library at all** is reported, not filed: name it, name the
+tier it belongs to, and leave it in the episodic note. The note is its home until a library exists —
+an open-questions file belongs to a domain, and this fact belongs to none.
 
 ## Step 5 — The episodic note stays
 
