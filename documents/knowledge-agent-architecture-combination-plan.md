@@ -2,8 +2,10 @@
 
 **Author:** Dandy Taylor (with Q)
 **Date:** 2026-09-18 · **Revised:** 2026-09-19
-**Status:** **Partly built.** Phases 0 and 1 complete, the behaviour layer built and tested, Phase 2
-half done. Originally hardened by a five-lens adversarial review (findings tagged
+**Status:** **Phases 0–2 complete.** Guardrails, decisions, the five skills, the retrieval agent and
+both halves of the eval are built and tested; two domain libraries hold 24 facts. The central claim —
+that an agent retrieves rather than recalling — is **proven for one library on one run**, not
+guaranteed. Phase 3 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
 `(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
 implementation proved, disproved and cost.
 
@@ -592,9 +594,15 @@ is a **plugin**, not a folder: a plugin works identically whether the consumer s
 engine or anywhere else on disk, whereas inheritance-by-nesting works only in the layout that
 produced it.
 
-An unexpected dividend: a `directory`-sourced plugin is read **in place**, not copied to a cache. So
-behaviour and the facts it operates on are the same working tree by construction and **cannot
-drift** — which is the argument for rejecting a git source even after the engine gained a remote.
+A `directory`-sourced plugin is read **in place**, not copied to a cache — which is the argument for
+rejecting a git source even after the engine gained a remote.
+
+**But "cannot drift" was wrong, and was disproved the same day.** Editing all five skills and then
+invoking one returned the *previous* version, while the file on disk was current and committed and no
+cache existed. **Behaviour is loaded once at session start; facts are read live at query time.** The
+two drift freely within a session and reconverge only at a restart. A git source would add a *second*
+axis of drift, across revisions as well as sessions, so the conclusion stands and the reasoning for it
+was overstated. Practical rule: **edit a skill, restart before trusting it.**
 
 ### 9.4 Cross-repository citation is structural, not incidental
 
@@ -625,6 +633,8 @@ Each of these read as coherent and was self-contradictory in use:
 | `CONFLICTED` carried **no date** | Its age drives escalation, and nothing recorded when the dispute began |
 | Golden sets named `<domain>.md` | **A folder name is a slug too** — so every golden set collided with its own domain folder. Guaranteed, once per domain |
 | `name` must match filename, but every folder has an `INDEX.md` | The contract violated its own rule on day one; path-addressed files needed an explicit exemption |
+| An `UNRESOLVED` golden case required **unconditionally** | A domain with no contradiction could comply only by manufacturing one. Flagged at the Phase 2 gate, then left unfixed for hours — a known defect is not a fixed one |
+| **The contract contradicted *itself*** | §1/§2/§6/§13 were updated for the library model and §3/§10 were not. A contract disagreeing with a *skill* has an answer — the contract wins. Disagreeing with *itself*, the precedence rule has nothing to say, which makes this a worse failure than staleness |
 
 ### 9.6 Guardrail defects found only by running the guardrails
 
@@ -637,6 +647,10 @@ Each of these read as coherent and was self-contradictory in use:
   commit surfaced it; `ls -l` looked perfect throughout.
 - **`meditate`'s own output failed the check `meditate` mandates.** Following it literally produced a
   queue file with no frontmatter, which the next sweep would report as an orphan.
+- **The non-executable-hook bug recurred twice more** — once by creating new hook files during the
+  restructure, once at library creation. Three occurrences of a bug that was found, fixed and written
+  into an ADR. The fix that finally held was not another fix but a **check**: `check-exec-bits`, run
+  in every hook and in CI. *A bug that recurs does not need fixing again; it needs detecting.*
 
 ### 9.7 What the plan got right, confirmed under test
 
@@ -649,18 +663,42 @@ Each of these read as coherent and was self-contradictory in use:
 - **Refusal discipline** holds: a distillation promoted two facts and refused six, including a
   single-session observation it declined to promote to product tier.
 
-### 9.8 What is still not built
+### 9.8 The retrieval layer, and what proving it cost
 
-The **entire retrieval half**. There are no thin agents, no orchestrator, no routing check and no
-answer-grounding eval. The golden set exists and has never been run against anything. **Nothing yet
-proves an agent retrieves rather than answering from memory** — which is the one claim this whole
-architecture rests on.
+Built and passing: a thin agent holding no facts, a deterministic routing check on every commit
+(`check-golden`), and an answer-grounding eval that greps what an agent actually said against the file
+it cited (`grade-eval`). **6/6 on a clean run.**
 
-Also absent: `check-scope`, cross-library `[[slug]]` resolution, the slug→path manifest, external
-`Source:` URL liveness checks, the Verifier, the Watcher, and the bootstrap command that would
-provision a new machine. Of §13's six checks, three are built.
+The eval's first run scored 5/6, and **both discrepancies were defects in the eval itself**:
 
-### 9.9 On sequence
+- **The oracle was testing for markup.** An expected excerpt carried markdown emphasis — text that
+  exists in a file and never in a spoken answer. A correct, grounded answer failed on a pair of
+  asterisks. Excerpts are now markup-free prose, matched with whitespace normalised.
+- **The answer key was in the exam room.** The golden set was routed from the domain router, so the
+  agent descended to it and read the expected answers — it said so in its transcript. Refusals
+  obtained that way prove nothing: nobody can distinguish retrieval from recitation. The oracle is now
+  unrouted, the agent is forbidden from opening one, and the sweep exempts it from the orphan check.
+
+The clean re-run's value is in *how* it refused rather than that it did. Asked for a deploy target it
+did not merely fail to find one — it reasoned from the contract that such a fact is repo-tier and no
+repo library was installed. A model answering from memory has no reason to invoke the scope tiers at
+all.
+
+**Still absent:** `check-scope`, cross-library `[[slug]]` resolution and the slug→path manifest,
+external `Source:` URL liveness, the Verifier, the Watcher, the orchestrator, and the bootstrap
+command. Seven of §13's twelve checks are built.
+
+### 9.9 A restructure invalidates its own verification
+
+Moving the topology moved every hook, script, path and interface that Phase 0 had tested. Re-running
+those tests found the hook non-executable in **two** repositories — every fresh clone silently
+unguarded — and two decision records that had quietly become false, including one claiming no tooling
+existed when four scripts and a skill did.
+
+None of it was visible from the working copy, where everything behaved correctly. **Verification is
+scoped to a topology, and survives a change to that topology no better than a hardcoded path does.**
+
+### 9.10 On sequence
 
 The topology changed three times in one session — one repository, then three, then engine-plus-
 libraries — each time driven by a finding rather than a preference. §6 says to settle the topology

@@ -143,8 +143,23 @@ another. Given how much of this contract has moved — v2 plus six amendments �
 possibility, it is the expected case.
 
 The `directory` source points at the same working tree the facts are read from, so behaviour and the
-knowledge it operates on are the same checkout by construction. They cannot drift, because there is
-only one of them.
+knowledge it operates on are the same checkout.
+
+> **Corrected 2026-09-19 — "they cannot drift" was wrong, and was disproved the same day.**
+> Editing all five skills and then invoking one through the Skill tool returned the **previous**
+> version: the contract path it named had been changed hours earlier and the step it followed had
+> been deleted. The file on disk was current, committed, and no cached copy existed anywhere under
+> `~/.claude/plugins`.
+>
+> **Plugin behaviour is loaded once at session start; facts are read live at query time.** So the two
+> drift freely *within* a session and reconverge only at a restart — this session was running the
+> morning's skills against the evening's contract. The lockstep argument survives as a reason to
+> prefer a `directory` source over a `git` one (a git source adds a *second* axis of drift, across
+> revisions as well as across sessions), but it is a weaker claim than the one made here, and the
+> stronger one was asserted without being tested.
+>
+> Practical consequence: **edit a skill, restart before trusting it.** Recorded as a fact in the
+> `claude-code-runtime` library.
 
 A git source becomes right for a consumer that holds **no local clone** and queries the knowledge
 base some other way. That is not this topology, and when it is, the drift problem has to be solved
