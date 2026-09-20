@@ -65,6 +65,12 @@ Specified now; **not yet built**. `check-kb` implements the third rule only.
 | No relative traversal out of a root (`../../knowledge/`) | The nested layout of ADR-0003 makes this reachable and it would bypass the configured root | to build |
 | Promotion to the general tier carries a CODEOWNER scope audit | The general tier is what every project depends on | to build (dormant, one owner) |
 
+**Status 2026-09-19.** `check-scope` is built and covers rows 1, 2 and 6 — well-formed values, agreement
+between a file and its library, and no relative link climbing out of a library. Row 4 (**cross-root slug
+uniqueness**) is **obsolete, not outstanding**: every cross-library reference now carries a mandatory
+`[[library:slug]]` prefix, so nothing can collide and there is nothing left to enforce. Row 7 (the
+CODEOWNER audit) stays dormant while there is one owner.
+
 ### 4. Promotion guards
 
 A fact promoted from repo to general tier must satisfy both, per the contract §9:

@@ -67,6 +67,12 @@ vocabulary a requester happened to use.
 - **Repo** — `knowledge/` inside the project repo, travelling with the clone.
 - **Personal** — user-level config.
 
+**A library is one domain, and a domain is one tier.** Every file in a library carries the same
+`scope:` as the library itself. A `repo:` fact filed in a general-tier library is a claim about every
+deployment inferred from one; a `product:` fact filed as `general` is a claim about every product
+inferred from one. Both read as ordinary facts and neither announces itself, which is why
+`check-scope` enforces the agreement rather than trusting it.
+
 **Behaviour is not one of the homes.** The engine (this contract, the tooling, the skills) holds no
 domains at all. Mixing them would be the very thing §0 of the design forbids — knowledge and
 behaviour in one place — and the engine is where the separation has to be observed most visibly,
@@ -428,12 +434,12 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
 | hygiene sweep | orphans, stale and missing stamps, ageing contradictions, golden-set rot | **built** — the `meditate` skill |
-| `check-scope` | `scope:` values valid; scope agrees with the tier; no traversal out of a library | **to build** |
+| `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution between installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **to build** |
 | answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Eight of twelve are built. A library passing the built checks is **structurally sound within itself**
+Nine of twelve are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.

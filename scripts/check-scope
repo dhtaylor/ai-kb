@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""check-scope — the scope attribute is only a rule if something enforces it.
+
+check-kb proves `scope:` is PRESENT. This proves it is right: that the value is
+well-formed, that it agrees with the library holding it, and that nothing reaches
+outside the library to fetch knowledge by relative path.
+
+Why the agreement rule matters more than it looks: a library is one domain, and a
+domain is one tier. A `repo:` fact filed in a general-tier library is a claim
+about every deployment made from one, and a `product:` fact filed as `general` is
+a claim about every product made from one. Both read as ordinary facts. Neither
+announces itself.
+
+NOT covered: the CODEOWNER audit on promotion to a shared tier (dormant — there
+is one owner), and cross-library slug uniqueness, which is obsolete: every
+cross-library reference carries a mandatory prefix, so nothing can collide.
+
+Usage: check-scope <library-root> [more-library-roots...]
+Exit 0 clean, 1 on any defect.
+"""
+import pathlib, re, sys
+
+NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
+          ".claude-plugin", ".claude", ".git"}
+VALID = re.compile(r"^(general|product:[a-z0-9][a-z0-9-]*|org:[a-z0-9][a-z0-9-]*|repo:[a-z0-9][a-z0-9-]*)$")
+# A relative link that climbs out of the library it is written in.
+ESCAPE = re.compile(r"\]\(\s*(\.\./[^)]*)\)|\[\[\s*(\.\.[^\]]*)\]\]")
+
+
+def scope_of(text):
+    m = re.search(r"^scope:\s*(\S+)\s*$", text, re.M)
+    return m.group(1) if m else None
+
+
+def main(roots) -> int:
+    defects = []
+    total = 0
+    for root in roots:
+        root = pathlib.Path(root)
+        idx = root / "INDEX.md"
+        if not idx.is_file():
+            defects.append(f"{root}: no INDEX.md — not a library root"); continue
+        lib_scope = scope_of(idx.read_text())
+        if lib_scope is None:
+            defects.append(f"{idx}: library router declares no scope:"); continue
+        if not VALID.match(lib_scope):
+            defects.append(f"{idx}: library scope '{lib_scope}' is not a valid value")
+
+        if lib_scope.startswith("repo:"):
+            defects.append(
+                f"{idx}: a library installed under kb/ is a general-tier home, but this one declares "
+                f"'{lib_scope}'. Repo-tier knowledge lives inside its project, not here")
+
+        for f in sorted(root.rglob("*.md")):
+            rel = f.relative_to(root)
+            if NON_KB & set(rel.parts):
+                continue
+            total += 1
+            text = f.read_text(errors="replace")
+            s = scope_of(text)
+            if s is None:
+                defects.append(f"{root.name}/{rel}: no scope:")
+            elif not VALID.match(s):
+                defects.append(f"{root.name}/{rel}: scope '{s}' is not one of "
+                               f"general | product:<vendor> | org:<company> | repo:<project>")
+            elif s != lib_scope:
+                defects.append(f"{root.name}/{rel}: scope '{s}' disagrees with its library "
+                               f"('{lib_scope}'). A library is one domain and a domain is one tier — "
+                               f"this fact belongs in a different library")
+
+            for m in ESCAPE.finditer(text):
+                target = (m.group(1) or m.group(2)).strip()
+                defects.append(f"{root.name}/{rel}: link '{target}' climbs out of the library. "
+                               f"Cross-library references use [[library:slug]]; a relative path across "
+                               f"a boundary resolves only in one layout")
+
+    for d in defects:
+        print(f"FAIL {d}")
+    print(f"\n{total} file(s) across {len(roots)} librar{'y' if len(roots)==1 else 'ies'} — "
+          + ("clean" if not defects else f"{len(defects)} defect(s)"))
+    return 1 if defects else 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("usage: check-scope <library-root> [more...]", file=sys.stderr); sys.exit(2)
+    sys.exit(main(sys.argv[1:]))
