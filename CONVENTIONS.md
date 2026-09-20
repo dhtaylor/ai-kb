@@ -182,14 +182,25 @@ for them.
   matching the filename (`<domain>-index`, `sources-index`, `knowledge-conventions`). `check-scope`
   exempts them from the within-root uniqueness check and **fails any `[[slug]]` that targets one** — cite
   the contract by path, or cite the specific fact that restates its rule.
-- **Cross-root links carry an explicit prefix:** `[[general:some-fact]]` from a repo KB into the general
-  root. `check-scope` enforces **cross-root uniqueness** to prevent ambiguous duplicates. On any residual
-  collision, **repo-local wins** for repo-scoped queries; the `general:` prefix is required otherwise.
-- **Resolution is O(1), not O(files).** The general root publishes a generated **slug→path manifest**
-  (single JSON, regenerated on every merge); consumers fetch that one file and resolve locally. Naive
-  per-link scanning across repos does not scale.
-- **Graceful absence.** A repo `[[general:slug]]` is a *soft* cross-repo dependency. If the general root
-  is not present, agents **warn and continue** — they never crash, and the repo KB stays usable standalone.
+- **Cross-library links name the library:** `[[<library>:<slug>]]`, e.g.
+  `[[claude-code-runtime:behaviour-loading]]`. The prefix names the **library**, not a tier — the older
+  `[[general:slug]]` form came from a two-root model where "general" identified a single tree; with N
+  libraries installed it identifies nothing.
+- **Slugs need be unique only *within* a library.** Cross-library uniqueness is **not** required, and
+  the rule that once demanded it is obsolete: an explicit prefix is mandatory for every cross-library
+  reference, so `[[a:foo]]` and `[[b:foo]]` cannot be confused. A bare `[[slug]]` never leaves the
+  library it is written in, so there is nothing left to collide.
+- **No manifest.** A generated slug→path manifest was specified so a consumer could resolve against a
+  *remote* root without scanning it. Every installed library is local, under the engine's `kb/`, so
+  resolution is a directory scan and a manifest would be committed state that can go stale for a
+  problem that no longer exists. Add one when a remote library exists to justify it.
+- **Resolution runs one level up.** A library cannot see its siblings, so `check-kb` skips prefixed
+  links by design and `check-xlinks` resolves them across the whole `kb/` directory. That split is not
+  an implementation detail: it is why a library remains checkable on its own.
+- **Graceful absence is a distinction, not a leniency.** A link into a library that is **not installed**
+  is a *soft dependency*: it warns, and agents continue. A link into a library that **is** installed but
+  lacks the slug is **dead** and fails. Collapsing the two would punish portability — a machine need not
+  hold every library — while treating both as warnings would let real rot accumulate unseen.
 
 ## 6. Provenance — every fact is traceable
 
@@ -418,11 +429,11 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
 | hygiene sweep | orphans, stale and missing stamps, ageing contradictions, golden-set rot | **built** — the `meditate` skill |
 | `check-scope` | `scope:` values valid; scope agrees with the tier; no traversal out of a library | **to build** |
-| cross-library links | `[[slug]]` resolution *between* installed libraries, and the slug→path manifest | **to build** |
+| `check-xlinks` | `[[library:slug]]` resolution between installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **to build** |
 | answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Seven of twelve are built. A library passing the built checks is **structurally sound within itself**
+Eight of twelve are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.

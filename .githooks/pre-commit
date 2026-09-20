@@ -26,6 +26,8 @@ echo "pre-commit guardrails:"
 run "exec bits"          ./scripts/check-exec-bits
 run "secret scan"        ./scripts/check-secrets
 run "embedded-fact lint" ./scripts/check-embedded-facts
+# Libraries cannot see each other, so cross-library resolution can only run here.
+[ -d kb ] && run "cross-library links" ./scripts/check-xlinks kb
 
 if [ "$fail" -ne 0 ]; then
   cat <<'MSG'

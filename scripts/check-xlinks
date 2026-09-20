@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""check-xlinks — resolve [[library:slug]] references between domain libraries.
+
+check-kb sees one library and cannot see its siblings, so it skips any prefixed
+link. This runs one level up, over the whole kb/ directory, and is the only thing
+that can tell a live cross-library reference from a dead one.
+
+FORM: [[<library>:<slug>]] — the prefix names the LIBRARY, not a tier. The older
+[[general:slug]] form came from a two-root model where "general" identified a
+single tree; with N libraries installed it identifies nothing.
+
+ABSENCE IS NOT A DEFECT. A library that is not installed is a soft dependency,
+not a broken link: libraries are portable and a machine need not hold every one.
+That WARNS. A link into a library that IS installed, naming a slug it does not
+have, is dead and FAILS — the difference matters, because treating absence as
+breakage would punish the portability the whole design is for.
+
+Usage: check-xlinks <kb-root>
+Exit 0 when nothing is dead, 1 otherwise. Warnings alone do not fail.
+"""
+import pathlib, re, sys
+
+NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
+          ".claude-plugin", ".claude", ".git", "episodic"}
+PLACEHOLDER = re.compile(r"[<>]")
+
+
+def slugs_of(lib: pathlib.Path):
+    return {f.stem for f in lib.rglob("*.md")
+            if not NON_KB & set(f.relative_to(lib).parts) and f.name != "INDEX.md"}
+
+
+def main(kb: pathlib.Path) -> int:
+    if not kb.is_dir():
+        print(f"check-xlinks: {kb} is not a directory", file=sys.stderr); return 2
+
+    libs = {d.name: d for d in sorted(kb.iterdir())
+            if d.is_dir() and (d / "INDEX.md").is_file()}
+    if not libs:
+        print(f"check-xlinks: no libraries installed under {kb} — nothing to resolve")
+        return 0
+
+    index = {name: slugs_of(path) for name, path in libs.items()}
+    dead, warn, ok = [], [], 0
+
+    for name, path in libs.items():
+        for f in sorted(path.rglob("*.md")):
+            if NON_KB & set(f.relative_to(path).parts):
+                continue
+            for link in re.findall(r"\[\[([^\]]+)\]\]", f.read_text(errors="replace")):
+                if ":" not in link or PLACEHOLDER.search(link):
+                    continue                       # bare link, or a template placeholder
+                target_lib, _, slug = link.partition(":")
+                where = f"{name}/{f.relative_to(path)}"
+                if target_lib not in index:
+                    warn.append(f"{where}: [[{link}]] -> library '{target_lib}' is not installed "
+                                f"(soft dependency, not a broken link)")
+                elif slug not in index[target_lib]:
+                    dead.append(f"{where}: [[{link}]] -> '{target_lib}' is installed but has no "
+                                f"slug '{slug}'")
+                else:
+                    ok += 1
+
+    for d in dead:
+        print(f"FAIL {d}")
+    for w in warn:
+        print(f"WARN {w}")
+    print(f"\n{len(libs)} librar{'y' if len(libs)==1 else 'ies'}, {ok} cross-link(s) resolved, "
+          f"{len(dead)} dead, {len(warn)} unresolvable (library absent)")
+    return 1 if dead else 0
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("usage: check-xlinks <kb-root>", file=sys.stderr); sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1])))
