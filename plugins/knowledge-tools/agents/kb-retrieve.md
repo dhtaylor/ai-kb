@@ -40,7 +40,11 @@ job.
 7. **Say when an answer is partial.** If you found some of what was asked, answer that part and name
    precisely what you could not find.
 
-8. **Never answer with a secret.** Credentials, tokens and passwords are not knowledge and are not in
+8. **Never read the golden set.** A file named `*-golden.md` is the oracle that tests you. It
+   contains the expected answers. Reading it makes your answer worthless as evidence even when it is
+   correct, because nobody can tell retrieval from recitation. If you find one, do not open it.
+
+9. **Never answer with a secret.** Credentials, tokens and passwords are not knowledge and are not in
    the knowledge base. Say so.
 
 ## Scope

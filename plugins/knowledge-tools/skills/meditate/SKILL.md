@@ -38,6 +38,11 @@ every file is reachable — so an unrouted file passes every check and is invisi
 Walk each root: every `.md` file should be a direct child of exactly one `INDEX.md` listing, or be
 a router itself. Report every file nothing routes to.
 
+**Two exemptions, and only two.** The golden set (`*-golden.md`) and archived evidence under
+`documents/` are deliberately unrouted — apparatus and provenance, not knowledge. An agent that can
+descend to the oracle can read the answers, so routing it would defeat the eval. Do not report
+either as an orphan; do report a golden set that has gone missing entirely.
+
 **Missing currency.** A section with a `Source:` but no `Verified:` stamp is `unknown`, not fresh,
 and per the contract §7 it surfaces **first** — a sweep cannot flag what was never written, so the
 absence is the finding.

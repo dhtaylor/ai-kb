@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""grade-eval — the answer-grounding half of the retrieval eval.
+
+check-golden proves the oracle is well-formed. This proves the AGENT is grounded:
+it takes what an agent actually answered and verifies, by grep rather than by
+judgement, that the expected excerpt appears in the answer AND in the file the
+agent cited.
+
+That conjunction is the whole point. An answer can be correct and ungrounded —
+right substance, no file, or the wrong file — and that is a failure here, because
+the claim under test is not "can it answer" but "did it retrieve". An LLM judge
+would forgive it; grep does not.
+
+Answers file: one record per line,  Q<n>|<cited-file-or-blank>|<answer text>
+
+Usage: grade-eval <library-root> <answers-file>
+Exit 0 if every record passes, 1 otherwise.
+"""
+import pathlib, re, sys
+
+
+def load_golden(lib: pathlib.Path):
+    gs = sorted(lib.glob("*-golden.md"))
+    if not gs:
+        print(f"grade-eval: no golden set in {lib}", file=sys.stderr); sys.exit(2)
+    recs, cur = [], None
+    for line in gs[0].read_text().splitlines():
+        s = line.strip()
+        m = re.match(r"^-\s+case:\s*(\S+)", s)
+        if m:
+            if cur: recs.append(cur)
+            cur = {"case": m.group(1)}
+        elif cur is not None:
+            kv = re.match(r'^(question|expected_file|expected_excerpt):\s*"?(.*?)"?\s*$', s)
+            if kv: cur[kv.group(1)] = kv.group(2)
+    if cur: recs.append(cur)
+    return recs
+
+
+def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
+    recs = load_golden(lib)
+    answers = {}
+    for line in answers_file.read_text().splitlines():
+        if not line.strip() or "|" not in line: continue
+        q, f, a = line.split("|", 2)
+        answers[q.strip()] = (f.strip(), a)
+
+    norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()
+    rows, npass = [], 0
+    for i, r in enumerate(recs, 1):
+        q = f"Q{i}"
+        case = r.get("case", "?")
+        exc  = r.get("expected_excerpt", "")
+        ef   = r.get("expected_file", "")
+        if q not in answers:
+            rows.append((q, case, "-", "-", "NO ANSWER")); continue
+        cited, ans = answers[q]
+
+        in_answer = norm(exc) in norm(ans)
+        file_ok   = (cited == ef) if ef else (cited == "")
+        in_file   = True
+        if ef:
+            target = lib / ef
+            in_file = target.is_file() and norm(exc) in norm(target.read_text())
+
+        ok = in_answer and file_ok and in_file
+        npass += ok
+        why = []
+        if not in_answer: why.append("excerpt not in answer")
+        if not file_ok:   why.append(f"cited {cited or '(none)'!r}, expected {ef or '(none)'!r}")
+        if not in_file:   why.append("excerpt not in the expected file — ORACLE ROT")
+        rows.append((q, case, "yes" if in_answer else "no", "yes" if file_ok else "no",
+                     "PASS" if ok else "FAIL: " + "; ".join(why)))
+
+    print(f"{'':5}{'case':11}{'grounded':10}{'cited ok':10}verdict")
+    print("-" * 78)
+    for q, case, g, c, v in rows:
+        print(f"{q:5}{case:11}{g:10}{c:10}{v}")
+    print("-" * 78)
+    print(f"answer-grounding: {npass}/{len(recs)} passed")
+    return 0 if npass == len(recs) else 1
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("usage: grade-eval <library-root> <answers-file>", file=sys.stderr); sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])))
