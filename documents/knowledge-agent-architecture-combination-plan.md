@@ -184,6 +184,12 @@ fact **links to it (`[[slug]]`), never restates it** (single-canonical-home rule
 - **Cross-link validation is a real tool, not "a small CI step" (hardening — High).** Cross-root `[[slug]]`
   resolution does not exist yet; until it does, every cross-repo link placed during a fold is unvalidated and
   dead links accrue silently. Specify it now and make it a deliverable that blocks broad rollout:
+  > **Superseded 2026-09-19 — see §9.11.** The prefix now names the **library**
+  > (`[[claude-code-runtime:behaviour-loading]]`), not a tier. Cross-root uniqueness and the
+  > slug→path manifest below are **obsolete, not outstanding**: mandatory prefixes mean nothing can
+  > collide, and every installed library is local, so there is nothing to fetch. The original
+  > reasoning is kept because it is why the replacement exists.
+
   - **Slug format & precedence.** `slug` = filename without extension. Bare `[[slug]]` resolves within the KB
     root it appears in; cross-tree links use an explicit prefix (`[[general:some-fact]]`). A cross-root
     **uniqueness constraint** (enforced by `check-scope`) prevents ambiguous duplicates. On any residual
@@ -684,9 +690,13 @@ did not merely fail to find one — it reasoned from the contract that such a fa
 repo library was installed. A model answering from memory has no reason to invoke the scope tiers at
 all.
 
-**Still absent:** `check-scope`, cross-library `[[slug]]` resolution and the slug→path manifest,
-external `Source:` URL liveness, the Verifier, the Watcher, the orchestrator, and the bootstrap
-command. Seven of §13's twelve checks are built.
+**Still absent:** external `Source:` URL liveness, the Verifier, the Watcher, the orchestrator, and
+the bootstrap command. **Nine of §13's twelve checks are built.** `check-xlinks` resolves
+`[[library:slug]]` across installed libraries; `check-scope` enforces that a file's tier agrees with
+its library's and that no relative link climbs out of one.
+
+The two fact-checkers are not merely unbuilt but currently **unbuildable**: both verify against live
+systems, and there are none. That is a property of the environment, not a backlog item.
 
 ### 9.9 A restructure invalidates its own verification
 
@@ -697,6 +707,27 @@ existed when four scripts and a skill did.
 
 None of it was visible from the working copy, where everything behaved correctly. **Verification is
 scoped to a topology, and survives a change to that topology no better than a hardcoded path does.**
+
+### 9.11 Machinery the architecture obsoleted
+
+A category distinct from defects: things this plan specified, correctly, that the built system then
+made unnecessary. Both arrived at the same moment, when content split into per-domain libraries.
+
+- **Cross-root slug uniqueness.** Specified so a *bare* slug could not resolve ambiguously across two
+  roots. Every cross-library reference now carries a mandatory prefix naming the library, and a bare
+  slug never leaves the library it is written in — so nothing can collide and the constraint has
+  nothing left to constrain.
+- **The slug→path manifest.** Specified so a consumer could resolve against a *remote* root without
+  scanning it, at O(1) rather than O(files). Every installed library is local under `kb/`. A manifest
+  would be committed state that goes stale, guarding a cost that is not incurred.
+
+Both were recorded as **obsolete** rather than deleted, in the ADR that first required them. The
+distinction matters more than it looks: six months on, a rule quietly dropped and a rule deliberately
+retired are indistinguishable, and the first invites someone to reinstate it.
+
+The general lesson is not that the plan was wrong. It specified the right machinery for the topology
+it assumed, and the topology changed underneath it for unrelated reasons. **Hardening is contingent on
+a structure, and survives a change to that structure no better than verification does** (§9.9).
 
 ### 9.10 On sequence
 
