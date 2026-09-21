@@ -15,7 +15,16 @@ NOT covered: the CODEOWNER audit on promotion to a shared tier (dormant — ther
 is one owner), and cross-library slug uniqueness, which is obsolete: every
 cross-library reference carries a mandatory prefix, so nothing can collide.
 
-Usage: check-scope <library-root> [more-library-roots...]
+TWO KINDS OF TREE, told apart by structure rather than by name or path:
+  * a LIBRARY is its own git repository (it has .git at its root). It is a
+    general-tier home, so a repo: scope there is a misfiled deployment fact.
+  * a PROJECT TREE is not — it sits inside the project's repository. It is the
+    repo-tier home, so anything BUT repo: there is a general fact misfiled into
+    one project, which is how a shared fact becomes N drifting copies.
+The rules are mirror images, and applying the library rule to a project tree
+rejects exactly the tree kb-init creates.
+
+Usage: check-scope <tree-root> [more-tree-roots...]
 Exit 0 clean, 1 on any defect.
 """
 import pathlib, re, sys
@@ -25,6 +34,17 @@ NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
 VALID = re.compile(r"^(general|product:[a-z0-9][a-z0-9-]*|org:[a-z0-9][a-z0-9-]*|repo:[a-z0-9][a-z0-9-]*)$")
 # A relative link that climbs out of the library it is written in.
 ESCAPE = re.compile(r"\]\(\s*(\.\./[^)]*)\)|\[\[\s*(\.\.[^\]]*)\]\]")
+
+
+def classify(root: pathlib.Path) -> str:
+    """A library is its own repository; a project tree lives inside one."""
+    if (root / ".git").exists():
+        return "library"
+    probe = root.resolve()
+    for parent in probe.parents:
+        if (parent / ".git").exists():
+            return "project"
+    return "library"   # outside any repository: apply the stricter, general-tier rule
 
 
 def scope_of(text):
@@ -46,10 +66,16 @@ def main(roots) -> int:
         if not VALID.match(lib_scope):
             defects.append(f"{idx}: library scope '{lib_scope}' is not a valid value")
 
-        if lib_scope.startswith("repo:"):
+        kind = classify(root)
+        if kind == "library" and lib_scope.startswith("repo:"):
             defects.append(
-                f"{idx}: a library installed under kb/ is a general-tier home, but this one declares "
-                f"'{lib_scope}'. Repo-tier knowledge lives inside its project, not here")
+                f"{idx}: this is a library (its own repository), which is a general-tier home, but it "
+                f"declares '{lib_scope}'. Repo-tier knowledge lives in the project it describes")
+        elif kind == "project" and not lib_scope.startswith("repo:"):
+            defects.append(
+                f"{idx}: this is a project tree, which is the repo-tier home, but it declares "
+                f"'{lib_scope}'. A fact true beyond this deployment belongs in a shared library — "
+                f"filed here it becomes one of N copies that drift")
 
         for f in sorted(root.rglob("*.md")):
             rel = f.relative_to(root)

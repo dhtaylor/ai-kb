@@ -73,6 +73,12 @@ deployment inferred from one; a `product:` fact filed as `general` is a claim ab
 inferred from one. Both read as ordinary facts and neither announces itself, which is why
 `check-scope` enforces the agreement rather than trusting it.
 
+**A project tree obeys the mirror rule.** A library is its own repository and a general-tier home, so
+`repo:` is wrong there. A project tree sits inside the project's repository and is the repo-tier home,
+so **anything but `repo:` is wrong there** — a fact true beyond one deployment, filed into one project,
+is one of N copies that will drift. `check-scope` tells the two apart by structure (does the tree have
+its own `.git`?), not by name or path.
+
 **Behaviour is not one of the homes.** The engine (this contract, the tooling, the skills) holds no
 domains at all. Mixing them would be the very thing §0 of the design forbids — knowledge and
 behaviour in one place — and the engine is where the separation has to be observed most visibly,
