@@ -4,11 +4,19 @@
 Covers, within a single root:
   * frontmatter lint  — required fields present, name matches filename
   * check-links       — [[slug]] and relative router links resolve
-  * check-scope       — within-root filename uniqueness; no [[slug]] at a path-addressed file
+  * slug uniqueness   — within-root filename uniqueness; no [[slug]] at a path-addressed file
+  * orphans           — every file reachable from the root INDEX.md by router links
 
-NOT yet covered (see §13): cross-root [[general:slug]] resolution, the slug->path
-manifest, scope-value validation, date-format linting, the embedded-fact lint over
-agent/command files, and the golden-set routing check.
+ORPHANS are the defect nothing else catches at commit time: an unrouted file
+passes every other check and is invisible to retrieval, which descends routers
+and never searches. Reachability, not mere mention: a file listed only by a
+sub-INDEX that is itself unrouted is as lost as one listed nowhere, and a
+[[slug]] from a topic file is a cross-reference, not a route. Exempt, per §3:
+the root INDEX.md (the entry point), the golden set (routing it would hand the
+retrieval agent its answer key) and documents/ (evidence, already excluded).
+
+Elsewhere (§13): scope values (check-scope), [[library:slug]] (check-xlinks),
+golden-set integrity (check-golden), secrets, exec bits, embedded facts.
 
 Usage: check-kb <knowledge-root>
 
@@ -36,6 +44,33 @@ EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}
 EXAMPLE_SLUGS = {"slug", "general:slug", "general:some-fact", "cross-link",
                  "source", "YYYY-MM-DD-domain-notes"}
 REQUIRED = ("name", "description", "domain", "scope")
+
+
+ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
+
+
+def orphans(root: pathlib.Path, files: list) -> list:
+    """Files not reachable from root/INDEX.md by following links out of routers."""
+    entry = root / "INDEX.md"
+    if not entry.exists():
+        return [f"{root}: no INDEX.md at the root — nothing in it is reachable"]
+    known = {f.resolve() for f in files}
+    reached, queue = {entry.resolve()}, [entry.resolve()]
+    while queue:
+        router = queue.pop()
+        for _, target in ROUTER_LINK.findall(router.read_text()):
+            if target.startswith("http"):
+                continue
+            t = (router.parent / target).resolve()
+            if t in known and t not in reached:
+                reached.add(t)
+                if t.name == "INDEX.md":
+                    queue.append(t)
+    return [f"{f}: orphan — no router reaches it from {entry}, so retrieval never will"
+            for f in files
+            if f.resolve() not in reached
+            and f.name not in PATH_ADDRESSED - {"INDEX.md"}
+            and not f.name.endswith("-golden.md")]
 
 
 def main(root: pathlib.Path) -> int:
@@ -95,6 +130,8 @@ def main(root: pathlib.Path) -> int:
             defects.append(
                 f"{f}: slug '{f.stem}' collides with directory '{dir_slugs[f.stem]}' — "
                 f"a folder name is a slug too, so [[{f.stem}]] is ambiguous")
+
+    defects += orphans(root, files)
 
     for d in defects:
         print(f"FAIL {d}")

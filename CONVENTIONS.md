@@ -459,16 +459,17 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | frontmatter lint | required fields present, `name` matches filename | **built** — `check-kb` |
 | `check-links` | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
 | slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
+| orphans | every file reachable from the root `INDEX.md` by router links; golden set and `documents/` exempt (§3) | **built** — `check-kb` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
 | secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
-| hygiene sweep | orphans, stale and missing stamps, ageing contradictions, golden-set rot | **built** — the `kb-audit` skill |
+| hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution between installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **to build** |
 | answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Nine of twelve are built. A library passing the built checks is **structurally sound within itself**
+Ten of thirteen are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.

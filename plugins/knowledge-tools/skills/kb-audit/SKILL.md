@@ -25,7 +25,8 @@ holding exactly one. Write facts into a library, never into the engine.
 Run the engine's checks and report each one's output verbatim:
 
 - `scripts/check-kb <library>` — frontmatter completeness, `name`/filename agreement, link
-  resolution, within-library slug uniqueness;
+  resolution, within-library slug uniqueness, and **orphans**: every file reachable from the root
+  `INDEX.md` by router links (the golden set and `documents/` exempt);
 - `scripts/check-scope <library>` — scope values well-formed and in agreement with the library;
 - `scripts/check-golden <library>` — every golden record well-formed, its file present, its excerpt
   present in that file;
@@ -35,7 +36,7 @@ Run the engine's checks and report each one's output verbatim:
 A failure these report is already a finding — put it in the queue; do not re-derive it by hand.
 
 Then state plainly what they do **not** cover, so nobody reads a clean run as a clean bill of
-health: orphans, currency, contradiction ageing, whether the golden set's unresolved cases match
+health: currency, contradiction ageing, whether the golden set's unresolved cases match
 the domain's actual `CONFLICTED` sections, scope *content* (as opposed to scope labels), and
 external `Source:` URL liveness.
 
@@ -43,15 +44,11 @@ external `Source:` URL liveness.
 
 These are the sweep's own work. Each is a real decay mode no current tool catches.
 
-**Orphans.** A file that no router points at. `check-kb` verifies that links resolve, not that
-every file is reachable — so an unrouted file passes every check and is invisible to retrieval.
-Walk the library: every `.md` file should be a direct child of exactly one `INDEX.md` listing, or be
-a router itself. Report every file nothing routes to.
-
-**Two exemptions, and only two.** The golden set (`*-golden.md`) and archived evidence under
-`documents/` are deliberately unrouted — apparatus and provenance, not knowledge. An agent that can
-descend to the oracle can read the answers, so routing it would defeat the eval. Do not report
-either as an orphan; do report a golden set that has gone missing entirely.
+**Routing the scripts do not judge.** `check-kb` reports every orphan — queue those from its
+output. What it cannot see: a file listed by **more than one** router (two routes drift apart,
+and one hook ends up describing a file that has changed), and a **routed golden set** — the golden
+set and `documents/` are deliberately unrouted, and a router line pointing at `*-golden.md` hands
+the retrieval agent its answer key. Report both.
 
 **Missing currency.** A section with a `Source:` but no `Verified:` stamp is `unknown`, not fresh,
 and per the contract §7 it surfaces **first** — a sweep cannot flag what was never written, so the
