@@ -1,9 +1,9 @@
 ---
-name: meditate
+name: kb-audit
 description: Sweep a knowledge base for decay — dead links, orphaned files, stale or missing currency stamps, index bloat, empty routed leaves, ageing contradictions and scope misfiling — and build a prioritised needs-attention queue. Detection only; it proposes and never mutates. Use as the acceptance gate after a wave of knowledge work, or as a recurring hygiene sweep. Do NOT use it to fix what it finds.
 ---
 
-# meditate
+# kb-audit
 
 The sweep. Its one discipline: **it detects and it reports. It does not fix.**
 
@@ -52,7 +52,7 @@ expire at **one tenth** the human interval. High-blast-radius facts — deploy t
 routing, credential references — are stale the moment their last stamp was written by an agent,
 regardless of date.
 
-**Index bloat.** A domain past roughly 15 topic files still flat. That is `organize-domain`'s
+**Index bloat.** A domain past roughly 15 topic files still flat. That is `kb-organize-domain`'s
 trigger; report it, do not reshape.
 
 **Empty routed leaves.** A router line pointing at a file that holds no content, or at a folder

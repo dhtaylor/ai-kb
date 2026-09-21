@@ -1,9 +1,9 @@
 ---
-name: organize-domain
-description: Reshape a lumpy knowledge domain — split an overgrown file, merge over-fragmented ones, introduce a sub-index when a domain exceeds the flat threshold, and keep every router, backlink and golden-set record in step. Structure only, never meaning. Use after a fold leaves a domain misshapen or when a domain has outgrown a flat layout. Do NOT use to add facts (update-domain), create a domain (create-domain), or resolve contradictions.
+name: kb-organize-domain
+description: Reshape a lumpy knowledge domain — split an overgrown file, merge over-fragmented ones, introduce a sub-index when a domain exceeds the flat threshold, and keep every router, backlink and golden-set record in step. Structure only, never meaning. Use after a fold leaves a domain misshapen or when a domain has outgrown a flat layout. Do NOT use to add facts (kb-update-domain), create a domain (kb-create-domain), or resolve contradictions.
 ---
 
-# organize-domain
+# kb-organize-domain
 
 Moves knowledge; never changes it. Every fact that comes out must be the same fact that went in,
 character for character where it is load-bearing.

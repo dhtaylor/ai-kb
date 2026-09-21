@@ -45,10 +45,10 @@ name=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/
 # 2. Refuse an initialised tree ----------------------------------------------
 if [ -f knowledge/INDEX.md ]; then
   echo "kb-init: $root/knowledge/INDEX.md already exists — this project is initialised."
-  echo "  Nothing changed. Adding knowledge to an existing tree is update-domain's job."
+  echo "  Nothing changed. Adding knowledge to an existing tree is kb-update-domain's job."
   exit 0
 fi
-[ -d knowledge ] && notes+=("knowledge/ existed with no router — its existing contents are unrouted; run meditate to see them")
+[ -d knowledge ] && notes+=("knowledge/ existed with no router — its existing contents are unrouted; run kb-audit to see them")
 
 # 3. The router --------------------------------------------------------------
 mkdir -p knowledge

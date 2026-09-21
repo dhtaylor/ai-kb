@@ -1,9 +1,9 @@
 ---
-name: create-domain
-description: Stand up a new semantic knowledge domain that does not exist yet, in the correct knowledge tier, conforming to the knowledge conventions — folder, INDEX router, frontmatter, provenance, golden set, and the router chain above it. Use when a fact needs a home and no domain covers it, or when seeding a domain from source material. Do NOT use to add facts to a domain that already exists (that is update-domain) or to reshape a lumpy one (organize-domain).
+name: kb-create-domain
+description: Stand up a new semantic knowledge domain that does not exist yet, in the correct knowledge tier, conforming to the knowledge conventions — folder, INDEX router, frontmatter, provenance, golden set, and the router chain above it. Use when a fact needs a home and no domain covers it, or when seeding a domain from source material. Do NOT use to add facts to a domain that already exists (that is kb-update-domain) or to reshape a lumpy one (kb-organize-domain).
 ---
 
-# create-domain
+# kb-create-domain
 
 Stands up a domain that does not exist yet. Structure only — you are building the shelf, and
 seeding it if source material was supplied. You are not inventing facts.
@@ -224,7 +224,7 @@ If the domain has no content yet, the golden set is **deferred and no file is cr
 placeholder. An empty golden-set file is an empty state leaf by another name, and an oracle with no
 records reads as coverage that does not exist.
 
-Say in your report that the golden set is deferred, and say who picks it up: **`update-domain`
+Say in your report that the golden set is deferred, and say who picks it up: **`kb-update-domain`
 seeds it when the domain gains its first facts, in the same change.** A domain that gains content
 without gaining a golden set has no oracle, and nobody will notice until a rename rots something
 silently.
@@ -246,7 +246,7 @@ it were.
 Stop and say so rather than proceeding, if:
 
 - the knowledge root is unconfigured — never guess a path;
-- the domain already exists — that is `update-domain`;
+- the domain already exists — that is `kb-update-domain`;
 - a library of that name is already installed under `kb/`;
 - the tier is genuinely ambiguous and the user has not decided;
 - you would have to invent a fact to fill the domain. An empty, well-formed domain is a good

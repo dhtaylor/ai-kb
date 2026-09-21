@@ -1,6 +1,6 @@
 ---
 name: knowledge-conventions
-description: The contract every knowledge domain conforms to — scope tiers, layout, router, granularity, slugs, provenance, currency, contradictions. Enforced by organize-domain; conformed to by update-domain, distill-episodic, and every retrieval agent.
+description: The contract every knowledge domain conforms to — scope tiers, layout, router, granularity, slugs, provenance, currency, contradictions. Enforced by kb-organize-domain; conformed to by kb-update-domain, kb-distill, and every retrieval agent.
 memory_type: reference
 domain: meta
 scope: general
@@ -28,6 +28,21 @@ slug resolution is now **root-scoped by filename** (§5, was name-field-global);
 **unretrievable, not merely annotated** (§8, was flag-in-place); and a file remains a **gestalt** while
 **currency moves to the section** (§4, §7) — because one verification date cannot honestly cover twelve
 facts of differing volatility.
+
+**Skill names changed on 2026-09-21.** Every skill now carries the `kb-` prefix, so the working set
+reads as one family. Records written earlier — ADRs, session notes, archived evidence — keep the names
+that were true when they were written, because a record is evidence and evidence is not rewritten:
+
+| Former | Current |
+|---|---|
+| `create-domain` | `kb-create-domain` |
+| `update-domain` | `kb-update-domain` |
+| `organize-domain` | `kb-organize-domain` |
+| `distill-episodic` | `kb-distill` |
+| `meditate` | `kb-audit` |
+
+`meditate` became `kb-audit` rather than `kb-sweep` deliberately: an audit inspects and reports, and
+nobody expects an auditor to fix the books. The name reinforces the one rule it is most tempted to break.
 
 ## 1. Scope tiers — answered at capture, never retrofitted
 
@@ -378,7 +393,7 @@ apply, say so in the file, with the reason.
 **Excerpts are matched with whitespace normalised**, so an excerpt may span a hard-wrapped line in the
 source. It may **not** contain markdown markup: emphasis exists in the file and never in a spoken
 answer, so an excerpt carrying it tests formatting rather than grounding. The golden set updates **in the same commit** as any
-file rename or split — an `organize-domain` exit criterion — or the oracle rots.
+file rename or split — an `kb-organize-domain` exit criterion — or the oracle rots.
 
 Two tiers test it, and they are not interchangeable:
 
@@ -439,7 +454,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
 | secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
-| hygiene sweep | orphans, stale and missing stamps, ageing contradictions, golden-set rot | **built** — the `meditate` skill |
+| hygiene sweep | orphans, stale and missing stamps, ageing contradictions, golden-set rot | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution between installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **to build** |

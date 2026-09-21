@@ -1,9 +1,9 @@
 ---
-name: distill-episodic
-description: Turn episodic material — session logs, meeting notes, debugging transcripts, dump records — into durable semantic facts, separating what was observed from what was concluded or merely speculated, and citing the episodic note as the source. Use when session notes contain knowledge worth keeping. Do NOT use to fold external documents (update-domain), create a domain (create-domain), or delete the episodic record.
+name: kb-distill
+description: Turn episodic material — session logs, meeting notes, debugging transcripts, dump records — into durable semantic facts, separating what was observed from what was concluded or merely speculated, and citing the episodic note as the source. Use when session notes contain knowledge worth keeping. Do NOT use to fold external documents (kb-update-domain), create a domain (kb-create-domain), or delete the episodic record.
 ---
 
-# distill-episodic
+# kb-distill
 
 Episodic notes are a record of *what happened*. Semantic facts are claims about *what is true*.
 Distilling is the act of deciding which of the former have earned the latter, and the whole
@@ -87,7 +87,7 @@ Placement follows the same rules as a fold, and the same decision table:
 - does not state it → add it to the file where it belongs.
 
 If no domain covers the fact, **stop and say a domain must be created first** — that is
-`create-domain`. Do not improvise a home. An **installed library that simply has no topic files yet is
+`kb-create-domain`. Do not improvise a home. An **installed library that simply has no topic files yet is
 already covered** — seeding it is this skill's job, not a reason to stop.
 
 A fact whose correct home exists in **no library at all** is reported, not filed: name it, name the

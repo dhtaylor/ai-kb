@@ -1,9 +1,9 @@
 ---
-name: update-domain
-description: Fold source material — a spec, vendor page, legacy document, prior agent prompt, or system output — into an existing knowledge domain, with per-section provenance, dedup and supersede handling, and contradictions flagged rather than resolved. Use when new source material needs to become durable knowledge in a domain that already exists. Do NOT use to create a domain (create-domain), reshape a lumpy one (organize-domain), or distill session notes (distill-episodic).
+name: kb-update-domain
+description: Fold source material — a spec, vendor page, legacy document, prior agent prompt, or system output — into an existing knowledge domain, with per-section provenance, dedup and supersede handling, and contradictions flagged rather than resolved. Use when new source material needs to become durable knowledge in a domain that already exists. Do NOT use to create a domain (kb-create-domain), reshape a lumpy one (kb-organize-domain), or distill session notes (kb-distill).
 ---
 
-# update-domain
+# kb-update-domain
 
 The workhorse, and the most dangerous skill in the set. Folding is where facts get corrupted,
 and **you are the thing doing the corrupting**. A language model rounds a constant, drops a
@@ -24,7 +24,7 @@ so — never guess a path.
 
 ## Step 1 — Confirm the target
 
-The domain must already exist. If it does not, stop and say `create-domain` is the skill.
+The domain must already exist. If it does not, stop and say `kb-create-domain` is the skill.
 
 Check the domain's `scope:` against the material. If some of the source belongs to a different
 tier — a deployment detail inside a vendor document, say — **that part does not go here.** Name
@@ -77,7 +77,7 @@ For each extracted fact, in this order:
 
 If a file's content outgrows its frontmatter `description`, either update the description to match
 what it now holds, or treat the mismatch as a signal the file is becoming two — that is
-`organize-domain`'s call, not a decision to make mid-fold.
+`kb-organize-domain`'s call, not a decision to make mid-fold.
 
 **A file is a gestalt.** Right-sized when it can be loaded alone to answer a real question yet
 still holds a coherent whole. Add the fact to the file that is already loaded to answer that kind
@@ -124,7 +124,7 @@ Resolving a contradiction is never your call. It is never automated.
 
 - Update the domain `INDEX.md` for any file you added: one hooked line, disambiguating its
   siblings. A file nothing routes to is invisible.
-- If the domain crossed roughly 15 topic files, say so — that is `organize-domain`'s trigger, not
+- If the domain crossed roughly 15 topic files, say so — that is `kb-organize-domain`'s trigger, not
   something to fix mid-fold.
 - **Seed or extend `<library>/<domain>-golden.md` in this same change.** If the
   domain had no golden set because it was empty, it has content now and this is where the
@@ -161,7 +161,7 @@ verified.
 Stop and say so rather than proceeding, if:
 
 - the knowledge root is unconfigured;
-- the target domain does not exist — that is `create-domain`;
+- the target domain does not exist — that is `kb-create-domain`;
 - the source material is not actually available to you. **Never fold from memory of what a
   document probably says.** A fold with no source is invention wearing a citation;
 - you cannot preserve a value or qualifier faithfully;

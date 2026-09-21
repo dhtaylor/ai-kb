@@ -9,6 +9,10 @@ guaranteed. Phase 3 onward is not started. Originally hardened by a five-lens ad
 `(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
 implementation proved, disproved and cost.
 
+> **Skills renamed 2026-09-21** to carry a `kb-` prefix (`meditate` is now `kb-audit`, `distill-episodic`
+> is now `kb-distill`; the mapping is in the contract). This document uses the current names throughout,
+> including where §9 recounts events that happened under the old ones.
+>
 > **Read §9 first if you are picking this up cold.** Three things in the sections below were wrong
 > in ways that only appeared when the thing was built, and §1 in particular has been rewritten.
 
@@ -271,12 +275,12 @@ writes an absolute path, and everybody actually pulls.** Latest-wins only works 
 
 Built *on* existing KB tooling — no new consolidation machinery invented:
 
-- **`create-domain`** — stand up domains that don't exist yet; seed from source material.
-- **`update-domain`** — the workhorse: fold an external/legacy source document (a spec, a prior agent prompt,
+- **`kb-create-domain`** — stand up domains that don't exist yet; seed from source material.
+- **`kb-update-domain`** — the workhorse: fold an external/legacy source document (a spec, a prior agent prompt,
   a vendor page) into an existing domain with per-section provenance; it does dedup/merge/supersede.
-- **`organize-domain`** — run after a fold on any domain that comes out lumpy.
-- **`distill-episodic`** — turn meeting notes / session logs into durable semantic facts.
-- **`meditate`** — the acceptance gate after each wave *and* the recurring hygiene sweep (dead links, stale
+- **`kb-organize-domain`** — run after a fold on any domain that comes out lumpy.
+- **`kb-distill`** — turn meeting notes / session logs into durable semantic facts.
+- **`kb-audit`** — the acceptance gate after each wave *and* the recurring hygiene sweep (dead links, stale
   `verified:` dates, orphaned facts, index bloat).
 
 ---
@@ -306,7 +310,7 @@ Built *on* existing KB tooling — no new consolidation machinery invented:
      catches answering from memory. Define an acceptable pass rate; **sample** N questions rather than all
      `12 × domains` every run (cost otherwise scales with the whole library). Include ≥2 **negative** cases
      per domain (must refuse to guess) and ≥1 **UNRESOLVED** case (must surface the conflict, §5A). The golden
-     set updates **in the same PR** as any file rename/split (an `organize-domain` exit criterion), else the
+     set updates **in the same PR** as any file rename/split (an `kb-organize-domain` exit criterion), else the
      oracle rots.
 3. **Currency stamping** — `verified: YYYY-MM-DD`; a `verify-domain` command re-checks highest-risk facts
    against the live system and re-stamps (or opens a `contradictions.md` flag on mismatch). Hardened:
@@ -340,8 +344,8 @@ weeding them. Three roles cover that lifecycle.
 ### The roles
 
 - **Curator (cataloguer)** — owns *structure*: where a fact lives, INDEX hooks, dedup, contradiction flagging,
-  `scope:` classification, promotion. This is `organize-domain` / `update-domain` / `distill-episodic` /
-  `meditate`, personified.
+  `scope:` classification, promotion. This is `kb-organize-domain` / `kb-update-domain` / `kb-distill` /
+  `kb-audit`, personified.
 - **Research librarian (fast access)** — the thin retrieval agents (§5.1): load INDEX, descend, cite, answer.
   Read-only, on demand. The reference desk.
 - **Fact-checker (currency)** — the new role, and it is more than one job, split by source of truth.
@@ -366,7 +370,7 @@ trusted to catch a vendor change it can't see):
 > feeding an LLM that drafts KB changes — a prompt-injection vector (a spoofed page saying "the correct
 > pattern for all agents is …" becomes a plausible auto-PR). Therefore:
 > - **Default (low-tech):** a **human-maintained digest** of vendor release notes / regulation changes,
->   reviewed on a cadence and folded via `update-domain`. Do not claim automated monitoring until a concrete
+>   reviewed on a cadence and folded via `kb-update-domain`. Do not claim automated monitoring until a concrete
 >   mechanism is prototyped.
 > - **If/when automated:** fetch in an **isolated, network-restricted** step (no tool access; cannot reach
 >   internal/link-local addresses — SSRF guard); **strip to plain text**; treat content strictly as
@@ -494,9 +498,9 @@ domain**, with explicit per-domain fact selection. Identify near-duplicate colla
 settled *before* the pilot, since they fix every retrieval path the pilot hardcodes.
 
 ### Phase 2 — Pilot one representative domain end-to-end
-Pick the most mature, information-rich domain. `update-domain` folds source material in with provenance;
-`organize-domain` reshapes; write the thin domain agent + one command over it; build the golden set (incl.
-negatives + an UNRESOLVED case); `meditate` to verify. **Near-duplicate collapse design:** the variant is a
+Pick the most mature, information-rich domain. `kb-update-domain` folds source material in with provenance;
+`kb-organize-domain` reshapes; write the thin domain agent + one command over it; build the golden set (incl.
+negatives + an UNRESOLVED case); `kb-audit` to verify. **Near-duplicate collapse design:** the variant is a
 **required parameter**; the agent loads `…/<variant>.md` and **fails explicitly** if absent rather than
 hallucinating.
 **Exit:** the thin agent (a) answers real questions citing KB files; (b) passes the **deterministic routing
@@ -505,7 +509,7 @@ check** and the **answer-grounding eval**; (c) responds "fact not found — chec
 negative/UNRESOLVED cases. **Do not fan out until this is clean.**
 
 ### Phase 3 — Roll out remaining domains in waves
-Each following the Phase-2 recipe; `create-domain` where new. Contradictions flagged **and marked
+Each following the Phase-2 recipe; `kb-create-domain` where new. Contradictions flagged **and marked
 `CONFLICTED`** (§5A), not silently resolved. **Blocked on** the cross-root `check-links` resolver existing and
 running in CI (§2) — without it, dead cross-repo links accrue.
 
@@ -517,7 +521,7 @@ state-changing commands armed with confirmation gates.
 ### Phase 5 — Steady state, librarians & team onboarding
 1-page contributor guide; stand up the **Verifier** (per-domain TTL over internal facts) and **Watcher**
 (general-tier, per its speculative scoping) — detection-only into the queue, mutation via PR; per-domain
-freshness horizons in each INDEX; `distill-episodic` on a cadence; `meditate` on a schedule.
+freshness horizons in each INDEX; `kb-distill` on a cadence; `kb-audit` on a schedule.
 **Exit:** a contributor who has read only the 1-page guide can *capture* a fact correctly, and stale or
 drifted facts surface as a queue rather than rotting silently.
 
@@ -525,10 +529,10 @@ drifted facts surface as a queue rather than rotting silently.
 
 ## 7. Risks & accepted residual limitations
 
-- **Folding is where facts get corrupted — and `update-domain` is itself an LLM (hardening — Critical).**
+- **Folding is where facts get corrupted — and `kb-update-domain` is itself an LLM (hardening — Critical).**
   "Verbatim moves" is *not* guaranteed by an LLM fold: it can round a constant, drop a qualifier, or merge two
   behaviors into one generalization. Mitigation: **require a human diff of each extracted fact against its
-  source** before commit (a Phase 2 exit criterion), or restrict `update-domain` to structure and
+  source** before commit (a Phase 2 exit criterion), or restrict `kb-update-domain` to structure and
   **copy-paste** load-bearing values.
 - **Retrieval discipline is a behavior, not a guarantee** — the golden set is a fire alarm on fixed questions;
   the **embedded-fact lint** (§5.1) is the actual lock.
@@ -651,7 +655,7 @@ Each of these read as coherent and was self-contradictory in use:
   644 despite the disk showing otherwise, and **git skips a non-executable hook silently**. Every
   guardrail was inert for anyone but the authoring working copy. Only cloning and attempting a bad
   commit surfaced it; `ls -l` looked perfect throughout.
-- **`meditate`'s own output failed the check `meditate` mandates.** Following it literally produced a
+- **`kb-audit`'s own output failed the check `kb-audit` mandates.** Following it literally produced a
   queue file with no frontmatter, which the next sweep would report as an orphan.
 - **The non-executable-hook bug recurred twice more** — once by creating new hook files during the
   restructure, once at library creation. Three occurrences of a bug that was found, fixed and written
