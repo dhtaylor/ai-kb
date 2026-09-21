@@ -1,0 +1,174 @@
+#!/usr/bin/env bash
+# kb-init — scaffold a project knowledge tree. No model required.
+#
+# Every step is mechanical, so this is a script rather than instructions for an
+# agent: the tier is repo:<project> because it is a project, the location is
+# knowledge/ because the contract says so, the horizon is the deployment band,
+# and there is no content to seed. A procedure with no judgment needs no model.
+#
+# GOVERNING RULE: create what is missing, touch nothing that exists. Most
+# projects already have a CLAUDE.md and a .claude/; a scaffolder that is
+# destructive on its second run is one nobody runs twice.
+#
+# Usage: kb-init [--name NAME] [DIR]
+#   DIR     any directory inside the target project (default: current directory).
+#           The project root is the enclosing git repository, not DIR itself.
+#   --name  project name (default: the repository's directory name), kebab-cased.
+set -uo pipefail
+
+name_arg=""; dir="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --name) name_arg="${2:-}"; shift 2 ;;
+    -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
+    -*) echo "kb-init: unknown option $1" >&2; exit 2 ;;
+    *) dir="$1"; shift ;;
+  esac
+done
+
+[ -d "$dir" ] || { echo "kb-init: $dir is not a directory" >&2; exit 2; }
+created=(); kept=(); notes=()
+
+# 1. Locate the project and name it ------------------------------------------
+if root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null); then
+  is_git=1
+else
+  is_git=0; root=$(cd "$dir" && pwd)
+  notes+=("not a git repository — the tree works, but there is no hook to wire")
+fi
+cd "$root" || exit 2
+
+raw="${name_arg:-$(basename "$root")}"
+name=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+[ -n "$name" ] || { echo "kb-init: could not derive a project name from '$raw'" >&2; exit 2; }
+
+# 2. Refuse an initialised tree ----------------------------------------------
+if [ -f knowledge/INDEX.md ]; then
+  echo "kb-init: $root/knowledge/INDEX.md already exists — this project is initialised."
+  echo "  Nothing changed. Adding knowledge to an existing tree is update-domain's job."
+  exit 0
+fi
+[ -d knowledge ] && notes+=("knowledge/ existed with no router — its existing contents are unrouted; run meditate to see them")
+
+# 3. The router --------------------------------------------------------------
+mkdir -p knowledge
+cat > knowledge/INDEX.md <<INDEX
+---
+name: ${name}-index
+description: Operational knowledge specific to the ${name} deployment — topology, quirks, known issues and runbooks.
+memory_type: reference
+domain: ${name}
+scope: repo:${name}
+freshness_horizon: 14d
+verifier_budget: 5
+metadata:
+  type: index
+  node_type: router
+  created: $(date +%F)
+tags: [${name}]
+keywords: [${name}, deployment, operations, known issues, runbook]
+---
+# ${name} — project knowledge
+
+Facts true **only of this deployment**: where it runs, how it is deployed, this system's known bugs
+and their workarounds, and the operational gotchas nobody wrote down.
+
+Anything true wherever a product or concept appears belongs in a shared domain library, not here —
+link to it with \`[[library:slug]]\` instead of restating it.
+
+This tree is empty. It fills from real work: capture findings as they happen, and distil them
+periodically.
+INDEX
+created+=("knowledge/INDEX.md")
+
+# 4. .claude/ and CLAUDE.md, only if absent ---------------------------------
+if [ -d .claude ]; then kept+=(".claude/"); else mkdir .claude; created+=(".claude/"); fi
+
+MARK="<!-- kb-init: knowledge base -->"
+STANZA="$MARK
+## Knowledge base
+
+This project has a knowledge tree at \`knowledge/\`, scoped \`repo:${name}\`.
+
+Facts true **only of this deployment** go here — topology, deploy quirks, this system's known bugs,
+operational gotchas. Anything true wherever a product or concept appears belongs in a shared domain
+library, not here; putting it here makes N copies that drift.
+
+Curation and capture come from the \`knowledge-tools\` plugin, registered once per machine. If it is
+not installed, say so rather than editing the tree by hand."
+
+if [ ! -f CLAUDE.md ]; then
+  printf '# %s\n\n%s\n' "$name" "$STANZA" > CLAUDE.md; created+=("CLAUDE.md")
+elif grep -qF "$MARK" CLAUDE.md; then
+  kept+=("CLAUDE.md (stanza already present)")
+else
+  printf '\n%s\n' "$STANZA" >> CLAUDE.md; kept+=("CLAUDE.md (stanza appended; no existing line changed)")
+fi
+
+# 5. Guardrails --------------------------------------------------------------
+HMARK="# kb-init: knowledge checks"
+SNIPPET="$HMARK
+if [ -n \"\${KB_ENGINE_ROOT:-}\" ] && [ -x \"\$KB_ENGINE_ROOT/scripts/check-kb\" ]; then
+  \"\$KB_ENGINE_ROOT/scripts/check-kb\" knowledge && \"\$KB_ENGINE_ROOT/scripts/check-scope\" knowledge || exit 1
+else
+  echo \"knowledge: engine not found (KB_ENGINE_ROOT unset) — structural checks skipped\"
+fi"
+
+if [ "$is_git" -eq 1 ]; then
+  hooks_path=$(git config --get core.hooksPath || true)
+  if [ -d .husky ] || [ -f .pre-commit-config.yaml ]; then
+    mgr=$([ -d .husky ] && echo Husky || echo "the pre-commit framework")
+    notes+=("this project uses $mgr — its hooks were NOT edited. Add this through $mgr:")
+    notes+=("$SNIPPET")
+    hook=""
+  elif [ -n "$hooks_path" ]; then
+    hook="$hooks_path/pre-commit"
+  elif [ -f .githooks/pre-commit ]; then
+    hook=".githooks/pre-commit"; git config core.hooksPath .githooks
+    notes+=(".githooks/ existed but was not activated — core.hooksPath set")
+  elif [ -f .git/hooks/pre-commit ]; then
+    hook=".git/hooks/pre-commit"
+    notes+=("appended to .git/hooks/pre-commit, which git does NOT track — teammates will not get it")
+  else
+    hook=".githooks/pre-commit"; git config core.hooksPath .githooks
+  fi
+
+  if [ -n "$hook" ]; then
+    mkdir -p "$(dirname "$hook")"
+    if [ ! -f "$hook" ]; then
+      printf '#!/usr/bin/env bash\n%s\n' "$SNIPPET" > "$hook"; created+=("$hook")
+    elif grep -qF "$HMARK" "$hook"; then
+      kept+=("$hook (checks already wired)")
+    else
+      printf '\n%s\n' "$SNIPPET" >> "$hook"; kept+=("$hook (checks appended; no existing line changed)")
+    fi
+    chmod +x "$hook"
+
+    # core.fileMode is false on some mounts, where git records 644 and then skips
+    # the hook SILENTLY. Record the mode in the index explicitly. Occurred 3 times.
+    case "$hook" in
+      .git/*) ;;
+      *)
+        if git ls-files --error-unmatch "$hook" >/dev/null 2>&1; then
+          git update-index --chmod=+x "$hook"
+        else
+          git add --chmod=+x "$hook"
+          notes+=("$hook staged so git records it executable — commit it with the rest")
+        fi
+        mode=$(git ls-files -s "$hook" | cut -d' ' -f1)
+        [ "$mode" = "100755" ] || notes+=("WARNING: $hook recorded as $mode, not executable — it will be skipped silently")
+        ;;
+    esac
+    notes+=("core.hooksPath is local config and is NOT cloned — each teammate runs: git config core.hooksPath ${hooks_path:-.githooks}")
+  fi
+fi
+
+[ -n "${KB_ENGINE_ROOT:-}" ] || notes+=("KB_ENGINE_ROOT is not set in this shell — the hook will skip its checks until it is")
+
+# 6. Report -------------------------------------------------------------------
+echo "kb-init: $name  ($root)"
+for c in "${created[@]}"; do echo "  created   $c"; done
+for k in "${kept[@]}";    do echo "  kept      $k"; done
+for n in "${notes[@]}";   do printf '%s\n' "$n" | sed '1s/^/  note      /; 2,$s/^/            /'; done
+echo
+echo "Next: capture findings as you work, and distil them periodically."
