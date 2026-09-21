@@ -118,14 +118,24 @@ that is not. Every file in a library carries the library's scope (§1), the queu
 
 Each item carries:
 
-- a **stable ID** — the first 8 hex characters of the SHA-1 of `<category>|<file>|<section>` (the
-  severity category's name as listed below, the library-relative path, the heading text or `-` for
-  a whole-file finding) — so repeat sweeps, by any agent, **deduplicate** rather than re-raising
-  what was already seen. Compute it (`printf '%s' 'orphan|webhooks.md|-' | sha1sum | cut -c1-8`);
-  never invent it;
+- a **stable ID** — the first 8 hex characters of the SHA-1 of `<category>|<file>|<locus>` — so
+  repeat sweeps, by any agent, **deduplicate** rather than re-raising what was already seen. Every
+  part is fixed, never composed:
+  - `<category>` is the single finding type as named in the severity list below — at severity 7,
+    the one sub-type (`empty routed leaf`), never the whole line. **Every contradiction hashes as
+    `contradiction`**, whether blocking, informational or undetermined: that is a judgment which
+    changes as you learn more, and an ID that changed with it would re-raise the same dispute;
+  - `<file>` is the library-relative path;
+  - `<locus>` is the section's heading text; for a golden-set record, `record <N>` (its position
+    in the file); for a whole-file finding, one of these keys — `negative-count`,
+    `unresolved-missing`, `cross-root-unstated`, `no-golden-set`, `unsupported-floor` — or `-`
+    for any other whole-file finding (the category already tells two such findings in one file
+    apart).
+
+  Compute it (`printf '%s' 'orphan|webhooks.md|-' | sha1sum | cut -c1-8`); never invent it;
 - a **status**: `open`, `acknowledged`, `resolved`. An acknowledged item is not re-raised unless its
   underlying source changes;
-- the **owner**, from CODEOWNERS where one exists;
+- the **owner**, from CODEOWNERS where one exists, else `unassigned`;
 - a **severity**, triaged in this order — every finding type has a place, so nothing lands in an
   undefined middle:
 
@@ -133,7 +143,9 @@ Each item carries:
   2. **high-blast-radius fact unstamped or stale** — deploy targets, environment routing,
      credential references;
   3. **golden-set rot** — the oracle is wrong, so it reports success while testing nothing;
-  4. **unstamped fact** (`unknown`) — ahead of stale, per §7: absence hides more easily than age;
+  4. **unstamped fact** (`unknown`) — ahead of stale, per §7: absence hides more easily than age.
+     A frontmatter `verified:` date with no section stamp behind it is this too (locus
+     `unsupported-floor`): it claims a freshness nothing supports, which is worse than silence;
   5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval;
   6. **orphan** — real knowledge nothing can route to;
   7. **informational contradiction, empty routed leaf, index bloat, scope misfiling**.
@@ -143,7 +155,9 @@ Each item carries:
   severity 7 and write `blocking: undetermined`; never assume the answer in either direction. A
   malformed marker (no `since:`, no register entry) is the same item, with the defect stated;
 
-  **Write the queue sorted by severity, 1 first**, and within a severity by age, oldest first;
+  **Write the queue sorted by severity, 1 first**; within a severity, unknown age first (§7:
+  absence ranks ahead of age), then oldest first, then by ID. The cap cuts from the bottom of that
+  order, so which items are held back is never a choice;
 - the **age**, and an escalation flag past 14 days. A `CONFLICTED` marker carries its own `since:`
   date (§8) and a stamp carries its date, so those are exact. Where no date exists — a golden-set
   record that silently drifted, an orphan nobody logged — say the age is **unknown** and name the
