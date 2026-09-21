@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+# kb-capture — file an episodic note into a knowledge tree. No model required.
+#
+# CAPTURE RECORDS, IT DOES NOT CLASSIFY. No tier decision, no domain choice, no
+# currency stamp, no judgment about what counts as a fact — that is distillation.
+# Doing it here is the ceremony that stops people capturing at all.
+#
+# THE ONE HARD RULE: preserve uncertainty in the words that show it. "Didn't
+# test", "probably", "the docs say" are what let distillation tell an observation
+# from a guess. A note that tidies hedges into confident prose poisons the next
+# step, because distillation then promotes a guess it can no longer recognise.
+#
+# Usage: kb-capture [--title TITLE] [--into TREE] [--from FILE] [DIR]
+#   DIR       anywhere inside a project with a knowledge tree (default: here)
+#   --into    file into this tree instead (a library, or a project's knowledge/)
+#   --from    take the note body from FILE ("-" for stdin) instead of an editor
+#   --title   one line; becomes the filename and description
+set -uo pipefail
+
+title=""; into=""; from=""; dir="."
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --title) title="${2:-}"; shift 2 ;;
+    --into)  into="${2:-}";  shift 2 ;;
+    --from)  from="${2:-}";  shift 2 ;;
+    -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
+    -*) echo "kb-capture: unknown option $1" >&2; exit 2 ;;
+    *)  dir="$1"; shift ;;
+  esac
+done
+
+# 1. Find the tree. Never guess one. -----------------------------------------
+if [ -n "$into" ]; then
+  tree="$into"
+else
+  root=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null) || root=""
+  tree="${root:+$root/knowledge}"
+fi
+if [ -z "$tree" ] || [ ! -f "$tree/INDEX.md" ]; then
+  echo "kb-capture: no knowledge tree here${tree:+ ($tree has no INDEX.md)}." >&2
+  echo "  In a project, run kb-init first. To file into a library, pass --into <library-path>." >&2
+  exit 2
+fi
+tree=$(cd "$tree" && pwd)
+
+field() { sed -n "s/^$1:[[:space:]]*//p" "$tree/INDEX.md" | head -1; }
+domain=$(field domain); scope=$(field scope)
+[ -n "$domain" ] && [ -n "$scope" ] || { echo "kb-capture: $tree/INDEX.md declares no domain or scope" >&2; exit 2; }
+
+# 2. The body: from a file, stdin, or an editor --------------------------------
+[ -n "$title" ] || { [ -t 0 ] && [ -z "$from" ] && read -r -p "What happened, in one line? " title; }
+[ -n "$title" ] || { echo "kb-capture: a --title is required" >&2; exit 2; }
+
+tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
+if [ -n "$from" ]; then
+  if [ "$from" = "-" ]; then cat > "$tmp"; else cat "$from" > "$tmp" || exit 2; fi
+else
+  cat > "$tmp" <<'TPL'
+## What happened
+
+<!-- What you ran and what you saw. Exact commands, exact values, exact errors. -->
+
+## What you believe but did not check
+
+<!-- Keep the hedges: "probably", "didn't test", "the docs say". Distillation needs
+     them to tell an observation from a guess. Delete this section if it is empty. -->
+TPL
+  "${EDITOR:-${VISUAL:-vi}}" "$tmp" || { echo "kb-capture: editor exited with an error — nothing filed" >&2; exit 1; }
+fi
+
+# An empty note is noise, and a template saved unchanged is an empty note.
+body_text=$(sed -e '/<!--/,/-->/d' -e '/^#/d' -e '/^[[:space:]]*$/d' "$tmp")
+if [ -z "$body_text" ]; then
+  echo "kb-capture: the note has no content — nothing filed." >&2; exit 1
+fi
+
+# 3. File it -------------------------------------------------------------------
+date=$(date +%F)
+slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
+# Truncate at a word boundary, not mid-word.
+if [ ${#slug} -gt 60 ]; then slug=${slug:0:60}; slug=${slug%-*}; fi
+stem="$date-$slug"; n=2
+while [ -e "$tree/episodic/$stem.md" ]; do stem="$date-$slug-$n"; n=$((n+1)); done
+
+mkdir -p "$tree/episodic"
+note="$tree/episodic/$stem.md"
+{
+  printf -- '---\nname: %s\n' "$stem"
+  # Quote rather than mangle: the title keeps its colon, and reads the same in the
+  # frontmatter as in the router hook.
+  printf 'description: "%s"\n' "$(printf '%s' "$title" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+  printf 'memory_type: episodic\ndomain: %s\nscope: %s\n' "$domain" "$scope"
+  printf 'metadata:\n  type: episodic\n  node_type: memory\n  created: %s\n' "$date"
+  printf 'tags: [%s, episodic]\nkeywords: [episodic, session]\n---\n' "$domain"
+  printf '# %s — %s\n\n' "$date" "$title"
+  cat "$tmp"
+} > "$note"
+
+# 4. Route it: the episodic router, newest first; and the tree's router to it -----
+eidx="$tree/episodic/INDEX.md"
+if [ ! -f "$eidx" ]; then
+  printf -- '---\nname: episodic-index\ndescription: Session notes for this tree, newest first — the raw record facts are distilled from.\nmemory_type: reference\ndomain: %s\nscope: %s\nmetadata:\n  type: index\n  node_type: router\n  created: %s\ntags: [%s, episodic, index]\nkeywords: [episodic, sessions, notes, log]\n---\n# Episodic — newest first\n\n' \
+    "$domain" "$scope" "$date" "$domain" > "$eidx"
+  made_eidx=1
+fi
+line="- [$stem]($stem.md) — $title"
+python3 - "$eidx" "$line" <<'PY'
+import sys, pathlib, re
+p, line = pathlib.Path(sys.argv[1]), sys.argv[2]
+t = p.read_text()
+m = re.search(r'^- \[', t, re.M)
+t = (t[:m.start()] + line + "\n" + t[m.start():]) if m else (t.rstrip() + "\n\n" + line + "\n")
+p.write_text(t)
+PY
+
+if ! grep -q '](episodic/INDEX.md)' "$tree/INDEX.md"; then
+  printf '\n- [episodic](episodic/INDEX.md) — session notes, newest first: the raw record facts are distilled from\n' >> "$tree/INDEX.md"
+  routed=1
+fi
+
+# 5. Report ---------------------------------------------------------------------
+echo "kb-capture: filed $note"
+[ -n "${made_eidx:-}" ] && echo "  created the episodic router"
+[ -n "${routed:-}" ]    && echo "  routed episodic/ from the tree's INDEX.md"
+echo "  Not classified — distil it when you have a few, and keep the hedges."
