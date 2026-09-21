@@ -165,7 +165,8 @@ record: unresolved items in `<domain>-open-questions.md`, the contradiction regi
 route to an empty file.
 
 The knowledge base carries one root-level state leaf, `needs-attention.md` — the queue a sweep builds.
-It is **a file like any other**: full frontmatter (§11), routed from the library's own `INDEX.md`,
+It is **a file like any other**: full frontmatter (§11) carrying the library's own `domain:` and
+`scope:`, routed from the library's own `INDEX.md`,
 because a queue that is itself an orphan is the first thing the next sweep will report. It belongs to
 the library it describes, not to the engine. Like every state leaf it
 exists only when it has content.
@@ -302,8 +303,9 @@ Verified: 2026-09-19 · by: agent · method: query
   it became `CONFLICTED`, or none was ever stamped — the frontmatter reads `verified: unknown`. It
   never keeps a date inherited from before the stamps went away: that date now certifies nothing and
   reads as freshness the file does not have.
-- **File frontmatter carries `verified:` as the floor** — the oldest section stamp in the file, derived
-  and lint-checked. Sweeps grep one field; the sections hold the truth.
+- **File frontmatter carries `verified:` as the floor** — the oldest stamp among the file's sections
+  that are not `CONFLICTED` (a disputed section is not served, so its stamp certifies nothing a reader
+  can get), derived and lint-checked. Sweeps grep one field; the sections hold the truth.
 
 ## 8. Contradictions — make them unretrievable, not merely annotated
 
@@ -323,8 +325,12 @@ which is right:
   it — an agent goes blind to correct knowledge because something nearby is in doubt. If a disputed
   claim shares a section with undisputed ones, **split it into its own subsection** so only the
   claim in doubt is withheld. Collateral refusal is a bug, not an abundance of caution;
-- register a one-line flag + pointer in `<domain>-contradictions.md`; the canonical note stays in the
-  file that owns the topic.
+- **a status marker applies to the heading it sits directly under — never to the headings enclosing
+  it.** A marker under `### Default sample size` withholds that subsection; the rest of the `##`
+  section above it stays retrievable. When you split a claim out, add a `positive` golden case for a
+  sibling fact left behind, so the eval proves the neighbours are still served;
+- register a one-line flag + pointer in `<domain>-contradictions.md`, routed from the library's
+  `INDEX.md` like any state leaf (§3); the canonical note stays in the file that owns the topic.
 
 **Blocking vs. informational.** A contradiction on a fact actively needed is *blocking* and names who
 resolves it and via what artifact. A blocking contradiction **must be cleared before its domain is
@@ -355,12 +361,14 @@ Promotion is **never automated**. Neither is resolving a contradiction, nor dele
 
 Every retrieval agent's body states, and every agent is held to:
 
-> *Your knowledge lives at `<root>/knowledge/semantic/<domain>/`. Load INDEX, descend to the relevant
-> file(s), cite them, then act. Do not answer from memory.*
+> *Your knowledge lives in the libraries installed under `<engine>/kb/`, and in the project's own
+> `knowledge/` tree. Load INDEX, descend to the relevant file(s), cite them, then act. Do not answer
+> from memory.*
 
 - **Cite every file used.** "file(s)" is plural deliberately: an answer may need a general-tier fact *and*
   a repo-tier fact. State when an answer is **partial**.
-- **Resolve both roots in parallel.** A single-root query must not pay for the second root.
+- **Load only the libraries the question touches.** A question about one domain must not pay for
+  every installed library; a question spanning a project fact and a library fact loads both.
 - **On absence:** answer *"fact not found — check KB"*. Never fill the gap from model memory.
 - **On `CONFLICTED`:** surface the conflict, serve nothing (§8).
 - **Surface the `verified:` date** on freshness-sensitive facts.

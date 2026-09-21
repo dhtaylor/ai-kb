@@ -8,7 +8,7 @@ description: Stand up a new semantic knowledge domain that does not exist yet, i
 Stands up a domain that does not exist yet. Structure only — you are building the shelf, and
 seeding it if source material was supplied. You are not inventing facts.
 
-**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+**Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
 the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
@@ -234,12 +234,12 @@ silently.
 Run the engine's `scripts/check-kb` **against the library path** — the target is required, because
 the engine holds no knowledge of its own and a silent default would report a clean run over zero
 files. It checks frontmatter,
-link resolution and slug uniqueness. Report the result.
+link resolution and slug uniqueness. Then run `scripts/check-scope <library>`. Report both
+results verbatim.
 
-State plainly what is **not** covered: cross-root `[[general:slug]]` resolution, scope-value
-validation and the golden-set routing check are not built yet. A domain passing `check-kb` is
-structurally sound within one root — it is not fully verified, and should not be described as if
-it were.
+State plainly what is **not** covered: a new domain has no facts yet, so nothing about currency,
+contradictions or retrieval has been tested. A domain passing these checks is structurally sound —
+it is not verified, and should not be described as if it were.
 
 ## Refusals
 

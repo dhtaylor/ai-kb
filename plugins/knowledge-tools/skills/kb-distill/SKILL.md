@@ -14,7 +14,7 @@ on partial information, and frustrated guesses — all in the same voice, often 
 Promote the wrong one and you have installed a guess in the place everything else treats as
 authoritative, wearing a citation that makes it look checked.
 
-**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+**Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
 the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.

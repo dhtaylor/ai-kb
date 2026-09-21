@@ -12,7 +12,7 @@ a false flag; being wrong about mutation poisons the single source of truth ever
 that helpfully tidies as it goes has silently crossed from the cheap side of that line to the
 expensive one.
 
-**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+**Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
 the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
@@ -22,12 +22,22 @@ holding exactly one. Write facts into a library, never into the engine.
 
 ## Step 1 — Run the mechanical checks first
 
-Run the engine's `scripts/check-kb <library>` and report its output verbatim. It covers frontmatter
-completeness, `name`/filename agreement, link resolution and within-root slug uniqueness.
+Run the engine's checks and report each one's output verbatim:
 
-Then state plainly what it does **not** cover, so nobody reads a clean run as a clean bill of
-health: cross-root `[[general:slug]]` resolution, scope-value validation, golden-set routing, and
-external `Source:` URL liveness are not built.
+- `scripts/check-kb <library>` — frontmatter completeness, `name`/filename agreement, link
+  resolution, within-library slug uniqueness;
+- `scripts/check-scope <library>` — scope values well-formed and in agreement with the library;
+- `scripts/check-golden <library>` — every golden record well-formed, its file present, its excerpt
+  present in that file;
+- `scripts/check-xlinks <kb-root>` — `[[library:slug]]` references into other installed libraries
+  (the `kb/` directory the library sits in; skip it for a project tree, which has no siblings).
+
+A failure these report is already a finding — put it in the queue; do not re-derive it by hand.
+
+Then state plainly what they do **not** cover, so nobody reads a clean run as a clean bill of
+health: orphans, currency, contradiction ageing, whether the golden set's unresolved cases match
+the domain's actual `CONFLICTED` sections, scope *content* (as opposed to scope labels), and
+external `Source:` URL liveness.
 
 ## Step 2 — Find what the scripts cannot
 
@@ -35,7 +45,7 @@ These are the sweep's own work. Each is a real decay mode no current tool catche
 
 **Orphans.** A file that no router points at. `check-kb` verifies that links resolve, not that
 every file is reachable — so an unrouted file passes every check and is invisible to retrieval.
-Walk each root: every `.md` file should be a direct child of exactly one `INDEX.md` listing, or be
+Walk the library: every `.md` file should be a direct child of exactly one `INDEX.md` listing, or be
 a router itself. Report every file nothing routes to.
 
 **Two exemptions, and only two.** The golden set (`*-golden.md`) and archived evidence under
@@ -64,13 +74,15 @@ informational, and whether the two records agree with each other — an inline m
 register entry, or a register entry whose inline marker has vanished, is itself a finding.
 Anything past **14 days** escalates.
 
-**Scope misfiling.** A `repo:*` fact sitting in the general root, or a `general` fact that is
-really one vendor's behavior. Sample rather than exhaustively audit, and say what you sampled.
+**Scope misfiling.** `check-scope` catches a *label* that disagrees with its library; it cannot
+catch a fact whose label is consistent but whose content is not — a deployment detail in a
+`general` library, or one vendor's behavior filed as `general`. Sample rather than exhaustively audit, and say what you sampled.
 
 **Golden-set rot.** Every `expected_file:` should name a file that exists, and every
 `expected_excerpt:` should actually appear in it. Grep it; do not assume. Also check the set against
 what §10 actually requires: every record carries a `case:` label, the domain has **≥2 negative
-cases** and **≥1 unresolved case**, and a cross-root case exists *or* the file says why it does not
+cases**, **≥1 unresolved case wherever the domain holds a `CONFLICTED` section** (a stated reason
+does not excuse its absence when a conflict is live), and a cross-root case exists *or* the file says why it does not
 apply. A domain with content and no golden set has no oracle at all — report that as a finding in
 its own right. A rotted oracle is worse than a missing one: it reports success.
 
@@ -89,8 +101,8 @@ finding.
 name: needs-attention
 description: Open findings from the most recent hygiene sweep, by severity.
 memory_type: reference
-domain: meta
-scope: general
+domain: <the library's domain, from its INDEX.md>
+scope: <the library's scope, from its INDEX.md>
 metadata:
   type: index
   node_type: memory
@@ -100,10 +112,17 @@ keywords: [needs attention, queue, findings, sweep, stale, orphan]
 ---
 ```
 
+Copy `domain:` and `scope:` from the library's own `INDEX.md` — never write `general` into a library
+that is not. Every file in a library carries the library's scope (§1), the queue included, and
+`check-scope` fails the library — and blocks the next commit — on one that does not.
+
 Each item carries:
 
-- a **stable ID** — a short hash of source plus fact — so repeat sweeps **deduplicate** rather than
-  re-raising what was already seen;
+- a **stable ID** — the first 8 hex characters of the SHA-1 of `<category>|<file>|<section>` (the
+  severity category's name as listed below, the library-relative path, the heading text or `-` for
+  a whole-file finding) — so repeat sweeps, by any agent, **deduplicate** rather than re-raising
+  what was already seen. Compute it (`printf '%s' 'orphan|webhooks.md|-' | sha1sum | cut -c1-8`);
+  never invent it;
 - a **status**: `open`, `acknowledged`, `resolved`. An acknowledged item is not re-raised unless its
   underlying source changes;
 - the **owner**, from CODEOWNERS where one exists;
@@ -117,14 +136,22 @@ Each item carries:
   4. **unstamped fact** (`unknown`) — ahead of stale, per §7: absence hides more easily than age;
   5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval;
   6. **orphan** — real knowledge nothing can route to;
-  7. **informational contradiction, empty routed leaf, index bloat, scope misfiling**;
+  7. **informational contradiction, empty routed leaf, index bloat, scope misfiling**.
+
+  A contradiction is **blocking** only when something names it as needed — a consumer, a golden
+  case, a caller in the task. When nothing in front of you establishes that either way, file it at
+  severity 7 and write `blocking: undetermined`; never assume the answer in either direction. A
+  malformed marker (no `since:`, no register entry) is the same item, with the defect stated;
+
+  **Write the queue sorted by severity, 1 first**, and within a severity by age, oldest first;
 - the **age**, and an escalation flag past 14 days. A `CONFLICTED` marker carries its own `since:`
   date (§8) and a stamp carries its date, so those are exact. Where no date exists — a golden-set
   record that silently drifted, an orphan nobody logged — say the age is **unknown** and name the
   proxy you used if you used one. Never present a proxy date as if it were the real one; an
   escalation clock built on invented ages escalates the wrong things.
 
-**Cap what you raise per owner — default 10 per sweep.** A queue nobody can work through is noise, and noise is how a
+**Cap what you raise per owner — default 10 per sweep.** One item is one defect: two defects in the
+same place are two items, not one merged to fit under the cap. A queue nobody can work through is noise, and noise is how a
 real finding gets ignored. If you are over the cap, raise the highest-severity items and say how
 many you held back.
 

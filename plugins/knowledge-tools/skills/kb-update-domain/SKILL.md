@@ -13,7 +13,7 @@ as trustworthy.
 
 Every rule below exists because of that. Follow them even when the paraphrase is obviously better.
 
-**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+**Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
 the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
@@ -38,7 +38,38 @@ each time. Never fold the whole document into each domain and let the indexes so
 
 Create a stub at `<library>/sources/<slug>.md` recording title, origin (URL, page ID, or
 filename), date ingested, and where the artifact itself lives. Provenance backlinks resolve to
-this stub, so it must exist before any fact cites it.
+this stub, so it must exist before any fact cites it. The stub is a file like any other — full
+frontmatter, the library's own `domain:` and `scope:`, routed from `sources/INDEX.md`:
+
+```markdown
+---
+name: <slug>
+description: Source stub — <what the artifact is, in one line>.
+memory_type: reference
+domain: <the library's domain>
+scope: <the library's scope>
+metadata:
+  type: source
+  node_type: citation
+  created: <today>
+tags: [<domain>, source]
+keywords: [<terms a reader would search for>]
+---
+# Source: <title>
+
+- **Title:** <title>
+- **Author:** <author, or "unknown">
+- **Date:** <the artifact's own date, or "unknown">
+- **Date ingested:** <today>
+- **Artifact location:** <`documents/<file>` if archived in this library; else a URL or
+  `repo:path` — never a relative path into another repository (§6)>
+
+<Two or three sentences: what the artifact is, and what was folded from it and what was not.>
+```
+
+If the artifact would not survive elsewhere — a local file, a pasted document, a page that may move
+— archive a copy under `<library>/documents/` and point the stub at it. Evidence travels with the
+library that cites it.
 
 If the artifact already has a home in the KB — an episodic note, another KB file — link straight
 to it. Do not stub something already present.
@@ -85,7 +116,7 @@ of question. Create a new file only when the fact is genuinely queried on its ow
 is as harmful as a monolith — it just fails at a different step.
 
 Crossing to another domain's fact? **Link it with `[[slug]]`, never restate it.** A general-tier
-fact referenced from a repo-tier file uses the `[[general:slug]]` form.
+fact in a different library is linked `[[<library>:slug]]` — the prefix names the library.
 
 ## Step 5 — Contradictions: flag, never resolve
 
@@ -100,7 +131,9 @@ When the source disagrees with what the KB already states and you cannot verify 
   section with undisputed facts, **split it into its own subsection first**, then mark that. Taking
   good knowledge offline as a side effect is a bug, not caution.
 - Register a one-line flag and pointer in `<domain>-contradictions.md`. Create that file if this
-  is the domain's first contradiction; the canonical note stays in the file owning the topic.
+  is the domain's first contradiction — full frontmatter, the library's `scope:`, and **a router
+  line in the library's `INDEX.md`**, or the register is an orphan. The canonical note stays in the
+  file owning the topic.
 - Say whether it is **blocking** (the fact is actively needed) or informational, and name who
   resolves it and by what means.
 
@@ -118,7 +151,9 @@ Resolving a contradiction is never your call. It is never automated.
 
   A fold is `method: doc-review` — you read a document, you did not query a live system. Do not
   stamp it as anything stronger. **No evidence, no stamp**: record what you actually checked.
-- Update the file's frontmatter `verified:` floor — the oldest section stamp in that file.
+- Update the file's frontmatter `verified:` floor — the oldest stamp among the file's sections
+  **that are not `CONFLICTED`**. A disputed section is not served, so its stamp certifies nothing a
+  reader can get; if every stamped section is disputed, the floor is `unknown` (§7).
 
 ## Step 7 — Routers and golden set
 
@@ -151,10 +186,21 @@ Only after that review do you commit.
 
 ## Step 9 — Verify
 
-Run the engine's `scripts/check-kb` against the library you wrote to (the target is required). Report the result, and
-state what it does not cover: cross-root `[[general:slug]]` resolution, scope-value validation
-and golden-set routing are not built. A clean run means structurally sound within one root — not
-verified.
+Run the engine's checks against the library you wrote to, before your first write and again after,
+and report each one's output verbatim:
+
+- `scripts/check-kb <library>` (the target is required);
+- `scripts/check-scope <library>`;
+- `scripts/check-golden <library>`;
+- `scripts/check-xlinks <kb-root>` — skip for a project tree, which has no siblings.
+
+**A check that already failed before you started is not yours to fix.** Report it as pre-existing
+and leave it — a fold that quietly repairs unrelated defects hides them in a diff reviewed for
+something else. A failure that is new after your fold is yours, and the fold is not done until it is
+gone.
+
+State what the checks do not cover: whether each fact matches its source (that is Step 8's human
+diff) and external `Source:` URL liveness. A clean run means structurally sound — not verified.
 
 ## Refusals
 

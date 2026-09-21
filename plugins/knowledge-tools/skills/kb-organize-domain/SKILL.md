@@ -13,7 +13,7 @@ what a language model does by reflex. Rewrite a sentence while moving it and you
 a contradiction with a source that still says the original thing — and the provenance link will
 still look perfectly valid.
 
-**Two roots, not one.** Your session context names the **engine** (the contract, the tooling,
+**Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
 the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
@@ -62,7 +62,8 @@ coherent whole. The boundary is the **question**, not the subject heading.
 A rename changes the slug, because the filename **is** the slug. That breaks, all at once:
 
 1. the file's own frontmatter `name:`, which must equal the new filename;
-2. every `[[slug]]` pointing at the file, in **both** roots;
+2. every `[[slug]]` pointing at the file within the library, **and every `[[<library>:slug]]` in
+   every other installed library** — a rename here breaks references there;
 3. every router line pointing at it;
 4. every `expected_file:` in the golden set.
 
@@ -80,10 +81,13 @@ naming problem: it is a signal the file has become two, so reconsider Step 2 bef
 two names are genuinely equal, **ask rather than coin one** — a rename is the expensive move and
 doing it twice is worse than doing it late.
 
-Before renaming, confirm the new slug collides with nothing in **either** root — including folder
-names, which are slugs too. If only one root is present, checking that one satisfies the clause;
-say which roots you checked rather than implying you checked more than exist. After renaming,
-grep both roots for the old slug and show that nothing still references it.
+Before renaming, confirm the new slug collides with nothing in the library — including folder
+names, which are slugs too. (Other libraries cannot collide: a cross-library reference always
+carries its library prefix.) After renaming, grep the library for `[[<old-slug>]]` and every other
+installed library under `kb/` for `[[<this-library>:<old-slug>]]`, and show that nothing still
+references it. Say which libraries you searched. A `[[<this-library>:<old-slug>]]` in another
+library is a reference you must fix in that library, in the same piece of work — and say so, since
+it is a change to a second repository.
 
 ## Step 5 — Keep the routers honest
 
@@ -110,15 +114,31 @@ the domain has no oracle at all.
 
 ## Step 7 — Verify, then show the shape change
 
-Run the engine's `scripts/check-kb <library>`. Then report:
+Run the engine's checks and report each one's output verbatim:
+
+- `scripts/check-kb <library>`;
+- `scripts/check-golden <library>` — the golden set still names files that exist and excerpts they
+  contain, which is Step 6 proved rather than asserted;
+- `scripts/check-xlinks <kb-root>` — no other installed library still points at an old slug (skip
+  for a project tree, which has no siblings);
+- `scripts/check-scope <library>`.
+
+**A check that already failed before you started is not yours to fix.** Run the checks before your
+first change as well as after; report a pre-existing failure as pre-existing, and leave it. Fixing it
+is a different piece of work with its own review, and folding it into a reshape hides it in a diff
+that claims to change no facts. A failure that is new after your change is yours, and the reshape is
+not done until it is gone.
+
+Then report:
 
 - the before and after file layout;
 - every rename, old slug to new;
-- proof no reference to an old slug survives, in either root;
+- proof no reference to an old slug survives, in this library or any other installed one;
 - every golden-set record touched;
 - confirmation that no fact's wording changed — and if any did, which and why.
 
-State what `check-kb` does not cover: cross-root resolution, scope validation, golden-set routing.
+State what the checks do not cover: whether a fact landed in the file where a reader would look
+for it, and whether the golden set still tests the questions worth asking.
 
 ## Refusals
 
