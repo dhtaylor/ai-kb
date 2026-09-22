@@ -1,0 +1,78 @@
+name: guardrails
+
+# Server-side guardrails for a DOMAIN LIBRARY.
+#
+# WHY: a library's commit hook is bypassable (--no-verify), and a clone that has
+# never run kb-bootstrap has no hook at all. Both are facts this knowledge base
+# holds and has tested. This runs the same checks where a developer cannot skip
+# them.
+#
+# WHY IT NEEDS A CREDENTIAL: the checks live in the engine (ai-kb), which is
+# private, and a library deliberately does not vendor them — one copy of a check,
+# in one place, is the whole point. So the workflow fetches the engine at run
+# time and needs read access to it.
+#
+#   Secret: AI_KB_TOKEN — a fine-grained PAT, read-only on Contents, scoped to
+#   dhtaylor/ai-kb ALONE, added under each library's
+#   Settings -> Secrets and variables -> Actions.
+#
+#   Narrower alternative, if you prefer: a read-only DEPLOY KEY on ai-kb. Put the
+#   private key in AI_KB_DEPLOY_KEY and replace the clone step with
+#   webfactory/ssh-agent plus an ssh:// clone URL. A deploy key grants one repo
+#   and nothing else; a PAT is an account credential wearing a scope.
+#
+# WHAT IT IS NOT: detection, not prevention — the push lands and then the run
+# fails. A real leak still needs rotation AND a history rewrite (both facts are
+# in knowledge-architecture/secret-governance.md, with re-check assertions).
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # check-secrets --all walks every blob in history
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Fetch the engine
+        env:
+          TOKEN: ${{ secrets.AI_KB_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "AI_KB_TOKEN is not set in this repository's Actions secrets."
+            echo "The checks live in the engine and cannot be fetched without it."
+            echo "See the header of this workflow for what the token needs to be."
+            exit 1
+          fi
+          git clone --depth 1 --quiet \
+            "https://x-access-token:${TOKEN}@github.com/dhtaylor/ai-kb.git" "$RUNNER_TEMP/engine"
+          echo "ENGINE=$RUNNER_TEMP/engine" >> "$GITHUB_ENV"
+
+      - name: Structure
+        run: "$ENGINE/scripts/check-kb ."
+
+      - name: Scope
+        run: "$ENGINE/scripts/check-scope ."
+
+      - name: Golden set
+        run: "$ENGINE/scripts/check-golden ."
+
+      - name: Executable bits
+        run: "$ENGINE/scripts/check-exec-bits ."
+
+      - name: Secret scan (full history + worktree)
+        run: "$ENGINE/scripts/check-secrets --all"
+
+      # check-xlinks is NOT run here, and that is not an oversight: it resolves
+      # [[library:slug]] BETWEEN installed libraries, and a library on its own
+      # cannot see its siblings. It runs where they are all present — the engine's
+      # own hook, and any machine with them installed.

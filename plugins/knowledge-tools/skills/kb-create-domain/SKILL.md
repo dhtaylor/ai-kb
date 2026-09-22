@@ -237,6 +237,14 @@ seeds it when the domain gains its first facts, in the same change.** A domain t
 without gaining a golden set has no oracle, and nobody will notice until a rename rots something
 silently.
 
+## Step 6b — Give the library its server-side gate
+
+Copy `ai-kb:documents/library-guardrails.yml` to the new library's
+`.github/workflows/guardrails.yml`. A commit hook is bypassable and a fresh clone has none at all,
+so the hook is not the enforcement boundary — a fact this knowledge base holds and has tested. The
+workflow fetches the engine at run time and needs an `AI_KB_TOKEN` secret on the library repo; say
+so in your report, because until it is added every run fails.
+
 ## Step 7 — Verify. The domain is not done until this is clean.
 
 Run the engine's `scripts/check-kb` **against the library path** — the target is required, because
