@@ -119,7 +119,9 @@ HMARK="# kb-init: knowledge checks"
 SNIPPET="$HMARK
 kb_engine=\"\${KB_ENGINE_ROOT:-\$(git config --get kb.engineRoot 2>/dev/null)}\"
 if [ -n \"\$kb_engine\" ] && [ -x \"\$kb_engine/scripts/check-kb\" ]; then
-  \"\$kb_engine/scripts/check-kb\" knowledge && \"\$kb_engine/scripts/check-scope\" knowledge || exit 1
+  \"\$kb_engine/scripts/check-kb\" knowledge \\
+    && \"\$kb_engine/scripts/check-scope\" knowledge \\
+    && \"\$kb_engine/scripts/check-xlinks\" \"\$kb_engine/kb\" knowledge || exit 1
 else
   echo \"knowledge: engine not found (run kb-bootstrap on this machine) — structural checks skipped\"
 fi"

@@ -127,7 +127,7 @@ meaning:
 | `check-kb` | missing frontmatter, `name` that disagrees with the filename, dead links, slug collisions, **orphans** — any file no router reaches |
 | `check-scope` | a scope value that disagrees with its library, a project tree holding general facts, a relative link climbing out of a library |
 | `check-golden` | a golden record whose file is missing or whose excerpt is not in that file, too few negative cases |
-| `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug |
+| `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
 
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact

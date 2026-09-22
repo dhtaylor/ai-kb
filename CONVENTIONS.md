@@ -484,7 +484,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
 | hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
-| `check-xlinks` | `[[library:slug]]` resolution between installed libraries; dead links fail, absent libraries warn | **built** |
+| `check-xlinks` | `[[library:slug]]` resolution from any tree — the installed libraries and each project tree passed to it — into the installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **to build** |
 | answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |

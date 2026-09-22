@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""check-xlinks — resolve [[library:slug]] references between domain libraries.
+"""check-xlinks — resolve [[library:slug]] references into the installed libraries.
 
-check-kb sees one library and cannot see its siblings, so it skips any prefixed
+check-kb sees one tree and cannot see its siblings, so it skips any prefixed
 link. This runs one level up, over the whole kb/ directory, and is the only thing
 that can tell a live cross-library reference from a dead one.
+
+A PROJECT TREE cites libraries too, and lives outside kb/ — pass it as an extra
+argument and its links are resolved against the same index. Without that, the
+links a project makes are checked by nothing at all: check-kb skips them because
+they are prefixed, and this saw only kb/.
 
 FORM: [[<library>:<slug>]] — the prefix names the LIBRARY, not a tier. The older
 [[general:slug]] form came from a two-root model where "general" identified a
@@ -15,14 +20,26 @@ That WARNS. A link into a library that IS installed, naming a slug it does not
 have, is dead and FAILS — the difference matters, because treating absence as
 breakage would punish the portability the whole design is for.
 
-Usage: check-xlinks <kb-root>
+Usage: check-xlinks <kb-root> [tree ...]
+  kb-root   the engine's kb/ directory: the libraries a link can resolve INTO
+  tree      any further tree whose links should be resolved — a project
+            knowledge/ tree, typically. It is a source of links, never a target:
+            nothing may cite a project's facts, because they are true of one
+            deployment only.
 Exit 0 when nothing is dead, 1 otherwise. Warnings alone do not fail.
 """
 import pathlib, re, sys
 
+# episodic/ is NOT excluded: a session note is a routed, citable file, and a fact
+# in one library legitimately cites one in another. Excluding it here called such
+# a citation dead while check-kb, which does not exclude it, called it live.
 NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
-          ".claude-plugin", ".claude", ".git", "episodic"}
+          ".claude-plugin", ".claude", ".git"}
 PLACEHOLDER = re.compile(r"[<>]")
+# The form itself, as written in prose that explains it — the contract, kb-init's
+# router text, a skill's instructions. Naming a library "library" is not allowed
+# anyway, so this cannot mask a real reference.
+EXAMPLES = {"library:slug"}
 
 
 def slugs_of(lib: pathlib.Path):
@@ -30,7 +47,29 @@ def slugs_of(lib: pathlib.Path):
             if not NON_KB & set(f.relative_to(lib).parts) and f.name != "INDEX.md"}
 
 
-def main(kb: pathlib.Path) -> int:
+def links_in(tree: pathlib.Path, label: str, index, dead, warn):
+    """Resolve every [[lib:slug]] written anywhere in one tree. Returns the count resolved."""
+    ok = 0
+    for f in sorted(tree.rglob("*.md")):
+        if NON_KB & set(f.relative_to(tree).parts):
+            continue
+        for link in re.findall(r"\[\[([^\]]+)\]\]", f.read_text(errors="replace")):
+            if ":" not in link or PLACEHOLDER.search(link) or link in EXAMPLES:
+                continue                 # bare link, template placeholder, or the form in prose
+            target_lib, _, slug = link.partition(":")
+            where = f"{label}/{f.relative_to(tree)}"
+            if target_lib not in index:
+                warn.append(f"{where}: [[{link}]] -> library '{target_lib}' is not installed "
+                            f"(soft dependency, not a broken link)")
+            elif slug not in index[target_lib]:
+                dead.append(f"{where}: [[{link}]] -> '{target_lib}' is installed but has no "
+                            f"slug '{slug}'")
+            else:
+                ok += 1
+    return ok
+
+
+def main(kb: pathlib.Path, trees) -> int:
     if not kb.is_dir():
         print(f"check-xlinks: {kb} is not a directory", file=sys.stderr); return 2
 
@@ -44,33 +83,28 @@ def main(kb: pathlib.Path) -> int:
     dead, warn, ok = [], [], 0
 
     for name, path in libs.items():
-        for f in sorted(path.rglob("*.md")):
-            if NON_KB & set(f.relative_to(path).parts):
-                continue
-            for link in re.findall(r"\[\[([^\]]+)\]\]", f.read_text(errors="replace")):
-                if ":" not in link or PLACEHOLDER.search(link):
-                    continue                       # bare link, or a template placeholder
-                target_lib, _, slug = link.partition(":")
-                where = f"{name}/{f.relative_to(path)}"
-                if target_lib not in index:
-                    warn.append(f"{where}: [[{link}]] -> library '{target_lib}' is not installed "
-                                f"(soft dependency, not a broken link)")
-                elif slug not in index[target_lib]:
-                    dead.append(f"{where}: [[{link}]] -> '{target_lib}' is installed but has no "
-                                f"slug '{slug}'")
-                else:
-                    ok += 1
+        ok += links_in(path, name, index, dead, warn)
+
+    extra = 0
+    for tree in trees:
+        tree = pathlib.Path(tree)
+        if not tree.is_dir():
+            print(f"check-xlinks: {tree} is not a directory", file=sys.stderr); return 2
+        extra += 1
+        ok += links_in(tree, tree.name or tree.resolve().name, index, dead, warn)
 
     for d in dead:
         print(f"FAIL {d}")
     for w in warn:
         print(f"WARN {w}")
-    print(f"\n{len(libs)} librar{'y' if len(libs)==1 else 'ies'}, {ok} cross-link(s) resolved, "
+    scanned = (f"{len(libs)} librar{'y' if len(libs)==1 else 'ies'}"
+               + (f" and {extra} other tree{'' if extra == 1 else 's'}" if extra else ""))
+    print(f"\n{scanned}, {ok} cross-link(s) resolved, "
           f"{len(dead)} dead, {len(warn)} unresolvable (library absent)")
     return 1 if dead else 0
 
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: check-xlinks <kb-root>", file=sys.stderr); sys.exit(2)
-    sys.exit(main(pathlib.Path(sys.argv[1])))
+        print("usage: check-xlinks <kb-root> [tree ...]", file=sys.stderr); sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1]), sys.argv[2:]))
