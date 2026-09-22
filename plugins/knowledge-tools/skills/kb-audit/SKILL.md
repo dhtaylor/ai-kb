@@ -161,6 +161,12 @@ Each item carries:
   proxy you used if you used one. Never present a proxy date as if it were the real one; an
   escalation clock built on invented ages escalates the wrong things.
 
+**Something real that fits none of these categories goes in your report, not the queue.** The
+severity ladder is a decay taxonomy; an oddity that is not decay — a formatting inconsistency, a
+check that passes for the wrong reason — has no place on it, and filing it under a category of
+convenience corrupts the ordering everyone else reads. Say it plainly in Step 5 instead, and say
+which file it is in. Inventing an eighth category is not a detect-only skill's liberty to take.
+
 **Cap what you raise per owner — default 10 per sweep.** One item is one defect: two defects in the
 same place are two items, not one merged to fit under the cap. A queue nobody can work through is noise, and noise is how a
 real finding gets ignored. If you are over the cap, raise the highest-severity items and say how
