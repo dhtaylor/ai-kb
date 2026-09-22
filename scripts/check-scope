@@ -77,6 +77,7 @@ def main(roots) -> int:
                 f"'{lib_scope}'. A fact true beyond this deployment belongs in a shared library — "
                 f"filed here it becomes one of N copies that drift")
 
+        label = root.name or root.resolve().name   # a trailing slash leaves .name empty
         for f in sorted(root.rglob("*.md")):
             rel = f.relative_to(root)
             if NON_KB & set(rel.parts):
@@ -85,22 +86,22 @@ def main(roots) -> int:
             text = f.read_text(errors="replace")
             s = scope_of(text)
             if s is None:
-                defects.append(f"{root.name}/{rel}: no scope:")
+                defects.append(f"{label}/{rel}: no scope:")
             elif not VALID.match(s):
-                defects.append(f"{root.name}/{rel}: scope '{s}' is not one of "
+                defects.append(f"{label}/{rel}: scope '{s}' is not one of "
                                f"general | product:<vendor> | org:<company> | repo:<project>")
             elif s != lib_scope and kind == "project":
-                defects.append(f"{root.name}/{rel}: scope '{s}' disagrees with its project tree "
+                defects.append(f"{label}/{rel}: scope '{s}' disagrees with its project tree "
                                f"('{lib_scope}'). A project tree holds only facts true of this "
                                f"deployment — one true beyond it belongs in a shared library")
             elif s != lib_scope:
-                defects.append(f"{root.name}/{rel}: scope '{s}' disagrees with its library "
+                defects.append(f"{label}/{rel}: scope '{s}' disagrees with its library "
                                f"('{lib_scope}'). A library is one domain and a domain is one tier — "
                                f"this fact belongs in a different library")
 
             for m in ESCAPE.finditer(text):
                 target = (m.group(1) or m.group(2)).strip()
-                defects.append(f"{root.name}/{rel}: link '{target}' climbs out of the library. "
+                defects.append(f"{label}/{rel}: link '{target}' climbs out of the library. "
                                f"Cross-library references use [[library:slug]]; a relative path across "
                                f"a boundary resolves only in one layout")
 
