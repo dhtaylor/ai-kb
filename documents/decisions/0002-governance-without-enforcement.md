@@ -112,10 +112,18 @@ status check**, and force-pushes and deletions are blocked. Verified from the pu
 `"protected": true`, contexts `["guardrails"]`.
 
 **Not enabled, deliberately:** `"enforcement_level": "non_admins"` — the gate exempts repository
-admins, which today means it exempts the only person using it. Binding the admin would likely force
-a pull request per change, since a commit has passed no check at the instant it is pushed. Tick it
-when someone else has push access, so that the exemption describes an escape hatch rather than the
-whole population.
+admins, which today means it exempts the only person using it. **Observed on the very next push**,
+which was a direct push of this amendment:
+
+    remote: Bypassed rule violations for refs/heads/main:
+    remote: - Required status check "guardrails" is expected.
+
+So a direct push does violate the rule and is admitted only by the exemption: binding the admin
+would not merely be stricter, it would reject direct pushes and force a pull request per change,
+because a commit has passed no check at the instant it is pushed. That is the right trade the day
+someone else has push access, so that the exemption describes an escape hatch rather than the whole
+population. Until then every push to this repository is a rule violation that GitHub allows and
+announces — which is a more honest description of the control than "enabled".
 
 **Not available on the libraries (private):** branch protection and rulesets need a paid plan for
 private repositories, the same limitation that put push protection out of reach in 2026-09-19. Their
