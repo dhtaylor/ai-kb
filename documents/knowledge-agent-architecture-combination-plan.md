@@ -694,8 +694,9 @@ did not merely fail to find one — it reasoned from the contract that such a fa
 repo library was installed. A model answering from memory has no reason to invoke the scope tiers at
 all.
 
-**Still absent:** external `Source:` URL liveness, the Verifier, the Watcher, the orchestrator, and
-the bootstrap command. **Nine of §13's twelve checks are built.** `check-xlinks` resolves
+**Still absent:** external `Source:` URL liveness, the Verifier, the Watcher and the orchestrator.
+The bootstrap is built — see §9.12. **Ten of §13's thirteen checks are built**, orphan detection
+having moved from the sweep into `check-kb` once capture made unrouted files cheap to create. `check-xlinks` resolves
 `[[library:slug]]` across installed libraries; `check-scope` enforces that a file's tier agrees with
 its library's and that no relative link climbs out of one.
 
@@ -741,3 +742,21 @@ at Phase 1 exit, before the pilot hardcodes paths against it. That was right in 
 unachievable in fact: **the topology could not be settled without building enough to discover what
 was wrong with it.** The mitigation that actually worked was keeping every decision in an ADR, so
 each change amended a recorded position rather than silently contradicting one.
+
+### 9.12 A setup you cannot verify is a setup that has already drifted
+
+The four hand-edited places that registered the engine on this machine were not merely tedious: one
+of them was wrong in a way nobody could see. The `~/.bashrc` export sat below the stock guard that
+returns early for non-interactive shells, so a hook fired by an IDE, a GUI client or cron found no
+engine and skipped its checks **while exiting 0**. The guardrail was weakest exactly where a human
+was not watching.
+
+`kb-bootstrap` (ADR-0008) writes all of them from one source — its own location — and `--check`
+reports drift. The load-bearing choice is not the command but its channel: git hooks now find the
+engine through `git config --global kb.engineRoot`, because git reads its global config in every
+context that can produce a commit, which no shell startup file does. The general lesson for this
+architecture: **a configuration mechanism must be readable by every consumer that depends on it, and
+the consumer nobody thinks about is the one that fails silently.**
+
+Clones remain a second step (`kb-init`), because `core.hooksPath` is local config git does not clone
+— a machine-level command cannot wire a repository that does not exist yet.

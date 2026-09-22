@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# kb-bootstrap — register this engine on this machine. Run once per machine, and
+# again whenever the engine moves; it is safe to run any number of times.
+#
+# ONE SOURCE: the engine is wherever this script lives. Nothing is typed, so
+# nothing can be typed wrong, and every place that needs the location gets it
+# from the same run. Four places, each for a reason:
+#
+#   ~/.claude/settings.json   KB_ENGINE_ROOT for Claude sessions; the marketplace
+#                             and plugin; the SessionStart hook (which lives in
+#                             the engine, so it is versioned with it)
+#   git config --global       kb.engineRoot, for git hooks. Git reads its global
+#                             config in EVERY context — terminal, IDE, GUI client,
+#                             cron — which no shell startup file does: ~/.bashrc
+#                             returns early for non-interactive shells.
+#   shell rc (managed block)  PATH, so a human can type kb-init and kb-capture
+#   installed libraries       core.hooksPath, which git does not clone
+#
+# Existing settings are merged, never replaced; a file is backed up before its
+# first change. Projects are wired per clone by `kb-init`, not from here.
+#
+# Usage: kb-bootstrap [--check | --dry-run]
+#   --check, --dry-run   report what is configured and what would change; change
+#                        nothing. Exit 1 if anything would change.
+set -uo pipefail
+
+mode=apply
+case "${1:-}" in
+  --check|--dry-run) mode=check ;;
+  -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
+  "") ;;
+  *) echo "kb-bootstrap: unknown option $1" >&2; exit 2 ;;
+esac
+
+engine="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+market="$engine/.claude-plugin/marketplace.json"
+[ -r "$engine/CONVENTIONS.md" ] && [ -r "$market" ] && [ -x "$engine/scripts/kb-session-start" ] || {
+  echo "kb-bootstrap: $engine does not look like a knowledge engine (no CONVENTIONS.md, marketplace.json or kb-session-start)" >&2
+  exit 2
+}
+
+drift=0
+report() { # status item detail
+  printf '  %-8s %-34s %s\n' "$1" "$2" "${3:-}"
+  case "$1" in ok) ;; *) drift=1 ;; esac
+}
+verb() { [ "$mode" = apply ] && echo "$1" || echo "$2"; }
+
+echo "kb-bootstrap: engine $engine$([ "$mode" = check ] && echo '  (check only — nothing changed)')"
+
+# 1. Claude settings -----------------------------------------------------------
+cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+settings="$cfg/settings.json"
+result=$(MODE="$mode" ENGINE="$engine" SETTINGS="$settings" MARKET="$market" python3 - <<'PY'
+import json, os, pathlib, shutil, time
+engine, mode = os.environ["ENGINE"], os.environ["MODE"]
+path = pathlib.Path(os.environ["SETTINGS"])
+m = json.loads(pathlib.Path(os.environ["MARKET"]).read_text())
+mname, pname = m["name"], m["plugins"][0]["name"]
+hook_cmd = f'"{engine}/scripts/kb-session-start"'
+
+before = json.loads(path.read_text()) if path.exists() else {}
+d = json.loads(json.dumps(before))
+out = []
+
+env = d.setdefault("env", {})
+out.append(("env.KB_ENGINE_ROOT", env.get("KB_ENGINE_ROOT") == engine))
+env["KB_ENGINE_ROOT"] = engine
+if "KB_GENERAL_ROOT" in env:            # retired: the engine is no longer <root>/knowledge
+    out.append(("env.KB_GENERAL_ROOT (retired)", False)); del env["KB_GENERAL_ROOT"]
+
+want = {"source": {"source": "directory", "path": engine}}
+mk = d.setdefault("extraKnownMarketplaces", {})
+out.append((f"marketplace {mname}", mk.get(mname) == want)); mk[mname] = want
+
+ep = d.setdefault("enabledPlugins", {})
+key = f"{pname}@{mname}"
+out.append((f"plugin {key}", ep.get(key) is True)); ep[key] = True
+
+# SessionStart: drop any earlier knowledge-root hook, keep everyone else's.
+ours = lambda h: any(s in h.get("command", "") for s in ("kb-root.sh", "kb-session-start"))
+ss = d.setdefault("hooks", {}).setdefault("SessionStart", [])
+had = [h for g in ss for h in g.get("hooks", []) if ours(h)]
+for g in ss:
+    g["hooks"] = [h for h in g.get("hooks", []) if not ours(h)]
+ss[:] = [g for g in ss if g.get("hooks")]
+ss.append({"hooks": [{"type": "command", "command": hook_cmd, "timeout": 10,
+                      "statusMessage": "Resolving knowledge engine..."}]})
+out.append(("SessionStart hook", len(had) == 1 and had[0].get("command") == hook_cmd))
+
+changed = d != before
+if changed and mode == "apply":
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        shutil.copy2(path, path.with_name(f"settings.json.bak-kb-{time.strftime('%Y%m%d-%H%M%S')}"))
+    path.write_text(json.dumps(d, indent=2) + "\n")
+for item, ok in out:
+    print(f"{'ok' if ok else 'fix'}\t{item}")
+print(f"old\t{'yes' if any('kb-root.sh' in h.get('command','') for h in had) else 'no'}")
+PY
+) || { echo "kb-bootstrap: could not update $settings" >&2; exit 1; }
+echo " $settings"
+old_hook=no
+while IFS=$'\t' read -r st item; do
+  [ "$st" = old ] && { old_hook=$item; continue; }
+  if [ "$st" = ok ]; then report ok "$item"; else report "$(verb set would-set)" "$item"; fi
+done <<<"$result"
+
+# 2. Git global config ----------------------------------------------------------
+echo " git config --global"
+cur=$(git config --global --get kb.engineRoot || true)
+if [ "$cur" = "$engine" ]; then report ok kb.engineRoot
+else
+  [ "$mode" = apply ] && git config --global kb.engineRoot "$engine"
+  report "$(verb set would-set)" kb.engineRoot "${cur:+was $cur}"
+fi
+
+# 3. Shell rc: a managed block, rewritten whole ----------------------------------
+case "$(basename "${SHELL:-bash}")" in
+  zsh) rc="$HOME/.zshrc" ;;
+  bash) rc="$HOME/.bashrc" ;;
+  *) rc="" ;;
+esac
+BEGIN="# >>> knowledge engine >>>"; END="# <<< knowledge engine <<<"
+block="$BEGIN
+# Managed by kb-bootstrap — rerun it rather than editing this block.
+# For humans at a terminal. Git hooks find the engine through
+# \`git config --global kb.engineRoot\`, which works in every context.
+export KB_ENGINE_ROOT=\"$engine\"
+case \":\$PATH:\" in *\":\$KB_ENGINE_ROOT/scripts:\"*) ;; *) export PATH=\"\$PATH:\$KB_ENGINE_ROOT/scripts\" ;; esac
+$END"
+if [ -z "$rc" ]; then
+  echo " shell rc"; report manual "(unrecognised shell ${SHELL:-})" "add $engine/scripts to PATH yourself"
+else
+  echo " $rc"
+  current=$( [ -f "$rc" ] && awk -v b="$BEGIN" -v e="$END" '$0==b{p=1} p{print} $0==e{p=0}' "$rc" || true)
+  if [ "$current" = "$block" ]; then report ok "managed block"
+  else
+    if [ "$mode" = apply ]; then
+      [ -f "$rc" ] && cp -p "$rc" "$rc.bak-kb-$(date +%Y%m%d-%H%M%S)"
+      tmp=$(mktemp)
+      if [ -n "$current" ]; then
+        BLOCK="$block" awk -v b="$BEGIN" -v e="$END" '$0==b{print ENVIRON["BLOCK"]; s=1; next} s&&$0==e{s=0; next} !s{print}' "$rc" > "$tmp"
+      else
+        { [ -f "$rc" ] && cat "$rc"; printf '\n%s\n' "$block"; } > "$tmp"
+      fi
+      cat "$tmp" > "$rc"; rm -f "$tmp"
+    fi
+    report "$(verb set would-set)" "managed block" "$([ -n "$current" ] && echo rewritten || echo appended)"
+  fi
+fi
+
+# 4. Installed libraries: core.hooksPath is not cloned ---------------------------
+echo " libraries under $engine/kb/"
+n=0
+for lib in "$engine"/kb/*/; do
+  [ -d "$lib/.git" ] && [ -f "$lib/.githooks/pre-commit" ] || continue
+  n=$((n+1)); name=$(basename "$lib")
+  if [ "$(git -C "$lib" config --get core.hooksPath || true)" = .githooks ]; then report ok "$name"
+  else
+    [ "$mode" = apply ] && git -C "$lib" config core.hooksPath .githooks
+    report "$(verb set would-set)" "$name" "core.hooksPath .githooks"
+  fi
+done
+[ "$n" -eq 0 ] && echo "  (none installed)"
+
+# 5. Report ----------------------------------------------------------------------
+echo
+[ "$old_hook" = yes ] && echo "note: the old hook script $cfg/hooks/kb-root.sh is no longer referenced — safe to delete."
+if [ "$mode" = check ]; then
+  [ "$drift" -eq 0 ] && echo "Everything is configured." || echo "Run kb-bootstrap to apply the changes above."
+  exit "$drift"
+fi
+echo "Done. Restart any open Claude Code session and terminal to pick this up."
+echo "In each project you clone, run kb-init once to wire its hook."

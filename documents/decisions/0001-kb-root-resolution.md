@@ -32,6 +32,13 @@ required an acceptance test before any agent file is written.
 3. **Project-level settings entry** — travels with the repo.
 4. **SessionStart hook injecting the resolved path** — the plan's other named fallback.
 
+> **Amended 2026-09-22 by [0008-machine-bootstrap](0008-machine-bootstrap.md).** The mechanism below
+> still holds for Claude sessions, with two changes: the variable is `KB_ENGINE_ROOT` (the engine is no
+> longer assumed to be `<root>/knowledge`), and the hook script lives in the engine as
+> `scripts/kb-session-start` rather than in `~/.claude/hooks/`. Git hooks, which this ADR did not
+> consider, resolve the engine through `git config --global kb.engineRoot`, and `kb-bootstrap` writes
+> every location from one source.
+
 ## Decision outcome
 
 **Chosen: option 2 combined with option 4.** `KB_GENERAL_ROOT` is defined in user-level settings; a

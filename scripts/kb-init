@@ -10,6 +10,11 @@
 # projects already have a CLAUDE.md and a .claude/; a scaffolder that is
 # destructive on its second run is one nobody runs twice.
 #
+# In a project that is ALREADY initialised — a fresh clone — it scaffolds nothing
+# and only wires the hook: core.hooksPath is local config that git does not
+# clone, so a clone runs no hook at all until someone sets it. That is the one
+# step a teammate needs after cloning: run kb-init.
+#
 # Usage: kb-init [--name NAME] [DIR]
 #   DIR     any directory inside the target project (default: current directory).
 #           The project root is the enclosing git repository, not DIR itself.
@@ -42,13 +47,15 @@ raw="${name_arg:-$(basename "$root")}"
 name=$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
 [ -n "$name" ] || { echo "kb-init: could not derive a project name from '$raw'" >&2; exit 2; }
 
-# 2. Refuse an initialised tree ----------------------------------------------
+# 2. An initialised tree is only wired, never re-scaffolded --------------------
+initialised=0
 if [ -f knowledge/INDEX.md ]; then
-  echo "kb-init: $root/knowledge/INDEX.md already exists — this project is initialised."
-  echo "  Nothing changed. Adding knowledge to an existing tree is kb-update-domain's job."
-  exit 0
+  initialised=1
+  kept+=("knowledge/INDEX.md (initialised project — wiring only)")
 fi
-[ -d knowledge ] && notes+=("knowledge/ existed with no router — its existing contents are unrouted; run kb-audit to see them")
+[ "$initialised" -eq 0 ] && [ -d knowledge ] && notes+=("knowledge/ existed with no router — its existing contents are unrouted; run kb-audit to see them")
+
+if [ "$initialised" -eq 0 ]; then
 
 # 3. The router --------------------------------------------------------------
 mkdir -p knowledge
@@ -103,14 +110,18 @@ elif grep -qF "$MARK" CLAUDE.md; then
 else
   printf '\n%s\n' "$STANZA" >> CLAUDE.md; kept+=("CLAUDE.md (stanza appended; no existing line changed)")
 fi
+fi  # scaffolding: new projects only
 
 # 5. Guardrails --------------------------------------------------------------
 HMARK="# kb-init: knowledge checks"
+# The engine is found through git's global config as well as the environment:
+# git reads it in every context (IDE, GUI client, cron), which ~/.bashrc does not.
 SNIPPET="$HMARK
-if [ -n \"\${KB_ENGINE_ROOT:-}\" ] && [ -x \"\$KB_ENGINE_ROOT/scripts/check-kb\" ]; then
-  \"\$KB_ENGINE_ROOT/scripts/check-kb\" knowledge && \"\$KB_ENGINE_ROOT/scripts/check-scope\" knowledge || exit 1
+kb_engine=\"\${KB_ENGINE_ROOT:-\$(git config --get kb.engineRoot 2>/dev/null)}\"
+if [ -n \"\$kb_engine\" ] && [ -x \"\$kb_engine/scripts/check-kb\" ]; then
+  \"\$kb_engine/scripts/check-kb\" knowledge && \"\$kb_engine/scripts/check-scope\" knowledge || exit 1
 else
-  echo \"knowledge: engine not found (KB_ENGINE_ROOT unset) — structural checks skipped\"
+  echo \"knowledge: engine not found (run kb-bootstrap on this machine) — structural checks skipped\"
 fi"
 
 if [ "$is_git" -eq 1 ]; then
@@ -137,7 +148,17 @@ if [ "$is_git" -eq 1 ]; then
     if [ ! -f "$hook" ]; then
       printf '#!/usr/bin/env bash\n%s\n' "$SNIPPET" > "$hook"; created+=("$hook")
     elif grep -qF "$HMARK" "$hook"; then
-      kept+=("$hook (checks already wired)")
+      # Our block, from the marker through its closing fi. Refresh it if an older
+      # kb-init wrote it; leave every other line of the hook alone.
+      current=$(awk -v m="$HMARK" '$0==m{p=1} p{print} p&&$0=="fi"{exit}' "$hook")
+      if [ "$current" = "$SNIPPET" ]; then
+        kept+=("$hook (checks already wired)")
+      else
+        tmp=$(mktemp)
+        SNIP="$SNIPPET" awk -v m="$HMARK" '$0==m{print ENVIRON["SNIP"]; s=1; next} s&&$0=="fi"{s=0; next} !s{print}' "$hook" > "$tmp"
+        cat "$tmp" > "$hook"; rm -f "$tmp"
+        kept+=("$hook (knowledge checks refreshed to the current version — commit it)")
+      fi
     else
       printf '\n%s\n' "$SNIPPET" >> "$hook"; kept+=("$hook (checks appended; no existing line changed)")
     fi
@@ -158,11 +179,11 @@ if [ "$is_git" -eq 1 ]; then
         [ "$mode" = "100755" ] || notes+=("WARNING: $hook recorded as $mode, not executable — it will be skipped silently")
         ;;
     esac
-    notes+=("core.hooksPath is local config and is NOT cloned — each teammate runs: git config core.hooksPath ${hooks_path:-.githooks}")
+    notes+=("core.hooksPath is local config and is NOT cloned — each teammate runs kb-init once after cloning")
   fi
 fi
 
-[ -n "${KB_ENGINE_ROOT:-}" ] || notes+=("KB_ENGINE_ROOT is not set in this shell — the hook will skip its checks until it is")
+[ -n "${KB_ENGINE_ROOT:-}$(git config --get kb.engineRoot 2>/dev/null)" ] || notes+=("no engine registered on this machine — the hook will skip its checks until kb-bootstrap is run")
 
 # 6. Report -------------------------------------------------------------------
 echo "kb-init: $name  ($root)"

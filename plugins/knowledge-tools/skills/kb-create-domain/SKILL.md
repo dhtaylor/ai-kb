@@ -96,13 +96,15 @@ set -uo pipefail
 
 find_engine() {
   [ -n "${KB_ENGINE_ROOT:-}" ] && [ -x "$KB_ENGINE_ROOT/scripts/check-kb" ] && { echo "$KB_ENGINE_ROOT"; return; }
+  local g; g=$(git config --get kb.engineRoot 2>/dev/null)   # set by kb-bootstrap; git reads it in every context
+  [ -n "$g" ] && [ -x "$g/scripts/check-kb" ] && { echo "$g"; return; }
   [ -x ../../scripts/check-kb ] && { echo "../.."; return; }   # designed layout: <engine>/kb/<library>
 }
 
 ENGINE=$(find_engine)
 if [ -z "$ENGINE" ]; then
   echo "domain pre-commit: engine not found — structural checks SKIPPED."
-  echo "  Set KB_ENGINE_ROOT, or clone this library under an engine's kb/."
+  echo "  Run kb-bootstrap on this machine, or clone this library under an engine's kb/."
   exit 0
 fi
 

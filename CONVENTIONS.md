@@ -100,24 +100,34 @@ behaviour in one place — and the engine is where the separation has to be obse
 because everything else follows its example.
 
 **Never write a literal path.** A hardcoded absolute path is correct on exactly one machine and fails
-silently everywhere else. But agent bodies do **not** write `$KB_GENERAL_ROOT/...` either — see below.
+silently everywhere else. But agent bodies do **not** write `$KB_ENGINE_ROOT/...` either — see below.
 
-**Resolution mechanism — settled by the Phase 0 acceptance test (2026-09-19), see [0001-kb-root-resolution](documents/decisions/0001-kb-root-resolution.md):**
+**Resolution mechanism — settled by the Phase 0 acceptance test (2026-09-19), see
+[0001-kb-root-resolution](documents/decisions/0001-kb-root-resolution.md), and extended to every
+consumer by [0008-machine-bootstrap](documents/decisions/0008-machine-bootstrap.md):**
 
-1. `KB_GENERAL_ROOT` is defined in **user-level settings** (`~/.claude/settings.json` `env`), not a shell
-   profile and not a project file. A shell profile is not read mid-session (the shell snapshot is taken at
-   session start), and a project file is a trust-root hazard — a repo could repoint every agent's canonical
+1. **One command writes every location: `kb-bootstrap`.** The engine is wherever that script lives, so
+   nothing is typed and nothing is typed twice. Run once per machine, and again if the engine moves.
+   Hand-editing any of the locations below is how two of them come to disagree.
+2. `KB_ENGINE_ROOT` is set in **user-level settings** (`~/.claude/settings.json` `env`), not a project
+   file — a project file is a trust-root hazard, since a repo could repoint every agent's canonical
    knowledge.
-2. A **SessionStart hook** resolves the variable and injects the **absolute path** into session context.
-   Agents use *that* path. This is required, not cosmetic: **the Read tool does not expand environment
-   variables.** Handed `$KB_GENERAL_ROOT/...` it fails with "File does not exist" and helpfully reports the
-   working directory — inviting a relative-path retry that succeeds by coincidence in one workspace and
-   breaks in every other. The hook removes the variable from the path-handling path entirely.
-3. **Absence is graceful and loud.** If the variable is unset, or points somewhere without a `knowledge/`
-   directory, the hook warns at session start and instructs agents to report the root as unconfigured —
-   never to guess a path, never to fall back to a relative one.
+3. A **SessionStart hook, which lives in the engine** (`scripts/kb-session-start`, so it is versioned
+   with the contract it announces), injects the **absolute path** into session context. Agents use
+   *that* path. This is required, not cosmetic: **the Read tool does not expand environment variables.**
+   Handed `$KB_ENGINE_ROOT/...` it fails with "File does not exist" and helpfully reports the working
+   directory — inviting a relative-path retry that succeeds by coincidence in one workspace and breaks
+   in every other. The hook removes the variable from the path-handling path entirely.
+4. **Git hooks resolve the engine through `git config --global kb.engineRoot`**, after the environment.
+   Git reads its global config in every context — terminal, IDE, GUI client, cron — and no shell startup
+   file does: a stock `~/.bashrc` returns before its exports for any non-interactive shell, so a hook
+   fired by anything but a human's own terminal would silently skip its checks.
+5. **Absence is graceful and loud.** Unset or pointing nowhere: the session hook warns at session start
+   and instructs agents to report the engine as unconfigured — never to guess a path, never to fall back
+   to a relative one. A git hook says which command fixes it.
 
-So: no file anywhere contains a literal KB path, and no agent ever handles the variable itself.
+So: no file anywhere contains a literal KB path, no agent ever handles the variable itself, and every
+place that needs the location is written by one command from one source.
 
 A project fact that depends on a general fact **links to it** (§5), never restates it. The
 single-canonical-home rule (§4) spans the KB boundary.

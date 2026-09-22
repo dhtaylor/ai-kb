@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+# kb-session-start — SessionStart hook: resolve the knowledge engine and its libraries.
+#
+# Registered by kb-bootstrap, and it lives IN the engine so it is versioned with
+# it: the engine is wherever this script is, so there is nothing to configure and
+# nothing to drift. Behaviour and content are separate repositories:
+#   engine     <engine>/            the contract, the tooling, the skills
+#   libraries  <engine>/kb/*        one repository per domain, each portable
+#
+# Agents receive RESOLVED absolute paths: the Read tool does not expand
+# environment variables, and its "file does not exist" error volunteers the
+# working directory, which invites a relative retry that succeeds by coincidence
+# in one workspace and breaks everywhere else.
+#
+# Absence is graceful at every level. No engine, no libraries, or neither — the
+# session still starts, and says so.
+set -uo pipefail
+
+emit() {
+  local ctx="$1" msg="${2:-}"
+  esc() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "${s//$'\n'/\\n}"; }
+  if [ -n "$msg" ]; then
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"},"systemMessage":"%s"}\n' "$(esc "$ctx")" "$(esc "$msg")"
+  else
+    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(esc "$ctx")"
+  fi
+}
+
+engine="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+if [ ! -r "$engine/CONVENTIONS.md" ]; then
+  emit "Knowledge engine: UNRESOLVED. The session hook runs from ${engine}, but ${engine}/CONVENTIONS.md is not readable, so the contract cannot be loaded. Treat the engine as absent: warn and continue, never guess a path." \
+       "No contract found under ${engine} — the knowledge engine is unavailable."
+  exit 0
+fi
+
+libs=""; count=0
+if [ -d "$engine/kb" ]; then
+  for d in "$engine"/kb/*/; do
+    [ -d "$d" ] || continue
+    name=$(basename "$d")
+    if [ -r "$d/INDEX.md" ]; then libs="${libs}
+  - ${name} -> ${engine}/kb/${name}"; count=$((count+1)); fi
+  done
+fi
+
+if [ "$count" -eq 0 ]; then
+  libs="
+  (none installed — no domain libraries are present under ${engine}/kb/. Answer \"fact not found — check KB\" rather than answering from memory.)"
+fi
+
+emit "Knowledge engine resolves to: ${engine}
+Contract: ${engine}/CONVENTIONS.md — load it before curating or retrieving. Use these absolute paths directly with the Read tool; it does not expand \$KB_ENGINE_ROOT.
+Domain libraries installed at ${engine}/kb/ (${count}):${libs}
+Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path."
