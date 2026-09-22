@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# run-checks — prove the guardrails still catch what they were written to catch.
+#
+# WHY: every check in scripts/ has been broken at least once, by its own author,
+# and each time it was found by a person happening to look:
+#
+#   check-exec-bits matched `scripts/check-*` and missed two new scripts, which
+#     were then "Permission denied" in every clone;
+#   check-xlinks excluded episodic/ and called a live citation dead;
+#   check-scope lost four spaces of indentation and silently checked only the
+#     last library it was given;
+#   check-golden counted a record that had drifted outside its code fence.
+#
+# Three of those passed CI. A guardrail nobody tests is a guardrail you hope
+# about. Each case below breaks one thing on purpose and requires the check to
+# notice — the negative control, applied to the checkers themselves.
+#
+# Fixtures are BUILT HERE, not committed: a tree full of deliberate defects
+# sitting in the repo is something another check will eventually read and flag.
+# Each one is a git repo where it must be, because check-scope tells a library
+# from a project tree by whether it has its own .git.
+#
+# Usage: tests/run-checks [-v]
+# Exit 0 when every case behaves as specified.
+set -uo pipefail
+
+ENGINE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+VERBOSE=${1:-}
+PASS=0; FAIL=0
+TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+fm() { # frontmatter: name, scope, [extra]
+  printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
+}
+
+# A valid library: router, one fact, a conformant golden set. Every defect fixture
+# below is this, with exactly one thing broken.
+build_clean() {
+  local d="$1" scope="${2:-general}"
+  mkdir -p "$d"
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nlast_swept: never\n' > "$d/INDEX.md"
+  printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
+  fm widgets "$scope" > "$d/widgets.md"
+  printf '# Widgets\n\n## Limits\n\nA widget holds up to 12 things.\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n' >> "$d/widgets.md"
+  fm fx-golden "$scope" > "$d/fx-golden.md"
+  cat >> "$d/fx-golden.md" <<'GOLDEN'
+# fx golden set
+
+Unresolved case: not applicable — no CONFLICTED section here.
+Cross-root case: not applicable — this fixture links to no other library.
+
+```yaml
+- case: positive
+  question: How many things does a widget hold?
+  expected_file: widgets.md
+  expected_excerpt: "up to 12 things"
+
+- case: negative
+  question: What is the deploy target?
+  expected_file: ""
+  expected_excerpt: "fact not found — check KB"
+
+- case: negative
+  question: Who owns the widget service?
+  expected_file: ""
+  expected_excerpt: "fact not found — check KB"
+```
+GOLDEN
+  git init -q "$d" && git -C "$d" add -A 2>/dev/null
+}
+
+# case <name> <expected-exit> <expected-substring> -- <command...>
+case_run() {
+  local name="$1" want_exit="$2" want_text="$3"; shift 4
+  local out rc
+  out=$("$@" 2>&1); rc=$?
+  if [ "$rc" = "$want_exit" ] && printf '%s' "$out" | grep -qF -- "$want_text"; then
+    PASS=$((PASS+1)); [ -n "$VERBOSE" ] && printf '  ok    %s\n' "$name"
+  else
+    FAIL=$((FAIL+1))
+    printf '  FAIL  %s\n' "$name"
+    printf '        wanted exit %s containing: %s\n' "$want_exit" "$want_text"
+    printf '        got exit %s:\n' "$rc"
+    printf '%s\n' "$out" | sed 's/^/          /' | head -6
+  fi
+}
+
+echo "run-checks: $ENGINE"
+
+# ---------------------------------------------------------------- check-kb ----
+build_clean "$TMP/clean"
+case_run "clean library passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/clean"
+
+build_clean "$TMP/orphan"
+fm stray general > "$TMP/orphan/stray.md"; printf '# Stray\n\nNothing routes here.\n' >> "$TMP/orphan/stray.md"
+case_run "unrouted file is an orphan" 1 "orphan" -- "$ENGINE/scripts/check-kb" "$TMP/orphan"
+
+build_clean "$TMP/subtree"
+mkdir -p "$TMP/subtree/deep"
+fm fx-sub general > "$TMP/subtree/deep/INDEX.md"; printf '# Deep\n\n- [buried](buried.md) — buried\n' >> "$TMP/subtree/deep/INDEX.md"
+fm buried general > "$TMP/subtree/deep/buried.md"; printf '# Buried\n\nListed, but by an unrouted index.\n' >> "$TMP/subtree/deep/buried.md"
+case_run "subtree under an unrouted sub-index is orphaned" 1 "deep/buried.md" -- "$ENGINE/scripts/check-kb" "$TMP/subtree"
+
+build_clean "$TMP/badname"
+sed -i 's/^name: widgets$/name: gadgets/' "$TMP/badname/widgets.md"
+case_run "name that disagrees with filename" 1 "does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/badname"
+
+build_clean "$TMP/deadlink"
+printf '\nSee [[nowhere]].\n' >> "$TMP/deadlink/widgets.md"
+case_run "dead [[slug]] link" 1 "dead" -- "$ENGINE/scripts/check-kb" "$TMP/deadlink"
+
+build_clean "$TMP/collide"
+mkdir -p "$TMP/collide/widgets"
+fm inner general > "$TMP/collide/widgets/inner.md"; printf '# Inner\n\ntext\n' >> "$TMP/collide/widgets/inner.md"
+printf -- '- [widgets-folder](widgets/inner.md) — inner\n' >> "$TMP/collide/INDEX.md"
+case_run "file colliding with a folder name" 1 "collides with directory" -- "$ENGINE/scripts/check-kb" "$TMP/collide"
+
+# ------------------------------------------------------------- check-scope ----
+build_clean "$TMP/scopeok"
+case_run "clean library passes check-scope" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/scopeok"
+
+build_clean "$TMP/scopemix"
+sed -i 's/^scope: general$/scope: product:acme/' "$TMP/scopemix/widgets.md"
+case_run "file scope disagreeing with its library" 1 "disagrees with its library" -- "$ENGINE/scripts/check-scope" "$TMP/scopemix"
+
+build_clean "$TMP/libwithrepo" "repo:fx"
+case_run "library declaring a repo: tier" 1 "general-tier home" -- "$ENGINE/scripts/check-scope" "$TMP/libwithrepo"
+
+# A project tree is one with no .git of its own, sitting inside a repository.
+mkdir -p "$TMP/proj"; git init -q "$TMP/proj"
+build_clean "$TMP/proj/knowledge" "general"; rm -rf "$TMP/proj/knowledge/.git"
+case_run "project tree declaring a general tier" 1 "project tree" -- "$ENGINE/scripts/check-scope" "$TMP/proj/knowledge"
+
+build_clean "$TMP/escape"
+printf '\nSee [the engine](../../CONVENTIONS.md).\n' >> "$TMP/escape/widgets.md"
+case_run "relative link climbing out of a library" 1 "climbs out" -- "$ENGINE/scripts/check-scope" "$TMP/escape"
+
+# ------------------------------------------------------------ check-golden ----
+build_clean "$TMP/goldok"
+case_run "conformant golden set passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldok"
+
+build_clean "$TMP/goldexcerpt"
+sed -i 's/up to 12 things/up to 20 things/' "$TMP/goldexcerpt/fx-golden.md"
+case_run "golden excerpt not in the file it names" 1 "excerpt not found" -- "$ENGINE/scripts/check-golden" "$TMP/goldexcerpt"
+
+build_clean "$TMP/goldfile"
+sed -i 's/expected_file: widgets.md/expected_file: nowhere.md/' "$TMP/goldfile/fx-golden.md"
+case_run "golden record naming a missing file" 1 "does not exist" -- "$ENGINE/scripts/check-golden" "$TMP/goldfile"
+
+build_clean "$TMP/goldneg"
+python3 - "$TMP/goldneg/fx-golden.md" <<'PY'
+import sys, pathlib, re
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(t[:t.index("- case: negative\n  question: Who owns")] + "```\n")
+PY
+case_run "golden set with fewer than two negatives" 1 "negative case" -- "$ENGINE/scripts/check-golden" "$TMP/goldneg"
+
+# ----------------------------------------------------------- check-xlinks ----
+mkdir -p "$TMP/kb"; build_clean "$TMP/kb/alpha"; build_clean "$TMP/kb/beta"
+printf '\nSee [[beta:widgets]].\n' >> "$TMP/kb/alpha/widgets.md"
+case_run "live cross-library link resolves" 0 "0 dead" -- "$ENGINE/scripts/check-xlinks" "$TMP/kb"
+
+printf '\nAnd [[beta:no-such-thing]].\n' >> "$TMP/kb/alpha/widgets.md"
+case_run "dead cross-library link fails" 1 "has no slug" -- "$ENGINE/scripts/check-xlinks" "$TMP/kb"
+
+# episodic/ is a legitimate citation target: a session note is routed and citable.
+# Excluding it from the slug index called a live citation dead — the bug that shipped.
+mkdir -p "$TMP/kb/beta/episodic"
+fm 2026-09-22-a-session-note general > "$TMP/kb/beta/episodic/2026-09-22-a-session-note.md"
+printf '# A session note\n\nWhat happened.\n' >> "$TMP/kb/beta/episodic/2026-09-22-a-session-note.md"
+fm episodic-index general > "$TMP/kb/beta/episodic/INDEX.md"
+printf '# Episodic\n\n- [2026-09-22-a-session-note](2026-09-22-a-session-note.md) — a note\n' >> "$TMP/kb/beta/episodic/INDEX.md"
+printf -- '- [episodic](episodic/INDEX.md) — session notes\n' >> "$TMP/kb/beta/INDEX.md"
+build_clean "$TMP/kb/gammaless" >/dev/null 2>&1 || true
+rm -rf "$TMP/kb/gammaless"
+mkdir -p "$TMP/kb3"; build_clean "$TMP/kb3/alpha"; build_clean "$TMP/kb3/beta"
+mkdir -p "$TMP/kb3/beta/episodic"
+fm 2026-09-22-a-session-note general > "$TMP/kb3/beta/episodic/2026-09-22-a-session-note.md"
+printf '# A session note\n\nWhat happened.\n' >> "$TMP/kb3/beta/episodic/2026-09-22-a-session-note.md"
+fm episodic-index general > "$TMP/kb3/beta/episodic/INDEX.md"
+printf '# Episodic\n\n- [2026-09-22-a-session-note](2026-09-22-a-session-note.md) — a note\n' >> "$TMP/kb3/beta/episodic/INDEX.md"
+printf -- '- [episodic](episodic/INDEX.md) — session notes\n' >> "$TMP/kb3/beta/INDEX.md"
+printf '\nSee [[beta:2026-09-22-a-session-note]].\n' >> "$TMP/kb3/alpha/widgets.md"
+case_run "citation of another library's session note resolves" 0 "0 dead" -- "$ENGINE/scripts/check-xlinks" "$TMP/kb3"
+
+mkdir -p "$TMP/kb2"; build_clean "$TMP/kb2/alpha"
+printf '\nSee [[gamma:widgets]].\n' >> "$TMP/kb2/alpha/widgets.md"
+case_run "link into an absent library only warns" 0 "unresolvable" -- "$ENGINE/scripts/check-xlinks" "$TMP/kb2"
+
+# a project tree's links are resolved when it is passed as an extra tree
+mkdir -p "$TMP/proj2"; git init -q "$TMP/proj2"
+build_clean "$TMP/proj2/knowledge" "repo:proj2"; rm -rf "$TMP/proj2/knowledge/.git"
+printf '\nSee [[beta:not-a-slug]].\n' >> "$TMP/proj2/knowledge/widgets.md"
+case_run "project tree's cross-library link is checked" 1 "has no slug" -- \
+  "$ENGINE/scripts/check-xlinks" "$TMP/kb" "$TMP/proj2/knowledge"
+
+# -------------------------------------------------------- check-exec-bits ----
+mkdir -p "$TMP/bits/.githooks"; git init -q "$TMP/bits"
+printf '#!/usr/bin/env bash\ntrue\n' > "$TMP/bits/.githooks/pre-commit"
+git -C "$TMP/bits" add -A >/dev/null 2>&1
+git -C "$TMP/bits" update-index --chmod=-x .githooks/pre-commit 2>/dev/null
+case_run "hook recorded non-executable" 1 "NOT EXECUTABLE" -- "$ENGINE/scripts/check-exec-bits" "$TMP/bits"
+
+mkdir -p "$TMP/bits2/scripts"; git init -q "$TMP/bits2"
+printf '#!/usr/bin/env python3\nprint(1)\n' > "$TMP/bits2/scripts/do-thing"
+git -C "$TMP/bits2" add -A >/dev/null 2>&1
+git -C "$TMP/bits2" update-index --chmod=-x scripts/do-thing 2>/dev/null
+case_run "shebang script recorded non-executable, whatever its name" 1 "do-thing" -- \
+  "$ENGINE/scripts/check-exec-bits" "$TMP/bits2"
+
+# ------------------------------------------------------------- kb-verify ----
+build_clean "$TMP/vpass"
+printf 'Recheck: true\n' >> "$TMP/vpass/widgets.md"
+case_run "passing assertion is reported, not applied" 0 "still hold" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vpass" --all --yes
+
+build_clean "$TMP/vfail"
+printf 'Recheck: false\n' >> "$TMP/vfail/widgets.md"
+case_run "failing assertion exits 1" 1 "FAILED" -- "$ENGINE/scripts/kb-verify" "$TMP/vfail" --all --yes
+
+build_clean "$TMP/vfail2"
+printf 'Recheck: false\n' >> "$TMP/vfail2/widgets.md"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vfail2/widgets.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vfail2" --all --yes --apply >/dev/null 2>&1
+# the old date must survive --apply: a verifier that restamps what it just
+# contradicted destroys the evidence that something changed.
+case_run "a failing assertion's stamp is never rewritten" 0 "Verified: 2026-01-01" -- \
+  grep -F "Verified:" "$TMP/vfail2/widgets.md"
+
+build_clean "$TMP/vnone"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vnone/widgets.md"
+case_run "stale section with no assertion is named, not skipped" 0 "no assertion" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vnone" --all
+
+# ---------------------------------------------------------------- kb-due ----
+build_clean "$TMP/due"
+sed -i 's/^last_swept: never$/last_swept: 2026-09-21/' "$TMP/due/INDEX.md"
+case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due"
+
+build_clean "$TMP/overdue"
+sed -i 's/^last_swept: never$/last_swept: 2026-01-01/' "$TMP/overdue/INDEX.md"
+case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/overdue"
+
+# ------------------------------------------------------------------- done ----
+echo
+if [ "$FAIL" -eq 0 ]; then
+  echo "run-checks: $PASS case(s), all as specified"
+  exit 0
+fi
+echo "run-checks: $FAIL of $((PASS+FAIL)) case(s) FAILED"
+echo "A guardrail that no longer catches what it was written to catch is worse than none:"
+echo "it reports clean over the defect it was built for."
+exit 1

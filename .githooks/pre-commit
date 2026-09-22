@@ -30,6 +30,13 @@ run "embedded-fact lint" ./scripts/check-embedded-facts
 [ -d kb ] && run "cross-library links" ./scripts/check-xlinks kb
 [ -d kb ] && [ -n "$(ls -d kb/*/ 2>/dev/null)" ] && run "scope" ./scripts/check-scope kb/*/
 
+# The suite takes a few seconds and only matters when the checked thing changed,
+# so it runs when this commit touches a check or the suite itself. CI runs it
+# every time, which covers a commit that reaches the server another way.
+if git diff --cached --name-only | grep -qE '^(scripts/|tests/)'; then
+  run "guardrail regression suite" ./tests/run-checks
+fi
+
 if [ "$fail" -ne 0 ]; then
   cat <<'MSG'
 

@@ -39,3 +39,10 @@ jobs:
 
       - name: Embedded-fact lint
         run: ./scripts/check-embedded-facts
+
+      # The content checks (check-kb, check-scope, check-golden, check-xlinks) have
+      # nothing to run against here: the engine holds no knowledge, and kb/ is not in
+      # this repository (ADR-0007). What CI can prove is that they still CATCH what
+      # they were written to catch — each case below breaks one thing on purpose.
+      - name: Guardrail regression suite
+        run: ./tests/run-checks -v
