@@ -245,6 +245,14 @@ so the hook is not the enforcement boundary — a fact this knowledge base holds
 workflow fetches the engine at run time and needs no credential: the engine is public, while the
 library's knowledge stays private.
 
+## Step 6c — Name an owner
+
+Write `.github/CODEOWNERS` in the new library — copy the shape from an installed one. It is advisory
+until branch protection makes owner review a required check, but a sweep files findings against it,
+and every finding in a library without one reads `unassigned`. The architecture asks for **two**
+named owners per domain so a departure cannot orphan it; if only one is available, say so in your
+report as an accepted risk rather than leaving the file out.
+
 ## Step 7 — Verify. The domain is not done until this is clean.
 
 Run the engine's `scripts/check-kb` **against the library path** — the target is required, because

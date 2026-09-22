@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""kb-owner — who owns a file, by CODEOWNERS, deterministically.
+
+A sweep files findings against an owner. Left to each agent to parse CODEOWNERS
+by eye, two sweeps of the same library disagree about who owns what — the same
+problem the finding IDs had, in the field everyone reads first.
+
+GITHUB'S RULE, which this implements: the LAST matching pattern wins, not the
+most specific. `*` at the top and `/scripts/` below it means scripts/x belongs to
+the second; reverse the lines and it belongs to the first. That ordering is a
+common surprise, and it is why this exists rather than a regex in a skill.
+
+Patterns supported: `*` (any), a leading `/` anchoring to the root, a trailing
+`/` matching a directory and everything under it, `*` and `?` within a segment,
+and `**`. An unowned file resolves to `unassigned` — never to a guess.
+
+DORMANT AS ENFORCEMENT: CODEOWNERS is advisory until branch protection makes
+owner review a required check (ADR-0002). What it does today is answer this
+question, so a queue item names someone rather than nobody.
+
+Usage: kb-owner <repo-root> <path> [<path>...]
+       kb-owner <repo-root> --list         every pattern, in file order
+Exit 0 always; unowned paths print `unassigned`.
+"""
+import fnmatch, pathlib, sys
+
+LOCATIONS = ("CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS")
+
+
+def rules(root: pathlib.Path):
+    for rel in LOCATIONS:
+        f = root / rel
+        if not f.is_file():
+            continue
+        out = []
+        for line in f.read_text(errors="replace").split("\n"):
+            line = line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            out.append((parts[0], parts[1:]))
+        return out, f
+    return [], None
+
+
+def matches(pattern: str, path: str) -> bool:
+    """path is repo-relative, no leading slash."""
+    p = pattern
+    if p == "*":
+        return True
+    anchored = p.startswith("/")
+    p = p.lstrip("/")
+    if p.endswith("/"):                       # a directory and everything under it
+        p += "**"
+    candidates = [path] if anchored else [path] + [
+        "/".join(path.split("/")[i:]) for i in range(1, len(path.split("/")))]
+    for c in candidates:
+        if fnmatch.fnmatchcase(c, p) or fnmatch.fnmatchcase(c, p.rstrip("/") + "/**"):
+            return True
+        # a bare directory name owns its contents
+        if not p.endswith("**") and c.startswith(p.rstrip("/") + "/"):
+            return True
+    return False
+
+
+def owner_of(rs, path: str):
+    owners = None
+    for pattern, who in rs:                   # last match wins — GitHub's rule
+        if matches(pattern, path):
+            owners = who
+    return owners
+
+
+def main(argv) -> int:
+    if len(argv) < 2:
+        print("usage: kb-owner <repo-root> <path>... | <repo-root> --list", file=sys.stderr)
+        return 0
+    root = pathlib.Path(argv[0])
+    rs, src = rules(root)
+    if argv[1] == "--list":
+        if not src:
+            print(f"kb-owner: no CODEOWNERS in {root} — every path is unassigned")
+            return 0
+        print(f"{src}:")
+        for pattern, who in rs:
+            print(f"  {pattern:<28} {' '.join(who)}")
+        return 0
+    for path in argv[1:]:
+        owners = owner_of(rs, path.lstrip("./")) if rs else None
+        print(f"{path}\t{' '.join(owners) if owners else 'unassigned'}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

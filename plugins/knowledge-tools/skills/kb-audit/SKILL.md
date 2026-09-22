@@ -132,7 +132,11 @@ Each item carries:
   Compute it (`printf '%s' 'orphan|webhooks.md|-' | sha1sum | cut -c1-8`); never invent it;
 - a **status**: `open`, `acknowledged`, `resolved`. An acknowledged item is not re-raised unless its
   underlying source changes;
-- the **owner**, from CODEOWNERS where one exists, else `unassigned`;
+- the **owner**, resolved with `scripts/kb-owner <tree> <file>` — never by reading CODEOWNERS
+  yourself. GitHub's rule is that the **last** matching pattern wins, not the most specific, which
+  is the opposite of most people's instinct; two sweeps parsing by eye disagree about who owns what,
+  in the field a reader looks at first. No CODEOWNERS, or no pattern matching: `unassigned`, and say
+  in your report that the tree has no owner file, because an unowned queue is one nobody works;
 - a **severity**, triaged in this order — every finding type has a place, so nothing lands in an
   undefined middle:
 

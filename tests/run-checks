@@ -301,6 +301,24 @@ git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "a person checke
 case_run "human stamp without an agent trailer is allowed" 0 "clean" -- \
   sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
 
+# ------------------------------------------------------------- kb-owner ----
+# GitHub resolves ownership by the LAST matching pattern, not the most specific.
+# A sweep that parses CODEOWNERS by eye gets this backwards and files findings
+# against the wrong person.
+mkdir -p "$TMP/own/.github"
+printf '*  @alice\n/scripts/  @bob\n' > "$TMP/own/.github/CODEOWNERS"
+case_run "last matching pattern wins" 0 "@bob" -- "$ENGINE/scripts/kb-owner" "$TMP/own" scripts/x.sh
+case_run "an earlier broad pattern still owns what no later one matches" 0 "@alice" -- \
+  "$ENGINE/scripts/kb-owner" "$TMP/own" README.md
+
+printf '/scripts/  @bob\n*  @alice\n' > "$TMP/own/.github/CODEOWNERS"
+case_run "reversing the order reverses the answer" 0 "@alice" -- \
+  "$ENGINE/scripts/kb-owner" "$TMP/own" scripts/x.sh
+
+mkdir -p "$TMP/own2"
+case_run "no CODEOWNERS resolves to unassigned, never a guess" 0 "unassigned" -- \
+  "$ENGINE/scripts/kb-owner" "$TMP/own2" anything.md
+
 # ------------------------------------------------------------------- done ----
 echo
 if [ "$FAIL" -eq 0 ]; then
