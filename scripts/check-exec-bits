@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# check-exec-bits — guard against a bug that has now occurred twice.
+# check-exec-bits — guard against a bug that has now occurred four times.
 #
 # core.fileMode is false on some mounts (notably Windows drives under WSL, which
 # report every file as 777). Git then ignores the on-disk executable bit and
@@ -11,6 +11,13 @@
 # by creating new hook files. A bug that recurs is a bug that needs a check, not
 # another fix.
 #
+# The check itself then recurred it: the rule named `scripts/check-*`, so
+# kb-bootstrap and kb-session-start were committed 644 and were "Permission
+# denied" in a clone — a teammate's first command. A rule written around the
+# names files happen to have today only guards the files that already existed.
+# The rule is now what a file IS: anything tracked that starts with a shebang
+# must be recorded executable, wherever it lives.
+#
 # Usage: check-exec-bits [repo-root]   (default: .)
 set -uo pipefail
 cd "${1:-.}" || exit 2
@@ -19,10 +26,15 @@ fail=0
 while IFS= read -r line; do
   mode=${line%% *}; rest=${line#* }; path=${rest#*$'\t'}
   case "$path" in
-    .githooks/*|scripts/check-*|*/hooks/*)
+    .githooks/*|*/hooks/*) want_exec=1 ;;
+    *) want_exec=0; [ "$(head -c2 "$path" 2>/dev/null)" = '#!' ] && want_exec=1 ;;
+  esac
+  case "$want_exec" in
+    1)
       if [ "$mode" != "100755" ]; then
         echo "NOT EXECUTABLE IN GIT: $path (recorded $mode)"
-        echo "    git skips a non-executable hook silently — this clone is unguarded."
+        echo "    git skips a non-executable hook silently, and a script it records"
+        echo "    644 is Permission denied in every clone — this one included."
         echo "    fix: git update-index --chmod=+x $path"
         fail=1
       fi ;;
