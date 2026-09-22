@@ -74,7 +74,9 @@ case_run() {
   local name="$1" want_exit="$2" want_text="$3"; shift 4
   local out rc
   out=$("$@" 2>&1); rc=$?
-  if [ "$rc" = "$want_exit" ] && printf '%s' "$out" | grep -qF -- "$want_text"; then
+  # An empty want_text means the exit status is the whole claim — grep finds
+  # nothing in empty output, so it cannot stand in for "no requirement".
+  if [ "$rc" = "$want_exit" ] && { [ -z "$want_text" ] || printf '%s' "$out" | grep -qF -- "$want_text"; }; then
     PASS=$((PASS+1)); [ -n "$VERBOSE" ] && printf '  ok    %s\n' "$name"
   else
     FAIL=$((FAIL+1))
@@ -114,6 +116,18 @@ mkdir -p "$TMP/collide/widgets"
 fm inner general > "$TMP/collide/widgets/inner.md"; printf '# Inner\n\ntext\n' >> "$TMP/collide/widgets/inner.md"
 printf -- '- [widgets-folder](widgets/inner.md) — inner\n' >> "$TMP/collide/INDEX.md"
 case_run "file colliding with a folder name" 1 "collides with directory" -- "$ENGINE/scripts/check-kb" "$TMP/collide"
+
+build_clean "$TMP/badfm"
+sed -i 's/^domain: fx$/domain fx/' "$TMP/badfm/widgets.md"          # a key with no colon
+case_run "malformed frontmatter is reported, not skipped" 1 "unparseable frontmatter" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/badfm"
+
+# The toolchain runs in every commit hook on every machine, and on CI runners that
+# install nothing. check-kb once imported PyYAML: it worked for its author and was
+# a traceback everywhere else, including on the runner, which had never exercised
+# it because the engine holds no knowledge for it to read.
+case_run "no script depends on a third-party module" 1 "" -- \
+  grep -rlE "^import (yaml|requests|jinja2)|^from (yaml|requests|jinja2) " "$ENGINE/scripts"
 
 # ------------------------------------------------------------- check-scope ----
 build_clean "$TMP/scopeok"

@@ -28,8 +28,6 @@ Exit 0 clean, 1 on any defect.
 import pathlib, re, sys
 from collections import Counter
 
-import yaml
-
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
 PATH_ADDRESSED = {"INDEX.md", "CONVENTIONS.md"}
@@ -73,6 +71,30 @@ def orphans(root: pathlib.Path, files: list) -> list:
             and not f.name.endswith("-golden.md")]
 
 
+# STDLIB ONLY, deliberately. PyYAML is not installed everywhere, and this runs in
+# every commit hook on every machine: an import nobody has is a traceback where a
+# guardrail should be. It bit CI, which had never run this check (the engine holds
+# no knowledge for it to read) and so had never noticed the dependency.
+#
+# It parses only what the contract needs — `key: value` at the top level, and
+# `key:` introducing an indented block, which it records as present and does not
+# descend into. A line that is neither is reported rather than skipped: silence
+# about a malformed file is how a malformed file survives.
+KEY = re.compile(r"^([A-Za-z_][\w-]*):\s*(.*)$")
+
+
+def frontmatter(block: str):
+    fm, bad = {}, None
+    for n, line in enumerate(block.split("\n"), 1):
+        if not line.strip() or line.startswith("#") or line[0] in " \t-":
+            continue                      # blank, comment, nested value, or list item
+        m = KEY.match(line)
+        if not m:
+            bad = (n, line); break
+        fm[m.group(1)] = m.group(2).strip().strip('"').strip("'")
+    return fm, bad
+
+
 def main(root: pathlib.Path) -> int:
     files = sorted(f for f in root.rglob("*.md")
                    if not NON_KB_DIRS & set(f.relative_to(root).parts))
@@ -87,10 +109,13 @@ def main(root: pathlib.Path) -> int:
         if not text.startswith("---\n"):
             defects.append(f"{f}: no frontmatter")
             continue
-        try:
-            fm = yaml.safe_load(text.split("---\n", 2)[1]) or {}
-        except yaml.YAMLError as e:
-            defects.append(f"{f}: unparseable frontmatter ({e})")
+        block = text.split("---\n", 2)
+        if len(block) < 3:
+            defects.append(f"{f}: frontmatter is not closed by a --- line")
+            continue
+        fm, bad = frontmatter(block[1])
+        if bad:
+            defects.append(f"{f}: unparseable frontmatter line {bad[0]}: {bad[1]!r}")
             continue
 
         for key in REQUIRED:
