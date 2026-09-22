@@ -105,6 +105,22 @@ Verified: 2026-09-22 · by: agent · method: query
 No evidence, no stamp. An unstamped fact reads as `unknown`, which is honest; a stamp on something
 nobody checked is not.
 
+Where a **command can decide** the claim, write the assertion under the stamp:
+
+```
+Recheck: t=$(mktemp -d); … ; exit $r      # exit 0 = the fact still holds
+```
+
+`kb-verify <tree>` then re-runs the assertions of sections past their horizon. It prints the
+commands and runs them only with `--yes`; a pass restamps only with `--apply`; **a failure is
+reported and never applied**, because a failure may mean the fact is stale, the assertion is wrong,
+or the world changed — three different repairs, and only a person picks between them. Stale sections
+with no assertion are listed as needing a human, which is most of them.
+
+**Author every assertion with its negative control.** Break the thing on purpose and confirm the
+command notices. One of the first three written here could not fail, and would have certified a fact
+forever.
+
 **Contradictions are flagged, never resolved by whoever finds them.** Mark the narrowest unit —
 split the disputed claim into its own subsection first, so its sound neighbours stay retrievable —
 with `status: CONFLICTED · since: <date>`, state both claims, and register it in
@@ -129,6 +145,9 @@ meaning:
 | `check-golden` | a golden record whose file is missing or whose excerpt is not in that file, too few negative cases |
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
+
+`kb-verify` is **not** in the hooks: it executes commands, which is not something a commit should do
+on your behalf. Run it on a cadence instead, with `kb-audit`.
 
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
 is true, whether its source still says so, or whether it landed where a reader would look.

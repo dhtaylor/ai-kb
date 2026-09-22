@@ -301,6 +301,24 @@ Verified: 2026-09-19 · by: agent · method: query
   stamp. **No evidence, no re-stamp.**
 - **`by:` is derived from the git committer identity**, not a free-form claim — a field is trivially
   forged, an identity is not. CI rejects a commit writing `by: human` from the agent identity.
+- **A section may carry a re-check assertion**, directly beneath its stamp:
+
+  ```
+  Recheck: env -i HOME=$HOME PATH=/usr/bin:/bin bash -lc '[ -z "${KB_ENGINE_ROOT:-}" ]'
+  ```
+
+  It is an **assertion, not a query**: exit 0 means the fact still holds, non-zero means it no longer
+  does. `kb-verify` runs these, so the evidence rule above is satisfied mechanically — the exact check
+  is *in the file*, beside the claim it defends, and is reviewable in the diff that introduced it.
+  Write one only where a command can actually decide the claim; most facts cannot be settled by a
+  shell and should carry none. **An assertion that cannot fail is worse than none**: it manufactures
+  freshness on a schedule.
+
+  Two rules make this safe to run. **A failing assertion is reported, never applied** — a verifier
+  that rewrites a fact it has just contradicted destroys the evidence that something changed; a human
+  decides between a stale fact, a wrong assertion and a real contradiction (§8). And **the commands
+  are printed and approved per run**, because a library is content that travels between people:
+  running one executes its author's shell on your machine.
 - **Trust tiers.** Agent-verified TTL is materially shorter than human-verified (**1/10th**).
   **High-blast-radius** facts — deploy targets, environment routing, credential references — require
   **human** re-verification regardless of any agent stamp.
@@ -487,8 +505,9 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | `check-xlinks` | `[[library:slug]]` resolution from any tree — the installed libraries and each project tree passed to it — into the installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **to build** |
 | answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
+| re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Ten of thirteen are built. A library passing the built checks is **structurally sound within itself**
+Eleven of fourteen are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.

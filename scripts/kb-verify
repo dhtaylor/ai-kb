@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""kb-verify — re-run the assertions that defend stale facts. Reports; applies only when told.
+
+Every other check in this engine proves STRUCTURE: frontmatter, links, scope, that
+the oracle is well formed. None of them asks the only question that matters about a
+fact — is it still true? This asks it, for the narrow set of facts a command can
+actually decide, and is honest about how narrow that is.
+
+A section carries an assertion beneath its stamp (§7):
+
+    Verified: 2026-09-19 · by: agent · method: manual
+    Recheck: env -i HOME=$HOME PATH=/usr/bin:/bin bash -lc '[ -z "${KB_ENGINE_ROOT:-}" ]'
+
+Exit 0 means the fact still holds. Non-zero means it does not.
+
+THREE RULES, and they are the design:
+
+  1. A PASS refreshes nothing unless you pass --apply. A verifier that restamps by
+     default turns an assertion nobody re-read into a freshness machine.
+  2. A FAILURE is never applied, with or without --apply. The fact is not edited, not
+     marked CONFLICTED, not deleted. Something changed and a human decides what: a
+     stale fact, a wrong assertion, or a real contradiction (§8). Automating that
+     decision destroys the evidence that it needed making.
+  3. COMMANDS ARE PRINTED AND APPROVED PER RUN (--yes). A library is content that
+     travels between people; running its assertions executes its author's shell as
+     you. That is a different trust question from cloning it for its facts, so it is
+     asked out loud rather than assumed.
+
+Selection is by staleness, per §7: a section is due when its stamp is older than the
+domain's freshness_horizon, or older than a TENTH of it for an agent stamp. The
+domain's verifier_budget caps how many run per sweep, oldest first.
+
+Usage: kb-verify <library-or-tree> [--yes] [--apply] [--all] [--budget N]
+  --yes      run the commands (without it, they are printed and nothing runs)
+  --apply    rewrite the date of sections whose assertion passed
+  --all      every section with an assertion, not only the stale ones
+  --budget N override the domain's verifier_budget
+Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
+"""
+import datetime, pathlib, re, subprocess, sys
+
+NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
+          ".claude-plugin", ".claude", ".git"}
+STAMP = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})\s*·\s*by:\s*(\S+)\s*·\s*method:\s*(\S+)\s*$")
+RECHECK = re.compile(r"^Recheck:\s*(.+?)\s*$")
+HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+TODAY = datetime.date.today()
+
+
+def horizon_and_budget(root: pathlib.Path):
+    idx = (root / "INDEX.md").read_text(errors="replace")
+    h = re.search(r"^freshness_horizon:\s*(\d+)d", idx, re.M)
+    b = re.search(r"^verifier_budget:\s*(\d+)", idx, re.M)
+    return (int(h.group(1)) if h else None), (int(b.group(1)) if b else None)
+
+
+def sections(path: pathlib.Path):
+    """Every stamped section: its heading, stamp line number, date, by, and assertion."""
+    lines = path.read_text(errors="replace").split("\n")
+    heading, out = "(file)", []
+    for i, line in enumerate(lines):
+        m = HEADING.match(line)
+        if m:
+            heading = m.group(2).strip()
+            continue
+        s = STAMP.match(line)
+        if not s:
+            continue
+        cmd = None
+        for nxt in lines[i + 1:i + 3]:          # the assertion sits directly beneath the stamp
+            r = RECHECK.match(nxt)
+            if r:
+                cmd = r.group(1); break
+            if nxt.strip():
+                break
+        out.append({"file": path, "heading": heading, "line": i,
+                    "date": datetime.date.fromisoformat(s.group(1)),
+                    "by": s.group(2), "method": s.group(3), "cmd": cmd})
+    return out
+
+
+def main(argv) -> int:
+    args = [a for a in argv if not a.startswith("--")]
+    flags = {a for a in argv if a.startswith("--")}
+    if len(args) != 1 or flags - {"--yes", "--apply", "--all", "--budget"}:
+        print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+    root = pathlib.Path(args[0])
+    if not (root / "INDEX.md").is_file():
+        print(f"kb-verify: {root} has no INDEX.md — not a library or project tree", file=sys.stderr)
+        return 2
+    budget_override = None
+    if "--budget" in flags:
+        try:
+            budget_override = int(argv[argv.index("--budget") + 1])
+        except (ValueError, IndexError):
+            print("kb-verify: --budget needs a number", file=sys.stderr); return 2
+
+    horizon, budget = horizon_and_budget(root)
+    if horizon is None:
+        print(f"kb-verify: {root}/INDEX.md declares no freshness_horizon — nothing to judge staleness by",
+              file=sys.stderr)
+        return 2
+    budget = budget_override or budget or 5
+    agent_ttl = max(1, horizon // 10)
+
+    found = []
+    for f in sorted(root.rglob("*.md")):
+        if NON_KB & set(f.relative_to(root).parts) or f.name.endswith("-golden.md"):
+            continue
+        found += sections(f)
+
+    def due(s):
+        age = (TODAY - s["date"]).days
+        return age > (agent_ttl if s["by"] == "agent" else horizon)
+
+    stamped = len(found)
+    with_cmd = [s for s in found if s["cmd"]]
+    selected = [s for s in with_cmd if "--all" in flags or due(s)]
+    selected.sort(key=lambda s: s["date"])
+    over_budget = max(0, len(selected) - budget)
+    selected = selected[:budget]
+
+    print(f"kb-verify: {root}  (horizon {horizon}d, agent TTL {agent_ttl}d, budget {budget})")
+    print(f"  {stamped} stamped section(s), {len(with_cmd)} with a Recheck assertion, "
+          f"{len(selected)} due to run"
+          + (f", {over_budget} more past the budget" if over_budget else ""))
+
+    # The facts no command can settle. Naming them is the point: a verifier that
+    # only reports what it can check reads as though everything else were verified.
+    unverifiable = [s for s in found if not s["cmd"] and due(s)]
+    if unverifiable:
+        print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
+        for s in unverifiable:
+            print(f"    {s['file'].relative_to(root)} § {s['heading']}"
+                  f"  ({(TODAY - s['date']).days}d, by: {s['by']})")
+
+    if not selected:
+        print("\nNothing to run.")
+        return 0
+
+    print(f"\n  Commands{'' if '--yes' in flags else ' (NOT run — pass --yes to run them)'}:")
+    for s in selected:
+        print(f"    {s['file'].relative_to(root)} § {s['heading']}  ({(TODAY - s['date']).days}d)")
+        print(f"      $ {s['cmd']}")
+    if "--yes" not in flags:
+        print("\nRead them before you do. A library's assertions run as you, with your privileges.")
+        return 0
+
+    passed, failed = [], []
+    print()
+    for s in selected:
+        r = subprocess.run(s["cmd"], shell=True, cwd=s["file"].parent,
+                           capture_output=True, text=True, timeout=120)
+        where = f"{s['file'].relative_to(root)} § {s['heading']}"
+        if r.returncode == 0:
+            passed.append(s); print(f"  PASS {where}")
+        else:
+            failed.append((s, r)); print(f"  FAIL {where}  (exit {r.returncode})")
+            for stream in (r.stdout, r.stderr):
+                for line in stream.strip().split("\n")[:3]:
+                    if line:
+                        print(f"         {line}")
+
+    if passed and "--apply" in flags:
+        for s in passed:
+            lines = s["file"].read_text().split("\n")
+            lines[s["line"]] = f"Verified: {TODAY} · by: agent · method: {s['method']}"
+            s["file"].write_text("\n".join(lines))
+        print(f"\n  restamped {len(passed)} section(s) to {TODAY} (by: agent — kb-verify is an agent, "
+              f"whatever ran the assertion)")
+    elif passed:
+        print(f"\n  {len(passed)} section(s) still hold. Not restamped — pass --apply for that.")
+
+    if failed:
+        print(f"\n  {len(failed)} assertion(s) FAILED. Nothing was edited, deliberately: the fact may be")
+        print( "  stale, the assertion may be wrong, or the world may have changed and the fact is now")
+        print( "  a contradiction (§8). That is a human's call, and auto-editing destroys the evidence.")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

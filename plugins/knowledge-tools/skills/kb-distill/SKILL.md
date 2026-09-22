@@ -80,6 +80,11 @@ Verified: <the date of the observation> · by: <agent|human> · method: manual
 
 Do not stamp today's date on a thing observed weeks ago. That is manufacturing freshness.
 
+**If a command can decide the fact, record it** as a `Recheck:` assertion beneath the stamp (§7), and
+**run its negative control before you write it** — break the thing it asserts and confirm the command
+notices. An assertion that cannot fail re-certifies a fact forever. Most facts get none; that is the
+normal case, not a gap.
+
 ## Step 4 — Place the facts
 
 Placement follows the same rules as a fold, and the same decision table:
