@@ -369,7 +369,16 @@ Every retrieval agent's body states, and every agent is held to:
   a repo-tier fact. State when an answer is **partial**.
 - **Load only the libraries the question touches.** A question about one domain must not pay for
   every installed library; a question spanning a project fact and a library fact loads both.
-- **On absence:** answer *"fact not found — check KB"*. Never fill the gap from model memory.
+- **On absence:** answer *"fact not found — check KB"*. Never fill the gap from model memory — nor from
+  the code, config or scripts around the knowledge base. Reading the source is the caller's job; a
+  retrieval agent that reads it answers correctly and hides the gap.
+- **On a fact held only in an episodic note:** the answer begins *"Not established in the knowledge
+  base"*, never with yes or no, and reports observed and believed-but-untested material as such.
+  A session note is a record; distillation decides what in it is a fact, and retrieval must not
+  promote what distillation refused.
+- **On a hedge in any file:** a claim the file itself marks untested, inferred or probable is reported
+  as such and never leads the answer — a `Verified:` stamp beside it dates what was checked, not what
+  was inferred. **Never chain facts from two files into a conclusion neither states.**
 - **On `CONFLICTED`:** surface the conflict, serve nothing (§8).
 - **Surface the `verified:` date** on freshness-sensitive facts.
 

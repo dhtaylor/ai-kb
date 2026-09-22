@@ -76,8 +76,7 @@ and their workarounds, and the operational gotchas nobody wrote down.
 Anything true wherever a product or concept appears belongs in a shared domain library, not here —
 link to it with \`[[library:slug]]\` instead of restating it.
 
-This tree is empty. It fills from real work: capture findings as they happen, and distil them
-periodically.
+This tree fills from real work: capture findings as they happen, and distil them periodically.
 INDEX
 created+=("knowledge/INDEX.md")
 

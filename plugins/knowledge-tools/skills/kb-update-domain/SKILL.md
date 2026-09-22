@@ -90,6 +90,9 @@ For each candidate fact:
 - **Never fill a gap.** If the source is silent, incomplete or ambiguous, the KB is silent. Record
   the gap in `<domain>-open-questions.md` rather than inferring the answer. A plausible invented
   fact is indistinguishable from a real one once it is in the KB, and that is the whole failure.
+  **Your own inference counts as a gap**: a "direct consequence" you draw beneath a folded fact
+  borrows that fact's stamp and reads as checked. Put it in open-questions as a question, not in
+  the fact section.
 - **Do not promote an example into a rule.** One observed value is an observation, not a default.
 
 If you find yourself improving the source's prose, stop — that is the corruption happening.

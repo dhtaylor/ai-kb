@@ -40,6 +40,11 @@ do not skip to the extraction.
 observation about that environment. It may become a repo-tier fact. It does not become a
 product-tier or general-tier fact without evidence external to this session — see the contract §9.
 
+**An untested consequence does not ride along with the fact it follows from.** "A direct
+consequence is…", "so presumably…", "this should mean…" — written beneath an observed fact, it
+borrows that fact's `Verified:` stamp and reads as checked. It is speculation. Leave it out of the
+fact section; if it is worth keeping, it goes in `<domain>-open-questions.md` as a question.
+
 If you cannot tell which category a statement falls into, it stays in the episodic note. That is
 not a failure; that is the note doing its job.
 

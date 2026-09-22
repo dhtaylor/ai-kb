@@ -89,6 +89,10 @@ def main(roots) -> int:
             elif not VALID.match(s):
                 defects.append(f"{root.name}/{rel}: scope '{s}' is not one of "
                                f"general | product:<vendor> | org:<company> | repo:<project>")
+            elif s != lib_scope and kind == "project":
+                defects.append(f"{root.name}/{rel}: scope '{s}' disagrees with its project tree "
+                               f"('{lib_scope}'). A project tree holds only facts true of this "
+                               f"deployment — one true beyond it belongs in a shared library")
             elif s != lib_scope:
                 defects.append(f"{root.name}/{rel}: scope '{s}' disagrees with its library "
                                f"('{lib_scope}'). A library is one domain and a domain is one tier — "
@@ -102,7 +106,11 @@ def main(roots) -> int:
 
     for d in defects:
         print(f"FAIL {d}")
-    print(f"\n{total} file(s) across {len(roots)} librar{'y' if len(roots)==1 else 'ies'} — "
+    kinds = [classify(pathlib.Path(r)) for r in roots]
+    n_lib, n_proj = kinds.count("library"), kinds.count("project")
+    parts = ([f"{n_lib} librar{'y' if n_lib == 1 else 'ies'}"] if n_lib else []) + \
+            ([f"{n_proj} project tree{'' if n_proj == 1 else 's'}"] if n_proj else [])
+    print(f"\n{total} file(s) across {' and '.join(parts) or '0 trees'} — "
           + ("clean" if not defects else f"{len(defects)} defect(s)"))
     return 1 if defects else 0
 
