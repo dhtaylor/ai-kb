@@ -138,7 +138,9 @@ Each item carries:
 
   1. **blocking contradiction** — a disputed fact that is actively needed;
   2. **high-blast-radius fact unstamped or stale** — deploy targets, environment routing,
-     credential references;
+     credential references. Apply §7's test — *if this fact is wrong, what happens?* — and reserve
+     this tier for damage that is expensive or impossible to undo. A fact that merely concerns a
+     variable or a hook belongs at 4 or 5. Hash its category as `high-blast-radius`;
   3. **golden-set rot** — the oracle is wrong, so it reports success while testing nothing;
   4. **unstamped fact** (`unknown`) — ahead of stale, per §7: absence hides more easily than age.
      A frontmatter `verified:` date with no section stamp behind it is this too (locus

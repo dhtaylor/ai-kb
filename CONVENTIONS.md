@@ -326,8 +326,18 @@ Verified: 2026-09-19 · by: agent · method: query
   are printed and approved per run**, because a library is content that travels between people:
   running one executes its author's shell on your machine.
 - **Trust tiers.** Agent-verified TTL is materially shorter than human-verified (**1/10th**).
-  **High-blast-radius** facts — deploy targets, environment routing, credential references — require
-  **human** re-verification regardless of any agent stamp.
+  **High-blast-radius** facts require **human** re-verification regardless of any agent stamp:
+  deploy targets, environment routing, credential references. **The test is the consequence, not the
+  subject matter — if this fact is wrong, what happens?** Damage that is expensive or impossible to
+  undo (shipped to the wrong place, written to the wrong environment, a wrong credential used) is
+  high blast radius. A skipped check, a confused reader or a wasted afternoon is not.
+
+  A fact is not high-blast-radius merely because it *mentions* an environment variable, a config file
+  or a hook: `config-resolution.md` is about how variables propagate, and getting it wrong misleads a
+  developer rather than deploying anything anywhere. Read the category wide enough and every
+  agent-written fact is permanently unverifiable — a queue full on the day it is created, which
+  nobody reads twice. Both first sweeps read it that way and filed 11 such items; the category was
+  underspecified, and this paragraph is the repair.
 - **Absent ≠ fresh.** A section with no stamp is `unknown`, and ranks **ahead of a merely stale one**
   in the attention queue — absence hides more easily than age. "Ahead of stale" is the claim, not
   "ahead of everything": a contradiction being actively served outranks both, and the full ordering
