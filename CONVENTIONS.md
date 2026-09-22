@@ -519,11 +519,11 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution from any tree — the installed libraries and each project tree passed to it — into the installed libraries; dead links fail, absent libraries warn | **built** |
-| routing check | golden-set questions actually route to `expected_file` | **to build** |
-| answer-grounding eval | the agent's answer contains `expected_excerpt`, grep-verified | **to build** |
+| routing check | golden-set questions actually route to `expected_file` | **half-built** — `check-golden` proves the record is well formed and its excerpt present; that an agent *routes* there is still checked by running one by hand |
+| answer-grounding eval | the agent's answer contains `expected_excerpt` AND it appears in a file the agent cited, grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Eleven of fourteen are built. A library passing the built checks is **structurally sound within itself**
+Twelve of fourteen are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.

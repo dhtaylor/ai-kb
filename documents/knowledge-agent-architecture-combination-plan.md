@@ -694,9 +694,11 @@ did not merely fail to find one — it reasoned from the contract that such a fa
 repo library was installed. A model answering from memory has no reason to invoke the scope tiers at
 all.
 
-**Still absent:** external `Source:` URL liveness, the Verifier, the Watcher and the orchestrator.
-The bootstrap is built — see §9.12. **Ten of §13's thirteen checks are built**, orphan detection
-having moved from the sweep into `check-kb` once capture made unrouted files cheap to create. `check-xlinks` resolves
+**Still absent:** external `Source:` URL liveness, the Watcher and the orchestrator — the last two
+for want of anything to watch and too few libraries to orchestrate. The bootstrap is built (§9.12);
+so is the Verifier, in the only form the environment allows (§9.13). **Twelve of §13's fourteen
+checks are built**, orphan detection having moved from the sweep into `check-kb` once capture made
+unrouted files cheap to create. `check-xlinks` resolves
 `[[library:slug]]` across installed libraries; `check-scope` enforces that a file's tier agrees with
 its library's and that no relative link climbs out of one.
 
@@ -760,3 +762,31 @@ the consumer nobody thinks about is the one that fails silently.**
 
 Clones remain a second step (`kb-init`), because `core.hooksPath` is local config git does not clone
 — a machine-level command cannot wire a repository that does not exist yet.
+
+### 9.13 The Verifier was not unbuildable; the question was framed too big
+
+This plan deferred the Verifier because it imagined querying live systems, and this environment has
+none. That framing hid the buildable part. A claim about a shell, a config file or git **is**
+decidable by a command, and the honest answer for everything else is to say so rather than imply a
+verification nobody performed.
+
+So a fact may carry its own assertion (`Recheck:`, §7) and `kb-verify` re-runs the ones whose stamps
+are past their horizon. Three properties matter more than the mechanism:
+
+- **A failure is reported, never applied.** It may mean a stale fact, a wrong assertion, or a real
+  contradiction — three different repairs, and automating the choice destroys the evidence that a
+  choice was needed.
+- **The assertion lives beside the claim**, so it is reviewed in the same diff and travels with the
+  library. A central registry of checks would drift from the facts it checks on the first edit.
+- **Every assertion ships with its negative control.** Two of the first five drafts could not fail —
+  one compared a login shell that never reads the file in question, the other short-circuited past
+  the very condition it was testing. Both would have re-certified their facts forever. An assertion
+  nobody tried to break is decoration.
+
+**Eight of roughly thirty facts can carry one**, and that ratio is the point rather than a
+shortfall: the rest are claims about Claude's own runtime or about design, and they now say plainly
+that only a person can re-check them. The failure mode this closes is specific and was caught in the
+act: a fact in test_project still described a hook that had been rewritten two commits earlier.
+Every structural check passed over it, and so did a careful sweep, because **both were reading the
+knowledge base rather than the thing it describes.**
+
