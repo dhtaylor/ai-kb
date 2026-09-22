@@ -36,6 +36,11 @@ do not skip to the extraction.
 | **Documented** — an authoritative source says so, but nobody here ran it | **Yes, at lower evidence.** Stamp `method: doc-review`, never `query` or `manual`, and say in the prose that it was not independently verified. It sounds like fact because the source is confident; the confidence is the source's, not yours |
 | **Tried and abandoned** — an approach that did not work | Only as a documented negative result, stated as such |
 
+**A general fact may drop a repo-tier detail rather than lose the fact.** When something true
+everywhere was observed in one named repository, the general library states the mechanism and cites
+the episodic note; it does not name the other repo as though the name were part of the fact. The
+name lives in the note, which is where a reader goes for the evidence.
+
 **One observation is not a general truth.** A thing seen once, in one environment, is an
 observation about that environment. It may become a repo-tier fact. It does not become a
 product-tier or general-tier fact without evidence external to this session — see the contract §9.
