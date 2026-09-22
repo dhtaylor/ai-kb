@@ -167,6 +167,12 @@ freshness_horizon: <N days>   # the domain's TTL floor; volatile deployment fact
                               # fundamentals in years. One interval for the whole library is wrong.
 verifier_budget: <N>          # max facts re-checked per verification cycle, highest score first.
                               # Without a cap the cadence grows unbounded as domains multiply.
+sweep_interval: <N>d          # how long a kb-audit sweep stays good for. 30d for a library, 14d for
+                              # a project tree, whose facts churn faster. Explicit rather than derived
+                              # from the horizon: a 90d horizon would imply a 9d nag.
+last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `never` until the first.
+                              # It lives here, not in needs-attention.md, because a CLEAN sweep
+                              # writes no queue file and would erase the evidence that it ran.
 ```
 
 Cross-cutting material that isn't a routing decision lives in its own child doc, listed like any other

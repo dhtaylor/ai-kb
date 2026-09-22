@@ -166,7 +166,17 @@ same place are two items, not one merged to fit under the cap. A queue nobody ca
 real finding gets ignored. If you are over the cap, raise the highest-severity items and say how
 many you held back.
 
-## Step 4 — Report
+## Step 4 — Record that the sweep happened
+
+Set `last_swept: <today>` in the tree's own `INDEX.md`. This is the sweep's second and last
+mutation, and it is not bookkeeping: **a clean sweep writes no queue file**, so without this line a
+sweep that found nothing is indistinguishable from one that never ran, and `kb-due` would nag
+forever. Write it whether or not you found anything.
+
+Do not touch `sweep_interval` — how often this domain should be swept is the owner's policy, not a
+sweep's finding. If the interval looks wrong, say so in your report.
+
+## Step 5 — Report
 
 Give the acceptance verdict plainly: is this knowledge base in a state where the next wave of work
 should proceed, or is something blocking? A blocking contradiction in a domain about to be promoted

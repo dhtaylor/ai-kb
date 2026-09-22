@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""kb-due — which knowledge trees are due for a hygiene sweep.
+
+A cadence nobody is reminded of is a preference, not a cadence. The sweep itself
+(`kb-audit`) needs an agent and cannot be automated, so the machinery is only this:
+record when each tree was last swept, work out when it is due, and say so where an
+agent is already standing — the session-start hook calls this.
+
+WHAT IT READS, from each tree's INDEX.md:
+  last_swept: YYYY-MM-DD    written by kb-audit when it finishes a sweep. It lives
+                            here and not in needs-attention.md because a CLEAN sweep
+                            writes no queue file at all, and would erase the only
+                            evidence it had run.
+  sweep_interval: <N>d      how long a sweep stays good for. Explicit, not derived
+                            from freshness_horizon: a 90d horizon would imply a 9d
+                            nag and a 14d project a 1.4d one, surprising in both
+                            directions. Default when absent: 30d.
+
+SILENCE IS THE POINT. Nothing due prints nothing (exit 0) in --quiet: a reminder
+that fires every session is ignored by the time it matters.
+
+Usage: kb-due <engine-root> [tree ...] [--quiet]
+  Scans <engine-root>/kb/* plus any further trees given (a project knowledge/ tree).
+  --quiet   print only overdue trees, and nothing at all when none are
+Exit 0 always: being due is a nudge, never a failure.
+"""
+import datetime, pathlib, re, sys
+
+DEFAULT_INTERVAL = 30
+TODAY = datetime.date.today()
+
+
+def field(text, name):
+    m = re.search(rf"^{name}:\s*(\S+)\s*$", text, re.M)
+    return m.group(1) if m else None
+
+
+def label(tree: pathlib.Path):
+    """A project tree is always called knowledge/; name it after the project instead."""
+    return tree.parent.resolve().name if tree.name == "knowledge" else tree.name
+
+
+def status(tree: pathlib.Path):
+    idx = tree / "INDEX.md"
+    if not idx.is_file():
+        return None
+    text = idx.read_text(errors="replace")
+    interval = field(text, "sweep_interval") or f"{DEFAULT_INTERVAL}d"
+    days = int(re.sub(r"\D", "", interval) or DEFAULT_INTERVAL)
+    swept = field(text, "last_swept")
+    if swept in (None, "never"):
+        return {"tree": tree, "age": None, "interval": days, "due": True}
+    try:
+        age = (TODAY - datetime.date.fromisoformat(swept)).days
+    except ValueError:
+        return {"tree": tree, "age": None, "interval": days, "due": True}
+    return {"tree": tree, "age": age, "interval": days, "due": age > days}
+
+
+def main(argv) -> int:
+    quiet = "--quiet" in argv
+    args = [a for a in argv if a != "--quiet"]
+    if not args:
+        print("usage: kb-due <engine-root> [tree ...] [--quiet]", file=sys.stderr); return 0
+    engine = pathlib.Path(args[0])
+
+    trees = []
+    kb = engine / "kb"
+    if kb.is_dir():
+        trees += [d for d in sorted(kb.iterdir()) if (d / "INDEX.md").is_file()]
+    trees += [pathlib.Path(a) for a in args[1:]]
+
+    rows = [s for s in (status(t) for t in trees) if s]
+    due = [s for s in rows if s["due"]]
+
+    if quiet:
+        for s in due:
+            when = "never swept" if s["age"] is None else f"last swept {s['age']}d ago"
+            print(f"{label(s['tree'])}: {when} (every {s['interval']}d) — kb-audit due")
+        return 0
+
+    if not rows:
+        print("kb-due: no knowledge trees found"); return 0
+    for s in rows:
+        when = "never swept" if s["age"] is None else f"{s['age']}d ago"
+        print(f"  {'DUE ' if s['due'] else 'ok  '} {label(s['tree']):<28} swept {when:<14} "
+              f"(every {s['interval']}d)")
+    print(f"\n{len(due)} of {len(rows)} tree(s) due for a sweep"
+          + ("" if due else " — nothing to do"))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

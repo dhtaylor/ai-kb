@@ -147,7 +147,23 @@ meaning:
 | `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
 
 `kb-verify` is **not** in the hooks: it executes commands, which is not something a commit should do
-on your behalf. Run it on a cadence instead, with `kb-audit`.
+on your behalf.
+
+---
+
+## The sweep cadence
+
+A tree is due for a `kb-audit` sweep every `sweep_interval` — 30 days for a library, 14 for a
+project tree, set in its `INDEX.md`. `kb-audit` writes `last_swept:` when it finishes, whether or
+not it found anything: a clean sweep writes no queue file, so without that line nobody could tell a
+clean sweep from one that never happened.
+
+Session start tells you when something is due, and says nothing when nothing is. Ask for it yourself
+any time:
+
+```bash
+kb-due "$KB_ENGINE_ROOT" knowledge      # the installed libraries, plus this project's tree
+```
 
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
 is true, whether its source still says so, or whether it landed where a reader would look.

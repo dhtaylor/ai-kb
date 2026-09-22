@@ -48,7 +48,17 @@ if [ "$count" -eq 0 ]; then
   (none installed — no domain libraries are present under ${engine}/kb/. Answer \"fact not found — check KB\" rather than answering from memory.)"
 fi
 
+# The libraries, plus this session's own project tree if it is in one.
+proj=""
+if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -f "$root/knowledge/INDEX.md" ]; then
+  proj="$root/knowledge"
+fi
+due=$("$engine/scripts/kb-due" "$engine" ${proj:+"$proj"} --quiet 2>/dev/null || true)
+[ -n "$due" ] && due="
+Hygiene sweeps due — run the kb-audit skill against each:
+${due}"
+
 emit "Knowledge engine resolves to: ${engine}
 Contract: ${engine}/CONVENTIONS.md — load it before curating or retrieving. Use these absolute paths directly with the Read tool; it does not expand \$KB_ENGINE_ROOT.
 Domain libraries installed at ${engine}/kb/ (${count}):${libs}
-Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path."
+Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${due}"

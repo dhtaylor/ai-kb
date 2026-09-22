@@ -68,6 +68,8 @@ domain: ${name}
 scope: repo:${name}
 freshness_horizon: 14d
 verifier_budget: 5
+sweep_interval: 14d
+last_swept: never
 metadata:
   type: index
   node_type: router

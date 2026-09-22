@@ -134,6 +134,8 @@ domain: <domain>
 scope: <the value from step 1>
 freshness_horizon: <e.g. 30d — how fast this domain's facts decay>
 verifier_budget: <N — max facts re-checked per cycle>
+sweep_interval: 30d
+last_swept: never
 metadata:
   type: index
   node_type: router
@@ -142,6 +144,10 @@ tags: [<domain>]
 keywords: [<terms an agent would grep for>]
 ---
 ```
+
+`sweep_interval` is how long a `kb-audit` sweep stays good for; 30d suits a library. `last_swept`
+starts as `never`, which makes the domain due immediately — correct, since a domain nobody has ever
+swept is exactly the one worth sweeping.
 
 `name` is `<domain>-index`, which deliberately does **not** match the filename. `INDEX.md` is a
 path-addressed file: it is reached by relative path and is never a `[[slug]]` target, so the
