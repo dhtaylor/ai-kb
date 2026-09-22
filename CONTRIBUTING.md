@@ -149,6 +149,11 @@ meaning:
 `kb-verify` is **not** in the hooks: it executes commands, which is not something a commit should do
 on your behalf.
 
+**Changing a check?** `tests/run-checks` breaks one thing on purpose per case and requires the check
+to notice. The engine's hook runs it when a commit touches `scripts/` or `tests/`, and CI runs it
+every time. Add a case with the fix whenever a check misses something — all four checks that have
+ever been wrong here were wrong in a way no existing case covered.
+
 ---
 
 ## The sweep cadence

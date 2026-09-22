@@ -522,8 +522,9 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | routing check | golden-set questions actually route to `expected_file` | **half-built** — `check-golden` proves the record is well formed and its excerpt present; that an agent *routes* there is still checked by running one by hand |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` AND it appears in a file the agent cited, grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
+| guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Twelve of fourteen are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
+Thirteen of fifteen are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.
