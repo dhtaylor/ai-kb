@@ -145,6 +145,7 @@ meaning:
 | `check-golden` | a golden record whose file is missing or whose excerpt is not in that file, too few negative cases |
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
+| `check-stamps` (CI) | a commit that announces agent co-authorship and also stamps a fact `by: human` — which would buy ten times the re-check interval |
 
 `kb-verify` is **not** in the hooks: it executes commands, which is not something a commit should do
 on your behalf.

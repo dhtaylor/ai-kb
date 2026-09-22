@@ -44,5 +44,11 @@ jobs:
       # nothing to run against here: the engine holds no knowledge, and kb/ is not in
       # this repository (ADR-0007). What CI can prove is that they still CATCH what
       # they were written to catch — each case below breaks one thing on purpose.
+      - name: Stamp honesty
+        run: |
+          before="${{ github.event.before }}"
+          case "$before" in ''|0000000000000000000000000000000000000000) before="${{ github.sha }}~1" ;; esac
+          ./scripts/check-stamps "$before..${{ github.sha }}" || exit 1
+
       - name: Guardrail regression suite
         run: ./tests/run-checks -v

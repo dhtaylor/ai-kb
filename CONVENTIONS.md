@@ -305,8 +305,14 @@ Verified: 2026-09-19 · by: agent · method: query
 - **Evidence, not just a date.** Every re-stamp records the **exact check run, the observed value, and the
   expected value** in a companion record. A stamp whose check queried the wrong source is worse than no
   stamp. **No evidence, no re-stamp.**
-- **`by:` is derived from the git committer identity**, not a free-form claim — a field is trivially
-  forged, an identity is not. CI rejects a commit writing `by: human` from the agent identity.
+- **`by:` is a claim, and only partly checkable.** The original rule here said it was derived from the
+  git committer identity and that CI rejected `by: human` from an agent identity. That is
+  unimplementable, and the reason is worth stating rather than hiding: **an agent commits under the
+  human's own git identity**, so there are not two identities to tell apart. What `check-stamps` does
+  enforce is narrower and real — a commit that announces agent co-authorship in its message may not
+  also add a `by: human` stamp. It catches the accident, not the determined author, and nothing here
+  can catch the latter. The stakes are why it is worth having: a human stamp suppresses re-checking
+  for **ten times** as long as an agent one.
 - **A section may carry a re-check assertion**, directly beneath its stamp:
 
   ```
@@ -522,9 +528,10 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | routing check | golden-set questions actually route to `expected_file` | **half-built** — `check-golden` proves the record is well formed and its excerpt present; that an agent *routes* there is still checked by running one by hand |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` AND it appears in a file the agent cited, grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
+| stamp honesty | a commit claiming agent co-authorship does not also add a `by: human` stamp | **built** — `check-stamps` |
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Thirteen of fifteen are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
+Fourteen of sixteen are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
 is what the last two rows are for.

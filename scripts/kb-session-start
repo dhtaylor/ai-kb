@@ -26,7 +26,7 @@ emit() {
   fi
 }
 
-engine="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+engine="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/.." && pwd)"
 if [ ! -r "$engine/CONVENTIONS.md" ]; then
   emit "Knowledge engine: UNRESOLVED. The session hook runs from ${engine}, but ${engine}/CONVENTIONS.md is not readable, so the contract cannot be loaded. Treat the engine as absent: warn and continue, never guess a path." \
        "No contract found under ${engine} — the knowledge engine is unavailable."

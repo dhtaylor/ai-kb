@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# check-stamps — refuse a commit that claims human verification while announcing
+# that an agent wrote it.
+#
+# WHY THIS IS NOT WHAT THE CONTRACT ORIGINALLY PROMISED: §7 said `by:` is derived
+# from the git committer identity and that CI rejects `by: human` from the agent
+# identity. That is unimplementable here, and the reason matters — **an agent
+# commits under the human's own git identity**. There are not two identities to
+# tell apart, so an identity check would be theatre.
+#
+# What IS observable is the commit's own account of itself. A commit whose message
+# carries a Claude co-authorship trailer, and which adds a `by: human` stamp, is
+# claiming a person re-verified a fact inside a commit that says a model wrote it.
+# That is the case worth refusing, and it is the one that actually occurs.
+#
+# It cannot stop a determined author: drop the trailer and the check sees nothing.
+# It is a guard against the accident — an agent restamping in passing — not a
+# control against a person who means it. Nothing here can be that, and the
+# contract should not pretend otherwise.
+#
+# by: human matters because §7 gives a human stamp TEN TIMES the TTL of an agent
+# one. A false human stamp does not just misattribute; it suppresses the re-check
+# for ten times as long.
+#
+# Usage: check-stamps [<range>]     default: HEAD~1..HEAD
+#   In CI, pass the pushed range (before..after).
+# Exit 0 clean, 1 on any offending commit.
+set -uo pipefail
+
+range="${1:-HEAD~1..HEAD}"
+git rev-parse --git-dir >/dev/null 2>&1 || { echo "check-stamps: not a git repository" >&2; exit 2; }
+
+commits=$(git rev-list "$range" 2>/dev/null) || {
+  echo "check-stamps: cannot resolve range '$range' — nothing checked" >&2; exit 2; }
+
+fail=0
+n=0
+for c in $commits; do
+  n=$((n+1))
+  # The trailer this project appends to agent-written commits.
+  git log -1 --format='%B' "$c" | grep -qiE '^co-authored-by:.*(claude|anthropic)' || continue
+  added=$(git show --format= --unified=0 "$c" -- '*.md' \
+          | grep -E '^\+Verified:.*by:[[:space:]]*human' || true)
+  [ -z "$added" ] && continue
+  echo "FAIL $(git log -1 --format='%h %s' "$c")"
+  printf '%s\n' "$added" | sed 's/^+/       /'
+  echo "       This commit says a model wrote it and stamps a fact as human-verified."
+  echo "       A human stamp carries ten times the TTL of an agent one (§7). If a person"
+  echo "       really did re-verify it, commit that stamp separately, without the trailer."
+  fail=1
+done
+
+if [ "$fail" -ne 0 ]; then
+  echo
+  echo "check-stamps: FAILED"
+  exit 1
+fi
+echo "check-stamps: clean ($n commit(s) in $range)"

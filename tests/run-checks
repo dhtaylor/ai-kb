@@ -24,7 +24,7 @@
 # Exit 0 when every case behaves as specified.
 set -uo pipefail
 
-ENGINE="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+ENGINE="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/.." && pwd)"
 VERBOSE=${1:-}
 PASS=0; FAIL=0
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
@@ -254,6 +254,52 @@ case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due"
 build_clean "$TMP/overdue"
 sed -i 's/^last_swept: never$/last_swept: 2026-01-01/' "$TMP/overdue/INDEX.md"
 case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/overdue"
+
+# --------------------------------------------------------- check-secrets ----
+# The check with the most expensive failure, and until now the only one with no
+# case here. The fixture's credential is ASSEMBLED at run time: written literally,
+# it would sit in this file and trip check-secrets over the engine itself.
+mkdir -p "$TMP/sec"; git init -q "$TMP/sec"
+printf 'key = "%s%s"\n' "AKIA" "ABCDEFGHIJKLMNOP" > "$TMP/sec/config.txt"
+git -C "$TMP/sec" add -A >/dev/null 2>&1
+case_run "staged credential is caught" 1 "" -- \
+  sh -c "cd '$TMP/sec' && '$ENGINE/scripts/check-secrets'"
+
+mkdir -p "$TMP/sec2"; git init -q "$TMP/sec2"
+printf 'key = "not-a-credential"\n' > "$TMP/sec2/config.txt"
+git -C "$TMP/sec2" add -A >/dev/null 2>&1
+case_run "ordinary staged text is not a credential" 0 "clean" -- \
+  sh -c "cd '$TMP/sec2' && '$ENGINE/scripts/check-secrets'"
+
+# A credential removed in a later commit is still in history — the fact
+# secret-governance.md states, and the reason --all walks every blob.
+git -C "$TMP/sec" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>&1
+rm "$TMP/sec/config.txt"; git -C "$TMP/sec" add -A >/dev/null 2>&1
+git -C "$TMP/sec" -c user.email=t@t -c user.name=t commit -qm remove >/dev/null 2>&1
+case_run "credential deleted but still in history is caught by --all" 1 "" -- \
+  sh -c "cd '$TMP/sec' && '$ENGINE/scripts/check-secrets' --all"
+
+# ---------------------------------------------------------- check-stamps ----
+# An agent commits under the human's git identity, so identity proves nothing.
+# What is observable: a commit that announces agent co-authorship AND stamps a
+# fact as human-verified, which buys ten times the TTL (CONVENTIONS §7).
+mkdir -p "$TMP/stamp"; git init -q "$TMP/stamp"
+fm claim general > "$TMP/stamp/claim.md"
+printf '# Claim\n\n## A\n\nx\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n' >> "$TMP/stamp/claim.md"
+git -C "$TMP/stamp" add -A; git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
+sed -i 's/by: agent/by: human/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -A
+git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "restamp
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>" >/dev/null 2>&1
+case_run "agent-authored commit claiming human verification" 1 "by: human" -- \
+  sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
+
+sed -i 's/by: human/by: agent/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -A
+git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm undo >/dev/null 2>&1
+sed -i 's/by: agent/by: human/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -A
+git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "a person checked it" >/dev/null 2>&1
+case_run "human stamp without an agent trailer is allowed" 0 "clean" -- \
+  sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
 
 # ------------------------------------------------------------------- done ----
 echo

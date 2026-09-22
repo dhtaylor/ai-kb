@@ -19,6 +19,10 @@
 # Existing settings are merged, never replaced; a file is backed up before its
 # first change. Projects are wired per clone by `kb-init`, not from here.
 #
+# PORTABILITY: paths resolve through python3 rather than `readlink -f`, which does
+# not exist on macOS before Monterey and takes different arguments on BSD. python3
+# is already required by every check in scripts/, so this adds no dependency.
+#
 # Usage: kb-bootstrap [--check | --dry-run]
 #   --check, --dry-run   report what is configured and what would change; change
 #                        nothing. Exit 1 if anything would change.
@@ -32,7 +36,7 @@ case "${1:-}" in
   *) echo "kb-bootstrap: unknown option $1" >&2; exit 2 ;;
 esac
 
-engine="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+engine="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/.." && pwd)"
 market="$engine/.claude-plugin/marketplace.json"
 [ -r "$engine/CONVENTIONS.md" ] && [ -r "$market" ] && [ -x "$engine/scripts/kb-session-start" ] || {
   echo "kb-bootstrap: $engine does not look like a knowledge engine (no CONVENTIONS.md, marketplace.json or kb-session-start)" >&2
