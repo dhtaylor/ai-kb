@@ -1,6 +1,6 @@
 # ADR-0002: Governance structure without enforcement
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-22 (see *What changed on 2026-09-22*)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 0 (guardrails)
@@ -60,8 +60,11 @@ than an oversight.
 
 ### Written but dormant
 
-`.github/CODEOWNERS` exists and names an owner per area. It is **advisory text** until branch
-protection makes owner review a required status check.
+`.github/CODEOWNERS` exists and names an owner per area — in the engine and, since 2026-09-22, in
+each library. It remains **advisory text**: owner review becomes a requirement only when branch
+protection requires pull requests and CODEOWNERS approval, which is deferred while one person
+cannot approve their own pull request. What it does do today is answer who a sweep's finding belongs
+to, resolved by `kb-owner` rather than by eye (`ai-kb:scripts/kb-owner`).
 
 ### Not yet in place
 
@@ -71,10 +74,11 @@ protection makes owner review a required status check.
   settings. The CI workflow above is the compensating control, and the difference is material:
   CI lets the push land and then fails the run, so a real leak still requires rotation **and**
   a history rewrite. Revisit if the repository becomes public or the plan changes.
-- **Branch protection on `main`:** require pull requests, require CODEOWNERS review, require
-  status checks to pass, block force-push, block self-merge. Deliberately deferred — on a
-  single-contributor repository these obstruct the only committer without supplying the second
-  reviewer that justifies them.
+- **Pull requests, CODEOWNERS review and self-merge blocking on `main`.** Still deferred, and now
+  for a sharper reason than before: GitHub does not let an author approve their own pull request, so
+  requiring approval with one contributor does not raise the bar — it stops all work. Enable with
+  the second contributor, not before.
+  (Requiring the status check itself, and blocking force-push, *were* enabled — see below.)
 - **Signed commits** for merges.
 - **A second owner per domain.** Not satisfiable with one contributor.
 
@@ -83,11 +87,10 @@ protection makes owner review a required status check.
 **Good.** Every control is either working or explicitly listed as absent. The structure
 activates rather than needing invention the day a second contributor arrives.
 
-**Bad — the honest part.** Today's guardrails are **advisory**. A committer who runs
-`--no-verify`, or a clone that never ran the activation step, is unguarded. Until push
-protection and branch protection are enabled, nothing prevents a bad commit reaching the
-remote. This is the accepted risk of the current single-contributor phase; it is not
-mitigated, it is merely bounded by there being one contributor who knows it.
+**Bad — the honest part.** Guardrails were **advisory** in every repository until 2026-09-22, and
+remain so in the libraries. A committer who runs `--no-verify`, or a clone that never ran the
+activation step, is unguarded. This is the accepted risk of the single-contributor phase; it is not
+mitigated, it is bounded by there being one contributor who knows it.
 
 **Activation is manual.** `core.hooksPath` is local git config and is not cloned. Every
 clone must run once:
@@ -99,7 +102,34 @@ git config core.hooksPath .githooks
 A clone that skips it has no guardrails at all, silently. Until a bootstrap command exists,
 this is a documented manual step and a real failure mode.
 
+## What changed on 2026-09-22
+
+The engine repository was made **public**, which moved it into a different enforcement tier and
+produced an asymmetry worth stating plainly.
+
+**Enabled on `ai-kb` (public):** `main` is protected, the `guardrails` workflow is a **required
+status check**, and force-pushes and deletions are blocked. Verified from the public API:
+`"protected": true`, contexts `["guardrails"]`.
+
+**Not enabled, deliberately:** `"enforcement_level": "non_admins"` — the gate exempts repository
+admins, which today means it exempts the only person using it. Binding the admin would likely force
+a pull request per change, since a commit has passed no check at the instant it is pushed. Tick it
+when someone else has push access, so that the exemption describes an escape hatch rather than the
+whole population.
+
+**Not available on the libraries (private):** branch protection and rulesets need a paid plan for
+private repositories, the same limitation that put push protection out of reach in 2026-09-19. Their
+CI runs the same checks and reports, and nothing forces anyone to heed it.
+
+**So the asymmetry is:** the repository holding *behaviour* is gated on the server; the repositories
+holding *knowledge* are not. That is backwards from where the risk sits — a wrong fact is served to
+an agent, while a wrong script fails loudly — and it is a property of the billing plan rather than
+of any decision made here. It is the strongest argument for either paying for the private repos or
+accepting that the libraries' real guardrail is the commit hook plus a human reading a red run.
+
 ## Review trigger
 
-Revisit this ADR when any of these becomes true: a second contributor joins; the shared tier
-gains a consuming project; or any agent gains the ability to mutate a production system.
+Revisit this ADR when any of these becomes true: a second contributor joins (enable pull requests,
+CODEOWNERS review, and admin enforcement); the shared tier gains a consuming project; any agent
+gains the ability to mutate a production system; or the account's plan changes, which would let the
+private libraries carry the protection the public engine now has.
