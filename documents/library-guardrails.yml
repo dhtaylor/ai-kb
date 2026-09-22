@@ -7,19 +7,11 @@ name: guardrails
 # holds and has tested. This runs the same checks where a developer cannot skip
 # them.
 #
-# WHY IT NEEDS A CREDENTIAL: the checks live in the engine (ai-kb), which is
-# private, and a library deliberately does not vendor them — one copy of a check,
-# in one place, is the whole point. So the workflow fetches the engine at run
-# time and needs read access to it.
-#
-#   Secret: AI_KB_TOKEN — a fine-grained PAT, read-only on Contents, scoped to
-#   dhtaylor/ai-kb ALONE, added under each library's
-#   Settings -> Secrets and variables -> Actions.
-#
-#   Narrower alternative, if you prefer: a read-only DEPLOY KEY on ai-kb. Put the
-#   private key in AI_KB_DEPLOY_KEY and replace the clone step with
-#   webfactory/ssh-agent plus an ssh:// clone URL. A deploy key grants one repo
-#   and nothing else; a PAT is an account credential wearing a scope.
+# WHY IT FETCHES THE ENGINE: the checks live there, and a library deliberately
+# does not vendor them — one copy of a check, in one place, is the whole point.
+# The engine is public, so this needs NO credential: no secret to add, none to
+# rotate, and nothing to leak. The knowledge stays private in this repository;
+# only the behaviour that checks it is public.
 #
 # WHAT IT IS NOT: detection, not prevention — the push lands and then the run
 # fails. A real leak still needs rotation AND a history rewrite (both facts are
@@ -44,17 +36,8 @@ jobs:
           python-version: "3.x"
 
       - name: Fetch the engine
-        env:
-          TOKEN: ${{ secrets.AI_KB_TOKEN }}
         run: |
-          if [ -z "$TOKEN" ]; then
-            echo "AI_KB_TOKEN is not set in this repository's Actions secrets."
-            echo "The checks live in the engine and cannot be fetched without it."
-            echo "See the header of this workflow for what the token needs to be."
-            exit 1
-          fi
-          git clone --depth 1 --quiet \
-            "https://x-access-token:${TOKEN}@github.com/dhtaylor/ai-kb.git" "$RUNNER_TEMP/engine"
+          git clone --depth 1 --quiet https://github.com/dhtaylor/ai-kb.git "$RUNNER_TEMP/engine"
           echo "ENGINE=$RUNNER_TEMP/engine" >> "$GITHUB_ENV"
 
       - name: Structure
