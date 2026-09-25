@@ -452,6 +452,7 @@ set: never opened, and excluded from every search. Each record carries:
   question: <what is asked>
   expected_file: <the file that must answer it>
   expected_excerpt: <text that must appear, grep-verifiable against expected_file>
+  alt_excerpt: <optional, repeatable: another sentence in expected_file stating the same fact>
 ```
 
 `case:` is required — a minimum of "≥2 negative cases" is unenforceable if nothing marks a case as
@@ -471,6 +472,20 @@ An **`unresolved` case is required only where the domain actually holds a `CONFL
 cross-library link cannot have either without fabricating one, and a golden case invented to satisfy a
 count is worse than an absent one — it tests a fiction and reports success. Where either does not
 apply, say so in the file, with the reason.
+
+**`alt_excerpt` exists because a file may state one fact twice.** This is usually a summary line and
+the source passage it quotes. An agent that quotes either sentence has retrieved the fact, but an
+oracle naming only one fails it. Rules:
+
+- **Every alternative is held to the main excerpt's standard.** It must be present in
+  `expected_file` (`check-golden`), and it must state the *same* fact, not a neighbouring one. An
+  answer passes if it quotes any listed excerpt. The grader checks that every one is still in the
+  file.
+- **Refusal cases take none.** A `negative` or `unresolved` excerpt is a fixed phrase, with no
+  second way to say it.
+- **An alternative added after results were seen is an amendment.** Record it beside the record,
+  and in the eval evidence it was prompted by, as the date and the run that prompted it. Stored
+  grades are never re-stated under the amended oracle.
 
 **Excerpts are matched with whitespace normalised**, so an excerpt may span a hard-wrapped line in the
 source. It may **not** contain markdown markup: emphasis exists in the file and never in a spoken

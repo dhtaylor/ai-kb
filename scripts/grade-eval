@@ -33,8 +33,9 @@ def load_golden(lib: pathlib.Path):
             if cur: recs.append(cur)
             cur = {"case": m.group(1)}
         elif cur is not None:
-            kv = re.match(r'^(question|expected_file|expected_excerpt):\s*"?(.*?)"?\s*$', s)
-            if kv: cur[kv.group(1)] = kv.group(2)
+            kv = re.match(r'^(question|expected_file|expected_excerpt|alt_excerpt):\s*"?(.*?)"?\s*$', s)
+            if kv and kv.group(1) == "alt_excerpt": cur.setdefault("alt_excerpt", []).append(kv.group(2))
+            elif kv: cur[kv.group(1)] = kv.group(2)
     if cur: recs.append(cur)
     return recs
 
@@ -83,7 +84,9 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
 
         # A quote may stop before the sentence's full stop; the excerpt's trailing
         # punctuation is not part of what it proves.
-        in_answer = norm(exc).rstrip('.!?;:,"') in norm(ans)
+        # A fact the file states twice may be quoted from either sentence (alt_excerpt).
+        excerpts  = [exc] + r.get("alt_excerpt", [])
+        in_answer = any(norm(e).rstrip('.!?;:,"') in norm(ans) for e in excerpts)
         # An answer may legitimately cite SEVERAL files — a cross-library question is
         # answered from two, and the contract requires citing every file used. So the
         # expected file must be AMONG those cited, not the only one. Demanding an exact
@@ -95,8 +98,8 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
             target = lib / ef
             # An unresolved case's excerpt is the refusal phrase, in no fact file; its file
             # must instead still hold the dispute. Every other excerpt must be in its file.
-            probe   = "status: conflicted" if case == "unresolved" else norm(exc)
-            in_file = target.is_file() and probe in norm(target.read_text())
+            probes  = ["status: conflicted"] if case == "unresolved" else [norm(e) for e in excerpts]
+            in_file = target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
 
         ok = in_answer and file_ok and in_file
         npass += ok

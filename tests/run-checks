@@ -185,6 +185,36 @@ i = t.index("- case: negative")
 p.write_text(t[:i] + rec + t[i:])
 PY
 }
+# A file may state one fact in two sentences (a summary and the source it quotes).
+# alt_excerpt names the second; it is held to exactly the same standard as the first.
+build_alt() { # build_alt <dir> <alt excerpt> [case-to-attach-to]
+  build_clean "$1"
+  printf 'Twelve things is the most a widget can hold.\n' >> "$1/widgets.md"
+  python3 - "$1/fx-golden.md" "$2" "${3:-positive}" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+anchor = {"positive": '  expected_excerpt: "up to 12 things"\n',
+          "negative": '  expected_excerpt: "fact not found — check KB"\n'}[sys.argv[3]]
+p.write_text(t.replace(anchor, anchor + '  alt_excerpt: "' + sys.argv[2] + '"\n', 1))
+PY
+}
+build_alt "$TMP/goldalt" "Twelve things is the most a widget can hold"
+case_run "alt_excerpt present in the file passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldalt"
+build_alt "$TMP/goldalt2" "Twenty things is the most a widget can hold"
+case_run "alt_excerpt absent from the file is oracle rot" 1 "alt_excerpt not found" -- "$ENGINE/scripts/check-golden" "$TMP/goldalt2"
+build_alt "$TMP/goldalt3" "anything at all" negative
+case_run "alt_excerpt on a refusal case is refused" 1 "alt_excerpt" -- "$ENGINE/scripts/check-golden" "$TMP/goldalt3"
+alt() { # alt <name> <want-exit> <want-text> <library> <Q1 record>
+  printf '%s\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' "$5" > "$4/answers"
+  case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$4" "$4/answers"
+}
+alt "grade-eval: quoting the alternative sentence is grounded" 0 "3/3 passed" "$TMP/goldalt" \
+  'Q1|widgets.md|At most twelve: "Twelve things is the most a widget can hold."'
+alt "grade-eval: quoting neither sentence still fails" 1 "excerpt not in answer" "$TMP/goldalt" \
+  'Q1|widgets.md|A widget carries about a dozen.'
+alt "grade-eval: an alternative missing from the file is oracle rot" 1 "ORACLE ROT" "$TMP/goldalt2" \
+  'Q1|widgets.md|A widget holds up to 12 things.'
+
 build_unresolved "$TMP/goldun" "disputed — not served" "CONFLICTED"
 case_run "unresolved case: refusal phrase, file holds a real conflict" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldun"
 build_unresolved "$TMP/goldun2" "disputed — not served" "settled"

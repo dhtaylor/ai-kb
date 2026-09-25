@@ -33,8 +33,10 @@ def parse(text):
             cur = {"case": m.group(1), "_line": raw}
             continue
         if cur is not None:
-            kv = re.match(r'^(question|expected_file|expected_excerpt):\s*"?(.*?)"?\s*$', line)
-            if kv:
+            kv = re.match(r'^(question|expected_file|expected_excerpt|alt_excerpt):\s*"?(.*?)"?\s*$', line)
+            if kv and kv.group(1) == "alt_excerpt":     # repeatable: a second sentence stating the same fact
+                cur.setdefault("alt_excerpt", []).append(kv.group(2))
+            elif kv:
                 cur[kv.group(1)] = kv.group(2)
     if cur:
         records.append(cur)
@@ -69,6 +71,10 @@ def main(root: pathlib.Path) -> int:
             defects.append(f"{where} [{case}]: no question")
 
         ef, exc = r.get("expected_file", ""), r.get("expected_excerpt", "")
+        alts = r.get("alt_excerpt", [])
+        if alts and case in ("negative", "unresolved"):
+            # A refusal's excerpt is a fixed phrase; there is no second way to say it.
+            defects.append(f"{where} [{case}]: alt_excerpt is not allowed on a refusal case")
         if case == "negative":
             if ef:
                 defects.append(f"{where} [negative]: names expected_file '{ef}' — a refusal case "
@@ -101,6 +107,10 @@ def main(root: pathlib.Path) -> int:
         if re.sub(r"\s+", " ", exc) not in re.sub(r"\s+", " ", target.read_text()):
             defects.append(f"{where} [{case}]: excerpt not found in {ef} — "
                            f"the oracle tests nothing: {exc[:60]!r}")
+        for alt in alts:                    # held to exactly the standard of the main excerpt
+            if re.sub(r"\s+", " ", alt) not in re.sub(r"\s+", " ", target.read_text()):
+                defects.append(f"{where} [{case}]: alt_excerpt not found in {ef} — "
+                               f"the oracle tests nothing: {alt[:60]!r}")
 
     if counts["negative"] < 2:
         defects.append(f"{gf.name}: {counts['negative']} negative case(s); the contract requires >=2 "
