@@ -12,6 +12,8 @@ the claim under test is not "can it answer" but "did it retrieve". An LLM judge
 would forgive it; grep does not.
 
 Answers file: one record per line,  Q<n>|<cited-files, comma-separated>|<answer text>
+A cited file may be library-relative (x.md), library-prefixed (<lib>/x.md) or
+kb-rooted (kb/<lib>/x.md); it is resolved to a file, not matched as text.
 
 Usage: grade-eval <library-root> <answers-file>
 Exit 0 if every record passes, 1 otherwise.
@@ -35,6 +37,18 @@ def load_golden(lib: pathlib.Path):
             if kv: cur[kv.group(1)] = kv.group(2)
     if cur: recs.append(cur)
     return recs
+
+
+def resolves_to(lib: pathlib.Path, expected: str, cited) -> bool:
+    """True if any cited path names the expected file.
+
+    An agent cites by whatever path it walked: library-relative (x.md), library-
+    prefixed (<lib>/x.md) or kb-rooted (kb/<lib>/x.md). Each is RESOLVED against the
+    library, its kb/ directory and the engine, and compared as a file — never matched
+    as a suffix, which would let a same-named file in another library pass."""
+    want = (lib / expected).resolve()
+    anchors = (lib, lib.parent, lib.parent.parent)
+    return any((a / c).resolve() == want for c in cited for a in anchors)
 
 
 def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
@@ -62,7 +76,7 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
         # expected file must be AMONG those cited, not the only one. Demanding an exact
         # match would fail the very case the contract tells the agent to produce.
         cited_set = {c.strip() for c in cited.split(",") if c.strip()}
-        file_ok   = (ef in cited_set) if ef else (not cited_set)
+        file_ok   = (resolves_to(lib, ef, cited_set)) if ef else (not cited_set)
         in_file   = True
         if ef:
             target = lib / ef

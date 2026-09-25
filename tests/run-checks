@@ -405,6 +405,29 @@ mkdir -p "$TMP/own2"
 case_run "no CODEOWNERS resolves to unassigned, never a guess" 0 "unassigned" -- \
   "$ENGINE/scripts/kb-owner" "$TMP/own2" anything.md
 
+# -------------------------------------------------------------- grade-eval ----
+# A retrieval agent cites a file by whatever path it walked to reach it — library-
+# relative, library-prefixed or kb-rooted. The grader must resolve that path, not
+# string-match it: the first intelligence-analysis run failed five correct citations
+# on the prefix alone. Resolving must not become suffix-matching, though — a file of
+# the same name in ANOTHER library is a wrong citation and has to stay one.
+build_clean "$TMP/ge/kb/fx"
+build_clean "$TMP/ge/kb/other"
+grade() { # grade <name> <want-exit> <want-text> <Q1 record>
+  printf '%s\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' "$4" > "$TMP/ge/answers"
+  case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" "$TMP/ge/answers"
+}
+grade "grounded answer, library-relative citation, passes" 0 "3/3 passed" \
+  "Q1|widgets.md|A widget holds up to 12 things."
+grade "library-prefixed citation resolves to the same file" 0 "3/3 passed" \
+  "Q1|fx/widgets.md|A widget holds up to 12 things."
+grade "kb-rooted citation resolves to the same file" 0 "3/3 passed" \
+  "Q1|kb/fx/widgets.md|A widget holds up to 12 things."
+grade "same-named file in another library is a wrong citation" 1 "expected 'widgets.md'" \
+  "Q1|other/widgets.md|A widget holds up to 12 things."
+grade "paraphrase of the excerpt is not grounded" 1 "excerpt not in answer" \
+  "Q1|widgets.md|Widgets take a dozen items at most."
+
 # ------------------------------------------------------------------- done ----
 echo
 if [ "$FAIL" -eq 0 ]; then
