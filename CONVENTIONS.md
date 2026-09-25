@@ -416,7 +416,9 @@ Every retrieval agent's body states, and every agent is held to:
 > from memory.*
 
 - **Cite every file used.** "file(s)" is plural deliberately: an answer may need a general-tier fact *and*
-  a repo-tier fact. State when an answer is **partial**.
+  a repo-tier fact. State when an answer is **partial**. A citation means *the answer rests on this
+  file*, so a refusal cites nothing: the files checked to establish an absence are named in the answer
+  text, never cited. `grade-eval` holds a negative case to exactly this.
 - **Load only the libraries the question touches.** A question about one domain must not pay for
   every installed library; a question spanning a project fact and a library fact loads both.
 - **On absence:** answer *"fact not found — check KB"*. Never fill the gap from model memory — nor from

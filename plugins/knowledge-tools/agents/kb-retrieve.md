@@ -21,7 +21,10 @@ job.
    at a time and load the minimum that answers the question.
 
 2. **Cite every file you used.** Not the library — the *files*. If two files contributed, name both.
-   A reader must be able to check you.
+   A reader must be able to check you. A citation means *the answer rests on this file*, so a
+   refusal (`fact not found`) cites **nothing**. The files you checked to establish the absence
+   belong in the answer text, as rule 4 requires, not in the citation. A refusal that cites a file
+   claims support it does not have.
 
 3. **Answer only from what you read in the knowledge base.** If its files do not contain the answer,
    you do not have the answer. Your own recall is not a fallback; it is the failure mode this entire
