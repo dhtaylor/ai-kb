@@ -71,8 +71,10 @@ the tier they belong to — this deployment's quirk in the project tree, the pro
 library.
 
 **Retrieve with the `kb-retrieve` agent** rather than asking a model to recall. It descends from a
-router, cites every file, refuses a disputed fact, says "fact not found" when the knowledge base is
-silent, and answers only from the knowledge base — not from the code or config beside it. Reading
+router and cites every file its answer rests on. It refuses a disputed fact with "disputed — not
+served", setting out both claims and citing the file that holds the conflict. It says "fact not
+found — check KB" when the knowledge base is silent, citing nothing and naming what it checked.
+It answers only from the knowledge base — not from the code or config beside it. Reading
 the source is the caller's job; that is how a gap stays visible instead of being quietly papered
 over.
 
@@ -128,8 +130,19 @@ with `status: CONFLICTED · since: <date>`, state both claims, and register it i
 
 **Every domain carries a golden set** (`<domain>-golden.md`): the questions that must be answerable,
 with the file and excerpt that must answer them. It is deliberately **not routed**, and retrieval
-agents must never read or search it — an agent that can reach the answer key proves nothing. Repair
-it in the same change that invalidates it, or it quietly stops testing anything.
+agents must never read or search it — an agent that can reach the answer key proves nothing. The same
+goes for eval evidence kept under a library's `documents/eval-<date>/`, which records earlier answers
+to the same questions. Repair the golden set in the same change that invalidates it, or it quietly
+stops testing anything.
+
+Two record rules catch people out (the full set is in [CONVENTIONS.md](CONVENTIONS.md) §10):
+
+- **An `unresolved` case** exists only where the domain really holds a `CONFLICTED` section. Its
+  `expected_file` is that file, and its `expected_excerpt` is exactly `disputed — not served`, the
+  refusal an agent must give.
+- **`alt_excerpt:`** (optional, repeatable, positive and cross-root cases only) names a second
+  sentence in the same file stating the same fact, so an agent quoting either one is grounded. One
+  added after seeing results is an amendment: record it beside the record.
 
 ---
 
@@ -142,7 +155,7 @@ meaning:
 |---|---|
 | `check-kb` | missing frontmatter, `name` that disagrees with the filename, dead links, slug collisions, **orphans** — any file no router reaches |
 | `check-scope` | a scope value that disagrees with its library, a project tree holding general facts, a relative link climbing out of a library |
-| `check-golden` | a golden record whose file is missing or whose excerpt is not in that file, too few negative cases |
+| `check-golden` | a golden record whose file is missing or whose excerpt (or `alt_excerpt`) is not in that file, too few negative cases, an `unresolved` case without the exact refusal phrase or pointing at a file with no `CONFLICTED` section |
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
 | `check-stamps` (CI) | a commit that announces agent co-authorship and also stamps a fact `by: human` — which would buy ten times the re-check interval |

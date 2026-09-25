@@ -167,8 +167,10 @@ Resolving a contradiction is never your call. It is never automated.
 - **Seed or extend `<library>/<domain>-golden.md` in this same change.** If the
   domain had no golden set because it was empty, it has content now and this is where the
   obligation lands. Every record carries a `case:` label (§10). Include at least two `negative` cases and — if the
-  fold produced a contradiction — an `unresolved` case proving the agent surfaces it rather than
-  serving a value. A `cross-root` case applies **only if the domain actually links across tiers**;
+  fold produced a contradiction — an `unresolved` case proving the agent refuses it rather than
+  serving a value. Its `expected_file` is the conflicted file, and its `expected_excerpt` is exactly
+  `disputed — not served` (§10). A `cross-root` case applies **only if the domain actually links
+  across libraries**;
   where it does not, say so in the file rather than inventing a link to satisfy a count.
 
 ## Step 8 — The gate: show your work before committing

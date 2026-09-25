@@ -234,14 +234,20 @@ library's own `INDEX.md`.
 ## Step 6 — Seed the golden set
 
 Create `<domain>-golden.md` **at the library root** — the oracle travels with the domain it tests.
-Records carry `case:`, `question:`, `expected_file:`, `expected_excerpt:`. A domain with no golden set has no oracle, and a later
-rename will rot it silently.
+Records carry `case:`, `question:`, `expected_file:`, `expected_excerpt:`, and optionally one or more
+`alt_excerpt:` lines (CONVENTIONS §10). A domain with no golden set has no oracle, and a later
+rename will rot it silently. Choose each excerpt so it starts where a natural quote would start. An
+excerpt beginning mid-clause gets quoted around, and fails a correct answer.
 
 Include from the start:
 
 - at least **two negative cases** — questions this domain must refuse to guess at;
-- at least **one UNRESOLVED case** — a conflict the agent must surface rather than serve;
-- at least **one cross-root case**, if the domain links across tiers.
+- an **`unresolved` case, only if the domain really holds a `CONFLICTED` section.** Its
+  `expected_file` is that file, and its `expected_excerpt` is exactly `disputed — not served`.
+  Otherwise, say in the file that none applies and why: a conflict invented to fill the slot tests a
+  fiction;
+- a **`cross-root` case, only if the domain links across libraries** (`[[library:slug]]`). Otherwise,
+  say so in the file, with the reason.
 
 If the domain has no content yet, the golden set is **deferred and no file is created** — not a
 placeholder. An empty golden-set file is an empty state leaf by another name, and an oracle with no

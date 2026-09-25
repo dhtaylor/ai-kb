@@ -121,7 +121,8 @@ Note in the episodic file that it has been distilled, and where the facts went.
 
 - Any file you added gets a router line in the domain `INDEX.md`.
 - Extend `<library>/<domain>-golden.md` for facts you added, records carrying a
-  `case:` label. Include an `unresolved` case if you flagged a contradiction.
+  `case:` label. If you flagged a contradiction, include an `unresolved` case: `expected_file` is the
+  conflicted file, and `expected_excerpt` is exactly `disputed — not served` (CONVENTIONS §10).
 - **Repair any existing record your own change invalidated, in this same change.** Marking a section
   `CONFLICTED` turns every `positive` case pointing at it into a case a correctly-behaving agent must
   now fail — the agent refuses a CONFLICTED section, so the oracle is testing the opposite of the

@@ -556,7 +556,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution from any tree — the installed libraries and each project tree passed to it — into the installed libraries; dead links fail, absent libraries warn | **built** |
 | routing check | golden-set questions actually route to `expected_file` | **half-built** — `check-golden` proves the record is well formed and its excerpt present; that an agent *routes* there is still checked by running one by hand |
-| answer-grounding eval | the agent's answer contains `expected_excerpt` AND it appears in a file the agent cited, grep-verified | **built** — `grade-eval` |
+| answer-grounding eval | the agent's answer contains `expected_excerpt` or an `alt_excerpt` AND the expected file is among those it cited (a cited path is resolved to a file, not string-matched); quote characters and trailing punctuation are normalised, wording is not; grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | ownership resolution | who a finding belongs to, by CODEOWNERS' last-match-wins rule | **built** — `kb-owner` |
 | stamp honesty | a commit claiming agent co-authorship does not also add a `by: human` stamp | **built** — `check-stamps` |
