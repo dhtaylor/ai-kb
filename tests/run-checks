@@ -208,6 +208,92 @@ printf '\nSee [[beta:not-a-slug]].\n' >> "$TMP/proj2/knowledge/widgets.md"
 case_run "project tree's cross-library link is checked" 1 "has no slug" -- \
   "$ENGINE/scripts/check-xlinks" "$TMP/kb" "$TMP/proj2/knowledge"
 
+# ---------------------------------------- library pre-commit hook: xlinks ----
+# check-xlinks is regression-tested above, but nothing had run it against real
+# content at the point a link actually breaks: a library's own pre-commit hook
+# never called it. These cases exercise the CANONICAL hook template embedded in
+# kb-create-domain/SKILL.md — extracted from its fenced block, not retyped —
+# so drift between the template and this test cannot hide a regression.
+
+SKILL="$ENGINE/plugins/knowledge-tools/skills/kb-create-domain/SKILL.md"
+TEMPLATE_HOOK="$TMP/template-pre-commit"
+if ! python3 - "$SKILL" "$TEMPLATE_HOOK" <<'PY'
+import re, sys
+src_path, out_path = sys.argv[1], sys.argv[2]
+src = open(src_path).read()
+blocks = re.findall(r'```bash\n(.*?)```', src, re.S)
+if len(blocks) != 1:
+    sys.exit(f"expected exactly one ```bash fenced block in {src_path}, found {len(blocks)}")
+body = blocks[0]
+if not body.startswith("#!/usr/bin/env bash") or "find_engine" not in body:
+    sys.exit(f"the ```bash block in {src_path} no longer looks like the pre-commit hook template")
+open(out_path, "w").write(body)
+PY
+then
+  echo "run-checks: FATAL — could not extract the pre-commit hook template from $SKILL" >&2
+  exit 2
+fi
+chmod +x "$TEMPLATE_HOOK"
+
+install_hook() { # install_hook <library-dir> -- stage the template as its hook
+  mkdir -p "$1/.githooks"
+  cp "$TEMPLATE_HOOK" "$1/.githooks/pre-commit"
+  chmod +x "$1/.githooks/pre-commit"
+  git -C "$1" add -A
+  git -C "$1" update-index --chmod=+x .githooks/pre-commit
+}
+
+# A hermetic HOME: this machine's real ~/.gitconfig sets kb.engineRoot to the
+# real engine, and KB_ENGINE_ROOT is commonly set in the shell too (kb-bootstrap
+# sets both) — either would make find_engine resolve to the real engine
+# instead of the fixture below. env -i plus a HOME with no .gitconfig is the
+# same hermetic pattern kb-verify's own Recheck assertions use.
+FAKEHOME="$TMP/fakehome"; mkdir -p "$FAKEHOME"
+
+# Case A: two libraries live under one engine's kb/, exactly where the template
+# expects. B cites a fact in A; A's own commit then renames that fact away,
+# leaving A itself clean but B's citation dangling. A's hook must catch it.
+XENGINE="$TMP/xhook/engine"; mkdir -p "$XENGINE/kb"
+ln -s "$ENGINE/scripts" "$XENGINE/scripts"
+build_clean "$XENGINE/kb/alpha"
+fm gadgets general > "$XENGINE/kb/alpha/gadgets.md"
+printf '# Gadgets\n\nA gadget is a small useful thing.\n' >> "$XENGINE/kb/alpha/gadgets.md"
+printf -- '- [gadgets](gadgets.md) — what a gadget is\n' >> "$XENGINE/kb/alpha/INDEX.md"
+git -C "$XENGINE/kb/alpha" add -A
+build_clean "$XENGINE/kb/beta"
+printf '\nSee [[alpha:gadgets]].\n' >> "$XENGINE/kb/beta/widgets.md"
+git -C "$XENGINE/kb/beta" add -A
+install_hook "$XENGINE/kb/alpha"
+
+# Break the cited fact — A's commit removes gadgets.md and its route.
+rm -f "$XENGINE/kb/alpha/gadgets.md"
+sed -i '/gadgets.md) — what a gadget is/d' "$XENGINE/kb/alpha/INDEX.md"
+git -C "$XENGINE/kb/alpha" add -A
+
+case_run "library hook blocks a commit that breaks a sibling's citation" 1 "has no slug" -- \
+  sh -c "cd '$XENGINE/kb/alpha' && env -i HOME='$FAKEHOME' PATH='$PATH' ./.githooks/pre-commit"
+
+# Case B: the same library, cloned OUTSIDE any engine's kb/ (KB_ENGINE_ROOT set
+# by hand, the documented escape hatch) — siblings are not visible, so the
+# hook must skip the cross-library check and say so, without failing.
+mkdir -p "$TMP/standalone"
+build_clean "$TMP/standalone"
+install_hook "$TMP/standalone"
+case_run "library outside the engine's kb/ skips cross-library links, does not fail" 0 \
+  "cross-library links not checked" -- \
+  sh -c "cd '$TMP/standalone' && env -i HOME='$FAKEHOME' PATH='$PATH' KB_ENGINE_ROOT='$XENGINE' ./.githooks/pre-commit"
+
+# Case C: re-confirm, through the hook this time rather than the bare script,
+# that a link into a library that simply is not installed only warns.
+mkdir -p "$TMP/xhook3/engine/kb"
+ln -s "$ENGINE/scripts" "$TMP/xhook3/engine/scripts"
+build_clean "$TMP/xhook3/engine/kb/solo"
+printf '\nSee [[gamma:widgets]].\n' >> "$TMP/xhook3/engine/kb/solo/widgets.md"
+git -C "$TMP/xhook3/engine/kb/solo" add -A
+install_hook "$TMP/xhook3/engine/kb/solo"
+case_run "library hook warns, but does not fail, on a link into an absent library" 0 "unresolvable" -- \
+  sh -c "cd '$TMP/xhook3/engine/kb/solo' && env -i HOME='$FAKEHOME' PATH='$PATH' ./.githooks/pre-commit"
+
 # -------------------------------------------------------- check-exec-bits ----
 mkdir -p "$TMP/bits/.githooks"; git init -q "$TMP/bits"
 printf '#!/usr/bin/env bash\ntrue\n' > "$TMP/bits/.githooks/pre-commit"

@@ -5,7 +5,7 @@
 **Status:** **Phases 0–2 complete.** Guardrails, decisions, the five skills, the retrieval agent and
 both halves of the eval are built and tested; two domain libraries hold 24 facts. The central claim —
 that an agent retrieves rather than recalling — is **proven for one library on one run**, not
-guaranteed. Phase 3 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
+guaranteed. Phase 3 is unblocked (ADR-0010) but not started; Phase 4 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
 `(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
 implementation proved, disproved and cost.
 
@@ -510,8 +510,10 @@ negative/UNRESOLVED cases. **Do not fan out until this is clean.**
 
 ### Phase 3 — Roll out remaining domains in waves
 Each following the Phase-2 recipe; `kb-create-domain` where new. Contradictions flagged **and marked
-`CONFLICTED`** (§5A), not silently resolved. **Blocked on** the cross-root `check-links` resolver existing and
-running in CI (§2) — without it, dead cross-repo links accrue.
+`CONFLICTED`** (§5A), not silently resolved. **Unblocked:** the cross-root `check-xlinks` resolver
+exists, is regression-tested, and now runs at every commit that can break a cross-library link — the
+engine's hook plus each library's own hook, when siblings are installed — with `kb-audit` as the
+periodic backstop (ADR-0010), rather than the credentialed CI job originally imagined here.
 
 ### Phase 4 — Orchestration + safety hardening
 Thin orchestrator (**routes, capped fan-out**, §5A) over the domain workers; full least-privilege tool audit;

@@ -115,6 +115,21 @@ echo "domain pre-commit (engine: $ENGINE):"
 "$ENGINE/scripts/check-kb"     .     || fail=1
 "$ENGINE/scripts/check-scope"  .     || fail=1
 "$ENGINE/scripts/check-golden" .     || fail=1   # once the library has a golden set
+
+# Cross-library links: check-xlinks needs to see every installed library, and a
+# library cannot see its siblings on its own (§5 of the contract). It can only
+# run truthfully when this library actually sits at <engine>/kb/<itself> — a
+# clone kept elsewhere, engine found only via kb.engineRoot, has no siblings to
+# check against. Absence warns and never fails, same as the resolver's own rule
+# for a library that is not installed.
+here=$(pwd -P)
+there=$(cd "$ENGINE/kb/$(basename "$here")" 2>/dev/null && pwd -P)
+if [ "$here" = "$there" ]; then
+  "$ENGINE/scripts/check-xlinks" "$ENGINE/kb" || fail=1
+else
+  echo "domain pre-commit: cross-library links not checked — this library is not installed under $ENGINE/kb, so its siblings are not visible."
+fi
+
 [ "$fail" -ne 0 ] && { echo; echo "Commit blocked."; exit 1; }
 echo "domain pre-commit: clean"
 ```
