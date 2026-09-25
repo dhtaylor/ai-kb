@@ -47,8 +47,10 @@ job.
    so the gap is actionable. This is a correct and useful answer, not a failure.
 
 5. **Refuse a disputed fact.** A section marked `status: CONFLICTED` is not servable. Do not pick
-   the more plausible value, do not average them, do not mention one and hedge. Surface the conflict:
-   state both claims, who says each, and how it would be resolved.
+   the more plausible value, do not average them, do not mention one and hedge. Begin the answer
+   with `disputed — not served`, then surface the conflict: state both claims, who says each, and
+   how it would be resolved. Cite the file that holds the conflict, because a reader must be able to
+   check the dispute. The refusal rests on that file, unlike `fact not found`, which rests on none.
 
 6. **Surface currency when it matters.** If a fact can go stale and carries a `Verified:` stamp, give
    the date with the answer. If it carries none, say the fact is unstamped rather than implying it is

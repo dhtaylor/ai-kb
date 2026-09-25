@@ -57,10 +57,18 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
     answers = {}
     for line in answers_file.read_text().splitlines():
         if not line.strip() or "|" not in line: continue
-        q, f, a = line.split("|", 2)
+        parts = line.split("|", 2)
+        if len(parts) < 3:               # the agent dropped a field: fail that record, not the run
+            answers[parts[0].strip()] = None; continue
+        q, f, a = parts
         answers[q.strip()] = (f.strip(), a)
 
-    norm = lambda s: re.sub(r"\s+", " ", s).strip().lower()
+    # Whitespace, case and QUOTE CHARACTERS are not grounding. An agent quoting a
+    # quotation escapes it (\"), nests it as '…', or gets curly quotes from a
+    # renderer; the words are unchanged. Every quote character folds to one.
+    QUOTES = str.maketrans({c: '"' for c in "'“”„‟″‘’‚‛′"})
+    norm = lambda s: re.sub(r"\s+", " ", s.replace('\\"', '"').replace("\\'", "'")
+                            .translate(QUOTES)).strip().lower()
     rows, npass = [], 0
     for i, r in enumerate(recs, 1):
         q = f"Q{i}"
@@ -69,9 +77,13 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
         ef   = r.get("expected_file", "")
         if q not in answers:
             rows.append((q, case, "-", "-", "NO ANSWER")); continue
+        if answers[q] is None:
+            rows.append((q, case, "-", "-", "FAIL: malformed record — expected Q<n>|<cited>|<answer>")); continue
         cited, ans = answers[q]
 
-        in_answer = norm(exc) in norm(ans)
+        # A quote may stop before the sentence's full stop; the excerpt's trailing
+        # punctuation is not part of what it proves.
+        in_answer = norm(exc).rstrip('.!?;:,"') in norm(ans)
         # An answer may legitimately cite SEVERAL files — a cross-library question is
         # answered from two, and the contract requires citing every file used. So the
         # expected file must be AMONG those cited, not the only one. Demanding an exact
@@ -81,7 +93,10 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
         in_file   = True
         if ef:
             target = lib / ef
-            in_file = target.is_file() and norm(exc) in norm(target.read_text())
+            # An unresolved case's excerpt is the refusal phrase, in no fact file; its file
+            # must instead still hold the dispute. Every other excerpt must be in its file.
+            probe   = "status: conflicted" if case == "unresolved" else norm(exc)
+            in_file = target.is_file() and probe in norm(target.read_text())
 
         ok = in_answer and file_ok and in_file
         npass += ok

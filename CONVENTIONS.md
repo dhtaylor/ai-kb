@@ -434,7 +434,9 @@ Every retrieval agent's body states, and every agent is held to:
 - **On a hedge in any file:** a claim the file itself marks untested, inferred or probable is reported
   as such and never leads the answer — a `Verified:` stamp beside it dates what was checked, not what
   was inferred. **Never chain facts from two files into a conclusion neither states.**
-- **On `CONFLICTED`:** surface the conflict, serve nothing (§8).
+- **On `CONFLICTED`:** serve nothing (§8). The answer begins *"disputed — not served"*, states both
+  claims and who makes each, and cites the file holding the conflict. That is the one refusal that
+  cites, because the dispute itself is what the reader must be able to check.
 - **Surface the `verified:` date** on freshness-sensitive facts.
 
 **The golden set** lives at the library root, `<domain>-golden.md`, and travels with the domain it
@@ -457,6 +459,12 @@ negative. For a `negative` case, `expected_file` may be empty and `expected_exce
 refusal the agent must produce.
 
 Every domain carries **≥2 negative cases** — a knowledge base that never refuses is one that guesses.
+
+An **`unresolved` case** names the file holding the `CONFLICTED` section as `expected_file`, and its
+`expected_excerpt` is exactly the refusal, `disputed — not served`. No fact file contains that
+phrase, so `check-golden` checks something else: that the named file really holds a `CONFLICTED`
+section, so the case tests a dispute that exists. `grade-eval` requires the phrase in the answer and
+the file among its citations.
 
 An **`unresolved` case is required only where the domain actually holds a `CONFLICTED` section**, and a
 **cross-root case only where the domain actually links across libraries** — a domain with no contradiction and no

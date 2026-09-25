@@ -18,6 +18,7 @@ Exit 0 clean, 1 on any defect.
 import pathlib, re, sys
 
 VALID_CASES = {"positive", "negative", "unresolved", "cross-root"}
+DISPUTED = "disputed — not served"   # the refusal of a CONFLICTED fact (CONVENTIONS §10)
 
 
 def parse(text):
@@ -85,6 +86,16 @@ def main(root: pathlib.Path) -> int:
             continue
         if not exc:
             defects.append(f"{where} [{case}]: no expected_excerpt")
+            continue
+        if case == "unresolved":
+            # The excerpt is the fixed refusal, which no fact file contains. What must be
+            # true of the file instead is that it holds the dispute the case claims to test.
+            if exc != DISPUTED:
+                defects.append(f"{where} [unresolved]: expected_excerpt must be the refusal "
+                               f"'{DISPUTED}', not {exc[:60]!r}")
+            if "status: CONFLICTED" not in target.read_text():
+                defects.append(f"{where} [unresolved]: {ef} has no CONFLICTED section — the case "
+                               f"tests a dispute that does not exist")
             continue
         # Line breaks in the source must not make a present excerpt look absent.
         if re.sub(r"\s+", " ", exc) not in re.sub(r"\s+", " ", target.read_text()):

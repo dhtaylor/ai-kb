@@ -169,6 +169,29 @@ p.write_text(t[:t.index("- case: negative\n  question: Who owns")] + "```\n")
 PY
 case_run "golden set with fewer than two negatives" 1 "negative case" -- "$ENGINE/scripts/check-golden" "$TMP/goldneg"
 
+# An UNRESOLVED case tests the refusal of a disputed fact. Its excerpt is the fixed
+# phrase ("disputed — not served"), which is in no fact file, so it cannot be grepped
+# for there. Instead the file it names must genuinely hold a CONFLICTED section: the
+# case must point at a real dispute, not a fiction written to satisfy a count.
+build_unresolved() { # build_unresolved <dir> <excerpt> <conflicted-file-marker>
+  build_clean "$1"
+  printf -- '# Gizmos\n\n## Capacity\n\nstatus: %s\n\nClaim A: 12. Claim B: 20.\n' "$3" > "$1/gizmos.md"
+  python3 - "$1/fx-golden.md" "$2" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+rec = ("- case: unresolved\n  question: How many things does a gizmo hold?\n"
+       "  expected_file: gizmos.md\n  expected_excerpt: \"" + sys.argv[2] + "\"\n\n")
+i = t.index("- case: negative")
+p.write_text(t[:i] + rec + t[i:])
+PY
+}
+build_unresolved "$TMP/goldun" "disputed — not served" "CONFLICTED"
+case_run "unresolved case: refusal phrase, file holds a real conflict" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldun"
+build_unresolved "$TMP/goldun2" "disputed — not served" "settled"
+case_run "unresolved case naming a file with no CONFLICTED section" 1 "no CONFLICTED section" -- "$ENGINE/scripts/check-golden" "$TMP/goldun2"
+build_unresolved "$TMP/goldun3" "status: CONFLICTED" "CONFLICTED"
+case_run "unresolved case whose excerpt is not the refusal phrase" 1 "disputed — not served" -- "$ENGINE/scripts/check-golden" "$TMP/goldun3"
+
 # ----------------------------------------------------------- check-xlinks ----
 mkdir -p "$TMP/kb"; build_clean "$TMP/kb/alpha"; build_clean "$TMP/kb/beta"
 printf '\nSee [[beta:widgets]].\n' >> "$TMP/kb/alpha/widgets.md"
@@ -432,6 +455,44 @@ grade "paraphrase of the excerpt is not grounded" 1 "excerpt not in answer" \
 printf 'Q1|kb/fx/widgets.md|A widget holds up to 12 things.\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' > "$TMP/ge/answers"
 case_run "kb-rooted citation resolves when the library is given as ." 0 "3/3 passed" -- \
   sh -c 'cd "$1" && "$2" . "$3"' _ "$TMP/ge/kb/fx" "$ENGINE/scripts/grade-eval" "$TMP/ge/answers"
+# A record missing its citation field (Q2|answer, one pipe) is the agent's format
+# error. It fails THAT record, by name; it must not take down the whole grade.
+# Punctuation is not grounding. An agent that quotes a quotation escapes it (\"),
+# nests it ('…' inside "…") or ends its quote before the sentence's full stop; the
+# words are the file's own words and must pass. A paraphrase still must not.
+build_clean "$TMP/gq/kb/fx"
+printf 'A "gadget" is not a widget.\n' >> "$TMP/gq/kb/fx/widgets.md"
+sed -i 's/expected_excerpt: "up to 12 things"/expected_excerpt: A "gadget" is not a widget./' "$TMP/gq/kb/fx/fx-golden.md"
+gq() { # gq <name> <want-exit> <want-text> <Q1 record>
+  printf '%s\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' "$4" > "$TMP/gq/answers"
+  case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/gq/kb/fx" "$TMP/gq/answers"
+}
+gq "backslash-escaped quotes are the same words" 0 "3/3 passed" \
+  'Q1|widgets.md|No: "A \"gadget\" is not a widget."'
+gq "a quote nested as single quotes is the same words" 0 "3/3 passed" \
+  "Q1|widgets.md|No: \"A 'gadget' is not a widget.\""
+gq "curly quotes are the same words" 0 "3/3 passed" \
+  'Q1|widgets.md|No: “A “gadget” is not a widget.”'
+gq "a quote ending before the full stop is the same words" 0 "3/3 passed" \
+  'Q1|widgets.md|No: "A \"gadget\" is not a widget" — per the file'
+gq "punctuation normalization does not rescue a paraphrase" 1 "excerpt not in answer" \
+  'Q1|widgets.md|No: a gadget and a widget are different things.'
+
+# build_unresolved inserts its record after the fixture's positive: it is Q2.
+un() { # un <name> <want-exit> <want-text> <Q2 record>
+  printf 'Q1|widgets.md|A widget holds up to 12 things.\n%s\nQ3||fact not found — check KB\nQ4||fact not found — check KB\n' "$4" > "$TMP/goldun/answers"
+  case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/goldun" "$TMP/goldun/answers"
+}
+un "unresolved: the refusal phrase, citing the conflicted file, passes" 0 "4/4 passed" \
+  'Q2|gizmos.md|disputed — not served. Claim A says 12; Claim B says 20.'
+un "unresolved: serving one of the values fails" 1 "excerpt not in answer" \
+  'Q2|gizmos.md|A gizmo holds 12 things.'
+un "unresolved: the refusal without citing the conflicted file fails" 1 "expected 'gizmos.md'" \
+  'Q2||disputed — not served.'
+
+printf 'Q1|widgets.md|A widget holds up to 12 things.\nQ2|fact not found — check KB\nQ3||fact not found — check KB\n' > "$TMP/ge/answers"
+case_run "record missing its citation field fails, the grade still runs" 1 "Q2   negative   -         -         FAIL: malformed record" -- \
+  "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" "$TMP/ge/answers"
 
 # ------------------------------------------------------------------- done ----
 echo
