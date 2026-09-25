@@ -4,8 +4,10 @@
 **Date:** 2026-09-18 · **Revised:** 2026-09-19
 **Status:** **Phases 0–2 complete.** Guardrails, decisions, the five skills, the retrieval agent and
 both halves of the eval are built and tested; two domain libraries hold 24 facts. The central claim —
-that an agent retrieves rather than recalling — is **proven for one library on one run**, not
-guaranteed. Phase 3 is unblocked (ADR-0010) but not started; Phase 4 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
+that an agent retrieves rather than recalling — is **evidenced for two libraries**, not guaranteed:
+one clean run on the first, and on the second, `intelligence-analysis`, four recorded runs ending at
+15/16 (§9.14). **Phase 3 is in progress:** wave 1 stood up `intelligence-analysis` (23 fact
+sections, local and not yet pushed). Phase 4 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
 `(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
 implementation proved, disproved and cost.
 
@@ -514,6 +516,11 @@ Each following the Phase-2 recipe; `kb-create-domain` where new. Contradictions 
 exists, is regression-tested, and now runs at every commit that can break a cross-library link — the
 engine's hook plus each library's own hook, when siblings are installed — with `kb-audit` as the
 periodic backstop (ADR-0010), rather than the credentialed CI job originally imagined here.
+**Wave 1 (2026-09-24):** `intelligence-analysis`, folded from a legacy skill's reference files,
+library only; the skill itself is not yet rebuilt as a thin agent. Retrieval eval 15/16 on the
+corrected protocol, with the evidence kept in the library (§9.14). Next waves: `create-user-story`
+(the first multi-domain fold: a general requirements canon plus `product:azure-devops`) and
+`humanizer`.
 
 ### Phase 4 — Orchestration + safety hardening
 Thin orchestrator (**routes, capped fan-out**, §5A) over the domain workers; full least-privilege tool audit;
@@ -792,3 +799,37 @@ act: a fact in test_project still described a hook that had been rewritten two c
 Every structural check passed over it, and so did a careful sweep, because **both were reading the
 knowledge base rather than the thing it describes.**
 
+### 9.14 The second library's eval found three defects, none of them in the library (2026-09-24)
+
+Proving retrieval on a second library was meant to confirm §9.8. Instead it found three defects in
+the apparatus around retrieval, which is where §9.8 found its two. Four runs, each by fresh
+`kb-retrieve` agents that never saw the answer key, went 9/16, 14/16, 11/16 and 15/16. Every drop
+had a cause outside the library:
+
+- **The grader string-matched citations** (`kb/<lib>/x.md` against `x.md`). It now resolves a cited
+  path to a file and still rejects a same-named file in another library. Its first fix broke on a
+  relative library path, and a one-point discrepancy between two gradings of the same answers is
+  what exposed it. `grade-eval` had no regression cases until this wave.
+- **The contract and the grader disagreed about refusals.** The agent was to cite every file used,
+  while a negative case was to cite none. A citation now means *the answer rests on this file*, so
+  a refusal cites nothing and names what it checked in its text.
+- **Library discovery could fail silently.** It was the most serious of the three. A sub-agent never
+  receives the session-start list of libraries. Every agent's first `kb/*` listing was swamped by
+  one library's `.git` objects, and in run 3 one agent concluded that library was the only one
+  installed and refused four answerable questions with confidence. The contract now enumerates
+  `kb/*/INDEX.md`. Run 4 was checked from the agents' tool calls, not from what they said, and all
+  four used that glob.
+
+The run also repeated §9.8's contamination in a new form. Eval evidence committed inside the library
+put earlier answers where a search could reach them, and a run 3 agent's search did. It is now
+excluded exactly as the golden set is. Under a verbatim-quote rule, the two misses that remained
+across runs 2–4 were partial quotes of the right sentence from the right file. One excerpt was
+shortened after results were seen because two independent agents quoted around it; that change is
+recorded as post hoc in the golden file and the evidence README. The other was left alone, because
+its excerpt begins where a quote naturally would.
+
+**What it establishes:** on the corrected protocol, agents with no knowledge of the answers routed
+every positive question to the right file and refused every question the library deliberately cannot
+answer. **What it does not:** a clean pass, or anything about a protocol that changed between runs
+rather than one repeated. The evidence is in
+`intelligence-analysis:documents/eval-2026-09-24/`, so this paragraph is not the only record.
