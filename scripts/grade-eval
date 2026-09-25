@@ -46,7 +46,8 @@ def resolves_to(lib: pathlib.Path, expected: str, cited) -> bool:
     prefixed (<lib>/x.md) or kb-rooted (kb/<lib>/x.md). Each is RESOLVED against the
     library, its kb/ directory and the engine, and compared as a file — never matched
     as a suffix, which would let a same-named file in another library pass."""
-    want = (lib / expected).resolve()
+    lib = lib.resolve()          # "." has no parent to anchor on until it is resolved
+    want = lib / expected
     anchors = (lib, lib.parent, lib.parent.parent)
     return any((a / c).resolve() == want for c in cited for a in anchors)
 

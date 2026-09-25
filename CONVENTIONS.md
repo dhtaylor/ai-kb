@@ -190,7 +190,10 @@ exists only when it has content.
 Within a library the recursion is the same at every level: a sub-folder's `INDEX.md` lists its own
 direct children. There is no router **above** the library root — no tier folders, no
 `semantic/INDEX.md`, no registry of libraries. A library is discovered by being installed under the
-engine's `kb/`, and the session-start hook enumerates what is present (§2).
+engine's `kb/`, and the session-start hook enumerates what is present (§2). An agent that did not
+receive that list, such as a sub-agent, enumerates `<engine>/kb/*/INDEX.md`, one router per library,
+and never infers the set from a listing of `kb/*`. A library's `.git` objects can crowd that listing,
+and a crowded-out library looks absent.
 
 Two things inside a library are deliberately **not routed**: the golden set (§10) and archived
 evidence under `documents/` (§6). They are apparatus and provenance, not knowledge — and routing the
@@ -438,7 +441,9 @@ Every retrieval agent's body states, and every agent is held to:
 tests. The `-golden` suffix is load-bearing: a **folder name is a slug too** (§5), so a file named
 `<domain>.md` would collide with the library's own directory name. It is **not routed from the
 library's `INDEX.md`** — an agent that can descend to the oracle can read the answers, and its
-refusals then prove nothing. Each record carries:
+refusals then prove nothing. **Eval evidence**, kept under `documents/eval-<date>/`, records past
+answers to the same questions, and a retrieval agent is held to it exactly as it is to the golden
+set: never opened, and excluded from every search. Each record carries:
 
 ```yaml
 - case: positive | negative | unresolved | cross-root

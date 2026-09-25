@@ -427,6 +427,11 @@ grade "same-named file in another library is a wrong citation" 1 "expected 'widg
   "Q1|other/widgets.md|A widget holds up to 12 things."
 grade "paraphrase of the excerpt is not grounded" 1 "excerpt not in answer" \
   "Q1|widgets.md|Widgets take a dozen items at most."
+# The library given as a RELATIVE path: "." has no parent to anchor on unless it is
+# resolved first, and a kb-rooted citation then failed while graded from inside it.
+printf 'Q1|kb/fx/widgets.md|A widget holds up to 12 things.\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' > "$TMP/ge/answers"
+case_run "kb-rooted citation resolves when the library is given as ." 0 "3/3 passed" -- \
+  sh -c 'cd "$1" && "$2" . "$3"' _ "$TMP/ge/kb/fx" "$ENGINE/scripts/grade-eval" "$TMP/ge/answers"
 
 # ------------------------------------------------------------------- done ----
 echo
