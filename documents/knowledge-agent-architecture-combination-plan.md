@@ -4,10 +4,10 @@
 **Date:** 2026-09-18 · **Revised:** 2026-09-19
 **Status:** **Phases 0–2 complete.** Guardrails, decisions, the five skills, the retrieval agent and
 both halves of the eval are built and tested; two domain libraries hold 24 facts. The central claim —
-that an agent retrieves rather than recalling — is **evidenced for two libraries**, not guaranteed:
-one clean run on the first, and on the second, `intelligence-analysis`, four recorded runs ending at
-15/16 (§9.14). **Phase 3 is in progress:** wave 1 stood up `intelligence-analysis` (23 fact
-sections, local and not yet pushed). Phase 4 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
+that an agent retrieves rather than recalling — is **evidenced for four libraries**, not
+guaranteed. The latest recorded runs score 15/16 for `intelligence-analysis`, 16/16 for
+`agile-requirements` and 14/17 for `azure-devops` (§9.14, §9.15). **Phase 3 is in progress:** waves 1
+and 2 stood up three libraries (all local, not yet pushed). Phase 4 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
 `(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
 implementation proved, disproved and cost.
 
@@ -521,6 +521,15 @@ library only; the skill itself is not yet rebuilt as a thin agent. Retrieval eva
 corrected protocol, with the evidence kept in the library (§9.14). Next waves: `create-user-story`
 (the first multi-domain fold: a general requirements canon plus `product:azure-devops`) and
 `humanizer`.
+**Wave 2 (2026-09-24):** `create-user-story` was folded **once per target domain**, which is the plan's
+first multi-domain fold. The vendor-independent canon went to `agile-requirements` (general), and
+the product facts went to `azure-devops` (`product:azure-devops`). No fact went to both. The ADO
+facts were checked against Microsoft Learn. That was only to confirm or qualify what the legacy file
+said: no fact was added from the web. One was found genuinely **CONFLICTED**, because Microsoft's own
+pages disagree about whether Agile's User Story carries Acceptance Criteria. That is the knowledge
+base's first real contradiction, and it needs a live Azure DevOps organization to resolve. The
+owner's house conventions were excluded as personal. Evals: 16/16 and 14/17 (§9.15). Remaining
+wave: `humanizer`.
 
 ### Phase 4 — Orchestration + safety hardening
 Thin orchestrator (**routes, capped fan-out**, §5A) over the domain workers; full least-privilege tool audit;
@@ -833,3 +842,33 @@ every positive question to the right file and refused every question the library
 answer. **What it does not:** a clean pass, or anything about a protocol that changed between runs
 rather than one repeated. The evidence is in
 `intelligence-analysis:documents/eval-2026-09-24/`, so this paragraph is not the only record.
+
+### 9.15 The first contradiction, the first cross-library answer, and what they exposed (2026-09-24)
+
+Wave 2 exercised the two golden-set cases no library had yet needed. Both exposed gaps in the
+contract rather than in the knowledge.
+
+- **A contradiction had no fixed refusal.** In its first test, the agent handled the disputed fact
+  correctly: it served nothing, stated both claims and cited the file. It still failed, because the
+  oracle expected the literal `status: CONFLICTED`, which nothing required an agent to say. The
+  refusal is now fixed: *"disputed — not served"*, then both claims, citing the conflicted file. That
+  makes it the one refusal that cites, because the dispute is what the reader must check.
+  `check-golden` now requires an unresolved case to name a file that really holds a `CONFLICTED`
+  section. In the next run the case passed.
+- **The cross-library case passed on its first attempt.** In both runs the agent followed
+  `[[agile-requirements:…]]` from `azure-devops` and cited both libraries.
+- **The grader still confused punctuation with grounding.** It failed escaped, nested and curly
+  quotes, and a quote that stopped before the excerpt's full stop. It also crashed outright on an
+  answer missing a field. It now folds quote characters, ignores an excerpt's trailing punctuation,
+  and fails a malformed record by name. A paraphrase still fails. Every earlier run, re-graded
+  against its original oracle, kept its stored verdict.
+- **The oracle accepts one sentence per fact, and a file may state a fact twice.** This is the
+  pattern that remains. Across all three new libraries, most genuine misses are the agent quoting a
+  *different* sentence from the right file that supports the same fact. That usually means a summary
+  line and the source it quotes. `azure-devops` Q11 failed this way in both runs, quoting the same
+  alternative sentence each time. The oracle has not been amended for it. Whether a golden record
+  should accept alternative excerpts is an **open decision**, and it is not taken here.
+
+Contamination stayed contained. In one run 1 agent, two searches ran without the exclusion glob;
+they returned filenames only, so the golden file's path showed but none of its content did. In run 2,
+no agent touched the oracle, as their tool calls confirm.
