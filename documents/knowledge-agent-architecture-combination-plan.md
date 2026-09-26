@@ -929,3 +929,14 @@ Each case ran once, so these results say which way things point, not how often t
 §9.16, the remaining misses were not patched one run at a time. The legacy skill stays in place
 until a multi-trial run over the corpus can measure restraint properly. The review transcripts were
 kept only in scratch and are not archived here.
+
+**Update, same day.** The reviews are now archived in
+`documents/eval-2026-09-26-intelligence-analysis-skill/`, with the protocol and grades. A third round
+ran all six cases against the committed skill and scored 3/6: **every flawed product passed, and every
+clean control failed**, each drawing two or three findings. Editing the rule text did not converge.
+Each wording change moved the false positives rather than removing them. The sourcing rule caught one
+control's planted flaw, then missed it once narrowed, then produced a new false positive on another
+control. So restraint is not a wording problem to be patched. It needs either a structural change,
+such as loading library files only when a candidate finding needs one, or a multi-trial measurement
+of what it actually costs. The round also found a defect in the legacy corpus: one snippet's
+contact-tracing percentage contradicts its own counts.

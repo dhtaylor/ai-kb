@@ -59,6 +59,30 @@ After round 2, two fixes went in with commit `90979d4`: a buried bottom line ran
 sourcing trap applies only to numbers whose basis names no study, dataset or issuing body. Round 3
 tests that commit.
 
+## Round 3: 3/6, all six cases against `90979d4`
+
+The same six cases went to fresh agents under the same separation. Each agent was also told to
+stay out of this folder.
+
+| Case | Level | Expected | Result |
+|---|---|---|---|
+| fin-01 | Light | 0–1 | **Pass.** 1 finding, the gold flaw; rated Light because of its form |
+| geo-02 | Full | 3–5 | **Pass.** 3 findings; the conflation is now under the gold key's standard. Mirror-imaging was found in substance but not named |
+| epi-01 | Medium | 2–3 | **Pass.** Medium, 3 findings; buried bottom line ranked second, behind the missing alternative |
+| biz-02 (control) | Medium | 0–1 | **Fail.** Medium, 2 findings |
+| epi-02 (control) | Full | 0–1 | **Fail.** 3 findings; the gold flaw was missed |
+| clim-02 (control) | Full | 0–1 | **Fail.** 2 findings. Round 1 passed this case |
+
+- **Flawed products 3/3, clean controls 0/3.** The skill finds real weaknesses at the right level,
+  and it cannot leave clean work alone.
+- **Editing the rule text did not converge.** The sourcing rule caught epi-02's flaw in round 2 and
+  missed it here once narrowed. Its "issuing body" exemption was read as covering PAHO. On clim-02,
+  the same rule produced a new false positive on an unattributed correlation. Each wording change
+  moved the false positives rather than removing them.
+- **A defect in the corpus.** The epi-01 snippet gives contact-tracing coverage as 68%, but "289 of
+  337" is 86%. The gold key's own reasoning uses the 68% figure. Round 3's epi-01 reviewer found the
+  inconsistency, and nobody had noticed it before.
+
 ## Files
 
 | Path | What |
@@ -68,3 +92,4 @@ tests that commit.
 | `round1/*.md` | Round 1 reviews by the first build, exactly as written |
 | `round2/new-*.md` | Round 2 reviews by the revised port |
 | `round2/legacy-*.md` | Round 2 reviews by the legacy skill (baseline) |
+| `round3/*.md` | Round 3 reviews at `90979d4` |
