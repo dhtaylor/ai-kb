@@ -88,6 +88,17 @@ The goal is a review the user can act on: honest about strengths, specific about
 prescriptive — never a vague "consider more alternatives," always "here is the passage, here is the
 standard it misses, here is the fix."
 
+### Retrieval economy: load on need, not up front
+
+In review mode, load the library's `INDEX.md` and its tradecraft-standards file, and **nothing else up
+front**. Read the product against those standards and form your candidate weaknesses from the product
+itself, then run the gates below on each candidate. Open another library file only when **a candidate
+that has already survived the gates** needs something from it: the exact position rule for a buried
+bottom line, a technique for its fix, or the precise name of a bias. Never open a file to look for more
+to find. A catalog of techniques and biases read in advance becomes a checklist, and a checklist
+applied to clean work manufactures findings. The library is where you confirm and name a finding, not
+where you go hunting for one.
+
 ### 1. Calibrate to the product — do this first, always
 
 Before judging anything, decide *how much rigor this product warrants*. Misjudging this is the most
@@ -142,8 +153,8 @@ find a single clear claim, that is itself the first and often most important fin
 library's argumentation standard and cite it: a product with no locatable bottom line fails it before
 any subtler check matters.
 
-**But finding is not enough — also check position.** Retrieve the library's writing-craft file for the
-exact position rule and the disguised cases it names (a chronology-first postmortem, a report that
+**But finding is not enough — also check position.** If the judgment is not in the product's opening
+sentences, retrieve the library's writing-craft file for the exact position rule and the disguised cases it names (a chronology-first postmortem, a report that
 opens with background numbers, a brief where the conclusion appears only in the final sentence). A
 judgment that arrives after throat-clearing context, background data, or a timeline fails that
 position rule even when the judgment itself, once you reach it, is clear and well-stated. A buried
@@ -154,8 +165,10 @@ is crediting a well-worded conclusion that simply arrives too late.
 
 ### 3. Select and run the techniques the product's level calls for
 
-Retrieve the library's technique catalog and its problem-to-technique table. Pick technique(s) that fit
-the weaknesses you're actually seeing — do not run the whole catalog on a product that needs one check.
+Run these checks on the product itself first. When a candidate weakness has survived the gates and its
+fix calls for a technique, retrieve the library's technique catalog and its problem-to-technique table
+to name the right one. Pick technique(s) that fit the weaknesses you're actually seeing — do not run the
+whole catalog on a product that needs one check.
 A medium product typically needs: the assumptions behind the conclusion surfaced, the sourcing behind
 it examined, and — only if a genuine competing explanation exists — a light pass at weighing it against
 the evidence (does anything actually discriminate between them, or is the evidence equally consistent
@@ -208,8 +221,9 @@ Rules on top of the format:
 - **Every weakness is a triple:** the *quoted passage*, the *standard or technique it misses* — cited
   exactly as the library states it, numbering and name included — and a *concrete rewrite or fix*. No
   floating criticisms.
-- **Name a bias or fallacy precisely when one applies**, using the library's own name for it and its
-  own prescribed mitigation from its bias-to-technique mapping — never "watch out for bias" on its own,
+- **Name a bias or fallacy precisely when one applies to a finding that has already survived the
+  gates**, using the library's own name for it and its own prescribed mitigation from its
+  bias-to-technique mapping — never "watch out for bias" on its own,
   and never a bias name you're recalling rather than retrieving. Getting the substance right but
   reaching for the wrong retrieved label sends the user to the wrong fix, so if you're not sure which
   entry in the mapping fits, say so rather than guessing.
