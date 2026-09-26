@@ -950,3 +950,13 @@ product. That is not a checklist effect. Either the reviewers' bar for a finding
 corpus author's, or the controls are less clean than their gold keys say, and only a human reading
 of the recurring findings can decide which. The load-on-need change is kept anyway. It cost
 nothing on the flawed cases and matches the legacy skill's own rule.
+
+**The owner adjudicated, and the controls were not clean.** The seven recurring findings on the three
+controls were each read against the quoted passage, and all seven were judged real weaknesses. The gold
+key is amended post hoc, with the original kept, and the amendment is recorded in the archive. Against
+the amended key, rounds 3 and 4 score 6/6. The legacy skill's one passing control becomes an
+under-review. What looked like a restraint problem was mostly an oracle that undercounted. The lesson
+generalises: **a clean control is a claim, and it needs the same scrutiny as a planted flaw.** When
+independent reviewers converge on the same "false positive", check the key before the reviewer. One
+genuine weakness in the port survives the amendment: it missed one planted flaw, a number that looks
+sourced but isn't, in three of four rounds.

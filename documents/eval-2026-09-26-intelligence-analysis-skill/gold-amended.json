@@ -1,0 +1,122 @@
+{
+ "fin-01-fed-slack": {
+  "level": "Light",
+  "gold": [
+   {
+    "flaw": "absent uncertainty language on directional market calls",
+    "standard_or_bias": "ATS #2",
+    "why": "'will compress' and 'will underperform' present two contested market predictions as certainties; even an informal alert should hedge directional calls."
+   }
+  ],
+  "expected_finding_count": "0-1",
+  "is_control": false
+ },
+ "epi-01-mpox-goma": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "buried BLUF",
+    "standard_or_bias": "ATS #6",
+    "why": "the key judgment ('sustained community transmission is unlikely') appears in paragraph 2; the memo leads with case counts rather than the bottom line."
+   },
+   {
+    "flaw": "base-rate neglect",
+    "standard_or_bias": "ATS #8",
+    "why": "concluding transmission is unlikely from 68% contact-tracing coverage treats the unassessed 32% (~48 contacts) as negligible rather than a material uncertainty gap."
+   },
+   {
+    "flaw": "absence-of-evidence treated as evidence-of-absence",
+    "standard_or_bias": "ATS #8",
+    "why": "'no secondary cases among reached contacts' is the sole empirical basis for the low-transmission judgment; absence of detection in 68% cannot establish absence in the remaining 32%."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false
+ },
+ "geo-02-balkans-assessment": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "conflating reported information with analyst judgment",
+    "standard_or_bias": "ATS #3",
+    "why": "'Serbia has assessed these exercises as routine training' presents Belgrade's own self-characterization, sourced from state outlet Tanjug, as an independent analytic finding."
+   },
+   {
+    "flaw": "mirror-imaging",
+    "standard_or_bias": "mirror-imaging / ATS #8",
+    "why": "'a leader in Vučić's position would not risk EU accession' projects a Western cost-benefit calculus onto Vučić, assuming EU membership is a binding deterrent rather than a bargaining chip."
+   },
+   {
+    "flaw": "overconfident / uncorroborated sourcing",
+    "standard_or_bias": "ATS #1 / ATS #2",
+    "why": "High confidence asserted despite the primary evidence for intent being a state outlet (Tanjug); no independent corroboration or source-reliability characterization."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false
+ },
+ "biz-02-thailand-entry": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "unsourced comparative claim",
+    "standard_or_bias": "ATS #1",
+    "why": "'lower regulatory complexity relative to Vietnam' is one of two reasons for ranking Thailand over Vietnam and carries no source or basis."
+   },
+   {
+    "flaw": "small, interested samples carried into precise conclusions",
+    "standard_or_bias": "ATS #1 / ATS #2",
+    "why": "n=12 reseller survey drives a precise breakeven/NPV claim and the n=18 BD-team interviews carry willingness-to-pay, neither caveated, though the memo caveats its Indonesia proxy."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false,
+  "amended": "2026-09-26, post hoc, by owner adjudication of recurring findings; see README"
+ },
+ "epi-02-dengue-andean": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "benchmark study uncited",
+    "standard_or_bias": "ATS #1",
+    "why": "the ~75% case-capture estimate is attributed to '2019–2023 active surveillance benchmarks' with no specific publication cited; a minor sourcing nit in an otherwise well-formed product."
+   },
+   {
+    "flaw": "anchoring on the prior estimate",
+    "standard_or_bias": "ATS #7 / ATS #8 / anchoring",
+    "why": "two material new inputs move the estimate exactly one band (+10 on both ends) with no reasoning for the magnitude."
+   },
+   {
+    "flaw": "unsourced primary driver",
+    "standard_or_bias": "ATS #1",
+    "why": "the confirmed serotype shift is a named driver and the stated reason for revising, yet the basis section characterizes only case reports and precipitation."
+   },
+   {
+    "flaw": "unsupported premise behind the recommendation",
+    "standard_or_bias": "ATS #3 / ATS #8",
+    "why": "'minimal carrying cost' underwrites the low-regret framing and is stated as fact with no basis or signal phrase."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false,
+  "amended": "2026-09-26, post hoc, by owner adjudication of recurring findings; see README"
+ },
+ "clim-02-pnw-fire-forecast": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "uncited load-bearing statistic",
+    "standard_or_bias": "ATS #1",
+    "why": "r ≈ 0.61 links the lead driver to the outcome and names no dataset or study, beside a carefully sourced snowpack figure."
+   },
+   {
+    "flaw": "likelihood conflated with confidence in the bottom line",
+    "standard_or_bias": "ATS #2",
+    "why": "'moderate confidence (60–75%)' attaches the probability range to confidence in the headline sentence."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false,
+  "amended": "2026-09-26, post hoc, by owner adjudication of recurring findings; see README"
+ }
+}

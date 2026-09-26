@@ -114,12 +114,38 @@ gates. The six cases re-ran under the same separation.
 - **The load-on-need change is kept.** It cost nothing on the flawed cases, it matches the legacy
   skill's own "read as you need them" rule, and reviewers used somewhat less context.
 
+## The gold key was amended after results were seen
+
+After round 4, the owner read the seven findings that had recurred on the three controls, each
+with its quoted passage and the case for and against it, and judged **all seven to be real
+weaknesses**. The three "clean" controls were not clean, and the gold key undercounted them.
+`gold-amended.json` adds those seven flaws, sets the expected finding counts to match, and marks
+all three cases as no longer controls. `gold.json` is unchanged.
+
+This amendment is **post hoc**, made after the results were seen. It is recorded here for that
+reason. There was one adjudicator, reading findings framed by the agent that ran the eval, so a
+second reader would make it sturdier. The recorded grades in the rounds above stay as they were,
+against the original key. The grades below are for comparison.
+
+| Case | Amended expectation | Round 3 | Round 4 | Legacy baseline |
+|---|---|---|---|---|
+| biz-02 | 2–3, two flaws | Pass: both | Pass: both | Pass: 3 findings, both flaws present |
+| epi-02 | 3–5, four flaws | Pass: 4 findings, all four flaws; one overreach on the ECMWF score | Pass on count: 3 findings, 3 of 4 flaws; the planted benchmark flaw missed | **Fail**: 1 finding; 3 of 4 flaws missed |
+| clim-02 | 2–3, two flaws | Pass: both | Pass: both | not run |
+
+Against the amended key, rounds 3 and 4 each score **6/6**. The legacy skill's one passing
+control, epi-02, becomes an under-review: it found the planted flaw and none of the other three.
+One genuine weakness in the port survives the amendment. It **missed epi-02's planted
+benchmark flaw in three of four rounds**, crediting a number that looks sourced but isn't as
+characterized sourcing.
+
 ## Files
 
 | Path | What |
 |---|---|
 | `cases/*.txt` | The six snippets, exactly as reviewed |
-| `gold.json` | Level, expected finding count, planted flaws and control flag per case |
+| `gold.json` | Level, expected finding count, planted flaws and control flag per case, as copied from the legacy corpus |
+| `gold-amended.json` | The same, plus the seven flaws the owner adjudicated real after round 4 (post hoc) |
 | `round1/*.md` | Round 1 reviews by the first build, exactly as written |
 | `round2/new-*.md` | Round 2 reviews by the revised port |
 | `round2/legacy-*.md` | Round 2 reviews by the legacy skill (baseline) |
