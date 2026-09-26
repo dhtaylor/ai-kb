@@ -1,0 +1,15 @@
+SUBJECT: Recommendation on APAC Expansion — Thailand Entry Decision
+
+BLUF: We judge, with moderate confidence, that Thailand is the right first APAC market for a FY2026 entry. The risk-adjusted opportunity outweighs the alternatives reviewed; however, if partner-channel depth proves shallower than scoped, the bear case favors deferral to FY2027.
+
+BACKGROUND
+Salesforce and HubSpot entered Southeast Asia via Singapore hubs in 2018–2020 and reported 3–4 year payback periods (company investor presentations, public filings). IDC's 2024 Southeast Asia SaaS report pegs Thai cloud-software spend at $620M, growing 18% YoY — ahead of Malaysia ($510M, 14%) and Vietnam ($380M, 12%). Our own customer-discovery interviews (n=18 Thai enterprise buyers, Q1 2025, conducted by our regional BD team) show willingness-to-pay at 85–90% of US rack rates and a preference for local-language support our Singapore team can already provide.
+
+ASSESSMENT
+We assess that Thailand's favorable CAC-to-LTV profile — estimated 2.8× based on our Indonesia cohort (nearest proxy, n=200 active accounts, 24-month vintage) — and its lower regulatory complexity relative to Vietnam make it the leading candidate. Confidence is moderate: the Indonesia analogy is directionally sound but subject to Thai-specific channel dynamics we have not yet fully mapped.
+
+ALTERNATIVE CONSIDERED
+The strongest alternative is a Philippines-first entry, which offers a larger English-speaking talent pool and lower support-delivery cost. We assessed this as viable but second-best: Philippine enterprise buying cycles run approximately 20% longer per our regional partner survey (Q4 2024, n=12 resellers), which delays breakeven by roughly one quarter and reduces NPV at our 12% hurdle rate.
+
+RECOMMENDATION
+Approve a Thailand pilot with a $1.2M budget cap through Q4 2025. Formal go/no-go review at month six against two leading indicators: pipeline coverage ratio ≥3× and partner NPS ≥40. If either threshold is missed, management will present a revised entry or deferral plan before committing additional capital.

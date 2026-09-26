@@ -1,0 +1,82 @@
+{
+ "fin-01-fed-slack": {
+  "level": "Light",
+  "gold": [
+   {
+    "flaw": "absent uncertainty language on directional market calls",
+    "standard_or_bias": "ATS #2",
+    "why": "'will compress' and 'will underperform' present two contested market predictions as certainties; even an informal alert should hedge directional calls."
+   }
+  ],
+  "expected_finding_count": "0-1",
+  "is_control": false
+ },
+ "epi-01-mpox-goma": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "buried BLUF",
+    "standard_or_bias": "ATS #6",
+    "why": "the key judgment ('sustained community transmission is unlikely') appears in paragraph 2; the memo leads with case counts rather than the bottom line."
+   },
+   {
+    "flaw": "base-rate neglect",
+    "standard_or_bias": "ATS #8",
+    "why": "concluding transmission is unlikely from 68% contact-tracing coverage treats the unassessed 32% (~48 contacts) as negligible rather than a material uncertainty gap."
+   },
+   {
+    "flaw": "absence-of-evidence treated as evidence-of-absence",
+    "standard_or_bias": "ATS #8",
+    "why": "'no secondary cases among reached contacts' is the sole empirical basis for the low-transmission judgment; absence of detection in 68% cannot establish absence in the remaining 32%."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false
+ },
+ "geo-02-balkans-assessment": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "conflating reported information with analyst judgment",
+    "standard_or_bias": "ATS #3",
+    "why": "'Serbia has assessed these exercises as routine training' presents Belgrade's own self-characterization, sourced from state outlet Tanjug, as an independent analytic finding."
+   },
+   {
+    "flaw": "mirror-imaging",
+    "standard_or_bias": "mirror-imaging / ATS #8",
+    "why": "'a leader in Vu\u010di\u0107's position would not risk EU accession' projects a Western cost-benefit calculus onto Vu\u010di\u0107, assuming EU membership is a binding deterrent rather than a bargaining chip."
+   },
+   {
+    "flaw": "overconfident / uncorroborated sourcing",
+    "standard_or_bias": "ATS #1 / ATS #2",
+    "why": "High confidence asserted despite the primary evidence for intent being a state outlet (Tanjug); no independent corroboration or source-reliability characterization."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false
+ },
+ "biz-02-thailand-entry": {
+  "level": "Medium",
+  "gold": [],
+  "expected_finding_count": "0-1",
+  "is_control": true
+ },
+ "epi-02-dengue-andean": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "benchmark study uncited",
+    "standard_or_bias": "ATS #1",
+    "why": "the ~75% case-capture estimate is attributed to '2019\u20132023 active surveillance benchmarks' with no specific publication cited; a minor sourcing nit in an otherwise well-formed product."
+   }
+  ],
+  "expected_finding_count": "0-1",
+  "is_control": true
+ },
+ "clim-02-pnw-fire-forecast": {
+  "level": "Full",
+  "gold": [],
+  "expected_finding_count": "0-1",
+  "is_control": true
+ }
+}

@@ -1,0 +1,10 @@
+FORECAST: Pacific Northwest Wildfire Season Outlook
+
+BOTTOM LINE UP FRONT: We assess with moderate confidence (60–75%) that the 2024 Pacific Northwest wildfire season will exceed the 10-year average burned area. The primary drivers are a below-normal spring snowpack and a projected blocking high-pressure ridge persisting into August. An alternative scenario — a wet June–July pattern analogous to 2011 — would suppress fire activity regardless of snowpack deficit; we assign this scenario roughly 25% probability based on current ensemble guidance.
+
+KEY JUDGMENTS
+1. Cascades snowpack measured 68% of April 1 median (NRCS SNOTEL network, observation-grade, 800+ sensor stations across the West). Snowpack deficit correlates with regional burned area at r ≈ 0.61 over 1990–2023; substantial interannual noise remains and the relationship is not deterministic.
+2. Blocking ridge projections rest on NOAA operational seasonal outlooks (updated monthly, operationally validated) and University of Washington ensemble runs (research-grade, single institution — treat with commensurate caution; no independent corroboration cited here).
+3. We do not assess a catastrophic single-event season comparable to the 2020 Labor Day fires as likely; that scenario requires specific ignition-timing and wind conditions not captured in seasonal outlooks and carries less than 15% probability.
+
+CONFIDENCE CAVEATS: Seasonal fire forecast skill degrades substantially beyond six weeks. This assessment describes a probability distribution, not a point prediction. Reassess when June precipitation data are available.

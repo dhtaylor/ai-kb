@@ -1,0 +1,11 @@
+EPIDEMIOLOGICAL FORECAST
+SUBJECT: Dengue Transmission Risk, Andean Region, Q3 2025
+PREPARED: WHO/PAHO Regional Surveillance Unit | DATE: 01 June 2025
+
+BOTTOM LINE: Dengue transmission across Colombia, Peru, and Ecuador will likely remain above the 10-year seasonal median through August 2025 (assessed probability: ~60–70%), driven by residual DENV-3 serotype circulation and above-average precipitation in lowland endemic zones. This updates and revises upward our March 2025 assessment (50–60%), reflecting a confirmed serotype shift and April precipitation anomalies.
+
+BASIS AND SOURCE RELIABILITY: Findings draw on (a) PAHO and national Ministry of Health case reports — assessed as moderately reliable, estimated to capture ~75% of true incidence based on 2019–2023 active surveillance benchmarks — and (b) ECMWF seasonal precipitation forecasts, verified at a 0.72 skill score for the Andean region. Overall analytic confidence is moderate, reflecting El Niño–La Niña transition uncertainty.
+
+ALTERNATIVE SCENARIO: Transmission returns to seasonal baseline by July if La Niña onset occurs earlier than the ECMWF June median projection (~30% probability). Stocks pre-positioned under the baseline scenario remain available for 2026 at minimal carrying cost if the alternative materializes.
+
+SO WHAT: Health ministries should pre-position vector control supplies no later than mid-July to ensure availability at the August transmission peak; the decision is low-regret under either scenario.
