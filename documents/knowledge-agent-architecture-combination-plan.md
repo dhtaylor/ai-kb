@@ -518,7 +518,7 @@ exists, is regression-tested, and now runs at every commit that can break a cros
 engine's hook plus each library's own hook, when siblings are installed — with `kb-audit` as the
 periodic backstop (ADR-0010), rather than the credentialed CI job originally imagined here.
 **Wave 1 (2026-09-24):** `intelligence-analysis`, folded from a legacy skill's reference files,
-library only; the skill itself is not yet rebuilt as a thin agent. Retrieval eval 15/16 on the
+the skill itself was rebuilt afterwards as a fact-free skill in a new `analysis-tools` plugin (§9.17). Retrieval eval 15/16 on the
 corrected protocol, with the evidence kept in the library (§9.14). Next waves: `create-user-story`
 (the first multi-domain fold: a general requirements canon plus `product:azure-devops`) and
 `humanizer`.
@@ -895,3 +895,37 @@ the contract. The three misses were already known kinds:
 
 One agent's search strayed into the engine's plan document, outside the knowledge base, and used
 none of it in an answer. No golden or eval content reached any agent.
+
+### 9.17 The first thin skill over a library, and what a behavioural eval found (2026-09-26)
+
+The legacy `intelligence-analysis` skill was rebuilt as a skill that holds no facts, in a new
+`analysis-tools` plugin. It keeps the legacy procedure, both its review mode and its coaching mode,
+and retrieves every standard, technique and bias from the library, citing the files. It is a skill
+rather than a subagent because coaching is a conversation, and a subagent cannot hold one. "Thin"
+turned out to mean fact-free, not any particular mechanism. The coaching log moved to a user-level
+file outside every repository, and only a coaching session creates it. The embedded-fact lint now
+covers every plugin rather than only `knowledge-tools`.
+
+Retrieval was never the problem. Every blind reviewer cited real library files, and none opened the
+answer key. The problem was **restraint**. A graded sample of six cases from the legacy corpus, three
+of them clean controls, found three failures, all of them over-reviewing:
+
+- **Behaviour excluded from the fold must be brought back deliberately.** The fold correctly left
+  the legacy review rules out of the library as behaviour. The first port restored only some of
+  them, and the reviews showed which were missing: the finding count follows quality rather than
+  level, the fix should be only as elaborate as the level, sourcing that looks cited but is not, and
+  a buried bottom line ranks first.
+- **The legacy skill had the main flaw too.** A baseline run of the legacy skill promoted both memos
+  to the full rubric because of what was at stake, exactly as the port did. A new rule, **the
+  product's form sets its level**, fixed that: both memos were then reviewed at the right level.
+  This goes beyond parity. It is a behaviour change.
+- **Restraint on clean products remains open.** On the three hard cases the port and the legacy
+  skill each passed one, but not the same one. A likely structural cause: legacy reviewers read one
+  or two reference files, while the port's reviewers read all four library files, and more
+  tradecraft in context gives a reviewer more to find. That is a cost of retrieving rather than
+  embedding.
+
+Each case ran once, so these results say which way things point, not how often they happen. Per
+§9.16, the remaining misses were not patched one run at a time. The legacy skill stays in place
+until a multi-trial run over the corpus can measure restraint properly. The review transcripts were
+kept only in scratch and are not archived here.

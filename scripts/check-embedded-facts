@@ -25,9 +25,8 @@ Exit 0 clean, 1 on any finding.
 """
 import pathlib, re, sys
 
-DEFAULT_DIRS = ["plugins/knowledge-tools/skills",
-                "plugins/knowledge-tools/agents",
-                "plugins/knowledge-tools/commands"]
+DEFAULT_DIRS = [str(p) for kind in ("skills", "agents", "commands")
+                for p in sorted(pathlib.Path("plugins").glob(f"*/{kind}"))]
 
 RULES = [
     ("absolute path",

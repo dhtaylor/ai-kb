@@ -11,6 +11,12 @@
       "description": "Maintenance and retrieval behaviour for the governed knowledge base: create, fold, reshape, distil and sweep domains, and query them under the retrieval contract.",
       "source": "./plugins/knowledge-tools",
       "category": "knowledge"
+    },
+    {
+      "name": "analysis-tools",
+      "description": "Thin analytic-reasoning behaviour over the governed knowledge base: reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft, retrieving every standard and technique from its knowledge library at runtime.",
+      "source": "./plugins/analysis-tools",
+      "category": "analysis"
     }
   ]
 }

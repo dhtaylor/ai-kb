@@ -1,0 +1,9 @@
+{
+  "name": "analysis-tools",
+  "description": "Thin analytic-reasoning behaviour over the governed knowledge base. Reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft, retrieving every standard, technique, and bias from the intelligence-analysis knowledge library at runtime. Holds no facts of its own.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Dandy Taylor"
+  },
+  "keywords": ["intelligence-analysis", "analytic-rigor", "coaching", "review", "tradecraft"]
+}
