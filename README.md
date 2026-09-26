@@ -92,11 +92,11 @@ This is early, working software, version 0.1.0, with one author so far.
 
 - **Built and tested:** the contract, ADRs 1 to 10, the five skills, the retrieval agent, both
   halves of the retrieval eval, and the guardrails above.
-- **Evidenced, not guaranteed:** that an agent retrieves rather than recalls has been tested on four
-  libraries by agents that never saw the answer key. The latest recorded runs scored 15/16, 16/16
-  and 14/17 on the three newest, each of which keeps its runs' answers and grades as evidence. The
-  first library's single run survives only as a note in the plan. The protocol changed between runs as defects in the eval itself were found; the plan's
-  §9.14–9.15 records which.
+- **Evidenced, not guaranteed:** that an agent retrieves rather than recalls has been tested on five
+  libraries by agents that never saw the answer key. The latest recorded runs scored 15/16, 16/16,
+  14/17 and 16/19 on the four newest, each of which keeps its runs' answers and grades as evidence.
+  The first library's single run survives only as a note in the plan. The protocol changed between runs as defects in the eval itself were found; the plan's
+  §9.14–9.16 records which.
 - **Next:** rolling out further domains, then orchestration across domain agents, then
   steady-state upkeep. The full plan, including what building it proved and disproved, is in
   [`documents/knowledge-agent-architecture-combination-plan.md`](documents/knowledge-agent-architecture-combination-plan.md).

@@ -4,10 +4,11 @@
 **Date:** 2026-09-18 · **Revised:** 2026-09-19
 **Status:** **Phases 0–2 complete.** Guardrails, decisions, the five skills, the retrieval agent and
 both halves of the eval are built and tested; two domain libraries hold 24 facts. The central claim —
-that an agent retrieves rather than recalling — is **evidenced for four libraries**, not
+that an agent retrieves rather than recalling — is **evidenced for five libraries**, not
 guaranteed. The latest recorded runs score 15/16 for `intelligence-analysis`, 16/16 for
-`agile-requirements` and 14/17 for `azure-devops` (§9.14, §9.15). **Phase 3 is in progress:** waves 1
-and 2 stood up three libraries (all local, not yet pushed). Phase 4 onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
+`agile-requirements`, 14/17 for `azure-devops` and 16/19 for `ai-writing-signals` (§9.14–9.16).
+**Phase 3 is complete:** three waves stood up four libraries, all local and not yet pushed. Phase 4
+onward is not started. Originally hardened by a five-lens adversarial review (findings tagged
 `(hardening — <severity>)`); now revised again from **build findings** — see §9, which records what
 implementation proved, disproved and cost.
 
@@ -528,8 +529,13 @@ facts were checked against Microsoft Learn. That was only to confirm or qualify 
 said: no fact was added from the web. One was found genuinely **CONFLICTED**, because Microsoft's own
 pages disagree about whether Agile's User Story carries Acceptance Criteria. That is the knowledge
 base's first real contradiction, and it needs a live Azure DevOps organization to resolve. The
-owner's house conventions were excluded as personal. Evals: 16/16 and 14/17 (§9.15). Remaining
-wave: `humanizer`.
+owner's house conventions were excluded as personal. Evals: 16/16 and 14/17 (§9.15).
+**Wave 3 (2026-09-25):** `humanizer` went to `ai-writing-signals` (general). The domain decays fast by
+its own account, so it carries the shortest freshness horizon installed (60d) and era-tags its
+vocabulary tells. Vendor-specific artifact strings are kept as examples of a general principle, and
+none is attributed to a tool because the source names none. That is a deliberate, recorded bend of
+§1. A disagreement between the skill's scanner and its catalog was reported and not folded. Eval:
+16/19 on an unchanged protocol (§9.16). **Phase 3 is complete.**
 
 ### Phase 4 — Orchestration + safety hardening
 Thin orchestrator (**routes, capped fan-out**, §5A) over the domain workers; full least-privilege tool audit;
@@ -872,3 +878,20 @@ contract rather than in the knowledge.
 Contamination stayed contained. In one run 1 agent, two searches ran without the exclusion glob;
 they returned filenames only, so the golden file's path showed but none of its content did. In run 2,
 no agent touched the oracle, as their tool calls confirm.
+
+### 9.16 The first eval on a protocol that did not move (2026-09-25)
+
+`ai-writing-signals` is the first library evaluated after the eval stopped changing under it, so its
+16/19 measures the knowledge and the agent, not the apparatus. No defect was found in the grader or
+the contract. The three misses were already known kinds:
+
+- **Two were the one-sentence pattern (§9.15).** The agent quoted a different sentence from the
+  right file that states the same fact. This catalog states some facts three or four ways.
+  `alt_excerpt` reduces this pattern but can't eliminate it, and adding alternatives after each run
+  would make the oracle follow the agent. None was added.
+- **One was a refusal that explained itself.** The agent refused, then cited the files that showed
+  *why* no answer exists, and paraphrased the fixed phrase. The contract already covers this case:
+  a refusal names what it checked in its text and cites nothing. So it is a miss, not a gap.
+
+One agent's search strayed into the engine's plan document, outside the knowledge base, and used
+none of it in an answer. No golden or eval content reached any agent.
