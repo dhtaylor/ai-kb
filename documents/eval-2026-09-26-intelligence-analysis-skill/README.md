@@ -83,6 +83,37 @@ stay out of this folder.
   337" is 86%. The gold key's own reasoning uses the 68% figure. Round 3's epi-01 reviewer found the
   inconsistency, and nobody had noticed it before.
 
+## Round 4: 3/6, library files loaded on need (`56ba045`)
+
+This round tested a structural hypothesis: that over-reviewing came from reading all four library
+files before judging. Review mode was changed to load only the router and the standards file up
+front, and to open another file only to confirm and name a finding that had already survived the
+gates. The six cases re-ran under the same separation.
+
+| Case | Library files read | Result |
+|---|---|---|
+| fin-01 | 2 | **Pass.** 1 finding, the gold flaw |
+| geo-02 | 4 | **Pass.** 3 findings, all gold flaws in substance; mirror-imaging named |
+| epi-01 | 4 | **Pass.** Medium, 3 findings; absence of evidence named |
+| biz-02 (control) | 3 | **Fail.** 2 findings |
+| epi-02 (control) | 3 | **Fail.** 3 findings; the gold flaw was credited as sourcing |
+| clim-02 (control) | 2 | **Fail.** 2 findings |
+
+- **The hypothesis is disconfirmed.** Reviewers did load less. The clim-02 reviewer read two files
+  and still wrote the same two findings as round 3.
+- **Control findings recur across rounds.** Independent reviewers under three versions of the skill
+  converged on the same specific issues in the controls:
+  - biz-02: the unsourced regulatory comparison with Vietnam, and the small-sample surveys
+  - epi-02: anchoring on the prior estimate, the unsourced serotype shift, and the carrying-cost
+    assumption
+  - clim-02: the unattributed r ≈ 0.61, and likelihood conflated with confidence in the bottom line
+
+  A checklist effect would not produce that consistency. Either the reviewers' threshold for a
+  finding sits below the corpus author's, or these controls are less clean than their gold keys
+  say. Only a human reading of those recurring findings can settle which.
+- **The load-on-need change is kept.** It cost nothing on the flawed cases, it matches the legacy
+  skill's own "read as you need them" rule, and reviewers used somewhat less context.
+
 ## Files
 
 | Path | What |
@@ -93,3 +124,4 @@ stay out of this folder.
 | `round2/new-*.md` | Round 2 reviews by the revised port |
 | `round2/legacy-*.md` | Round 2 reviews by the legacy skill (baseline) |
 | `round3/*.md` | Round 3 reviews at `90979d4` |
+| `round4/*.md` | Round 4 reviews at `56ba045` |

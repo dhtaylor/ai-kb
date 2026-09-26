@@ -940,3 +940,13 @@ control. So restraint is not a wording problem to be patched. It needs either a 
 such as loading library files only when a candidate finding needs one, or a multi-trial measurement
 of what it actually costs. The round also found a defect in the legacy corpus: one snippet's
 contact-tracing percentage contradicts its own counts.
+
+**Round 4 tested the structural route and disconfirmed it.** Review mode now loads library files only
+when a finding that has survived the gates needs one. Reviewers did load less, and the score was
+unchanged at 3/6: flawed products 3/3, controls 0/3. One control's reviewer read two files and wrote the
+same two findings as the round before. More telling, the controls' findings **recur**: independent
+reviewers under three versions of the skill converged on the same specific issues in each clean
+product. That is not a checklist effect. Either the reviewers' bar for a finding sits below the
+corpus author's, or the controls are less clean than their gold keys say, and only a human reading
+of the recurring findings can decide which. The load-on-need change is kept anyway. It cost
+nothing on the flawed cases and matches the legacy skill's own rule.
