@@ -110,7 +110,7 @@ Place the product on this ladder and hold it to that bar *only*. The levels and 
 this skill's own behavior (they are not in the library — calibrating *this* skill's output volume is
 not a tradecraft fact):
 
-- **Light** (a tweet, a chat message, a quick email, an offhand claim). **Cap: 0–1 finding.** Ask
+- **Light** (a tweet, a chat message, a quick email, a flash or alert note, an offhand claim). **Cap: 0–1 finding.** Ask
   only: is the single load-bearing claim stated with more certainty than its basis supports? If yes,
   that's your one finding. If not, say "sound for a quick note" and stop. Do not flag a missing bottom
   line, missing alternatives, or missing sourcing at this level — those checks do not apply here, and
@@ -120,15 +120,23 @@ not a tradecraft fact):
   supported; is information kept separate from assumption and from judgment; are the key assumptions
   surfaced; is at least one serious alternative weighed; is uncertainty expressed in calibrated
   language rather than a vague hedge; are the sources that carry the conclusion characterized.
-- **Full** (a formal assessment, forecast, threat/risk analysis, strategy document, anything
-  consequential or externally read). **Cap: ~3–5 findings.** The complete rubric applies — retrieve it
+- **Full** (a formal assessment, forecast, estimate, threat/risk analysis, or strategy document).
+  **Cap: ~3–5 findings.** The complete rubric applies — retrieve it
   (below) — including analysis of alternatives, an explicit statement of how this relates to prior
   analysis, and calibrated language throughout, but still prioritized and capped.
 
 **The product's form sets its level.** If its form is named in a level's list above, that is its
 level — stakes and audience do not promote a listed form. A memo that drives a large decision is still
-a memo: review it at Medium. The "consequential or externally read" clause places only products whose
-form no list names. Promoting a product because it matters is the usual route to over-reviewing it.
+a memo: review it at Medium. Two defaults cover the rest:
+
+- **A short message is Light**, whoever sent it and whatever it concerns. A few sentences sent as an
+  email, a chat post or a flash note is a message, even when a headquarters sends it about a serious
+  subject.
+- **A form no list names is Medium.** A news item, an op-ed, an equity note or a board update is
+  Medium unless it presents itself as a formal assessment, forecast, estimate, threat/risk analysis or
+  strategy document. Only then is it Full.
+
+Promoting a product because it matters is the usual route to over-reviewing it.
 
 **Retrieve which checks actually apply at each level** from the library's tradecraft-standards file
 before scoring — the mapping above is this skill's plain-language paraphrase for calibrating quickly.
