@@ -1,0 +1,31 @@
+{
+  "case": "sport-01-lillard-clutch",
+  "A": {
+    "level_stated": "Light",
+    "level_ok": true,
+    "finding_count": 1,
+    "gold_caught": [
+      "illusory correlation / law of small numbers — labeled 'oversensitivity to consistency / the law of small numbers', tied to Standard #8 (overclaiming) and #3 (info vs. judgment); same substance as gold."
+    ],
+    "gold_missed": [],
+    "extras": [],
+    "count_ok": true,
+    "fix_quality": 3,
+    "score": 7
+  },
+  "B": {
+    "level_stated": "Light",
+    "level_ok": true,
+    "finding_count": 1,
+    "gold_caught": [
+      "law of small numbers — labeled identically to A's substance, tied to Standards #8/#3; additionally notes the note gives 'no attempts, misses, or career baseline'."
+    ],
+    "gold_missed": [],
+    "extras": [],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 8
+  },
+  "winner": "B",
+  "rationale": "Both reviews correctly scope to the Light level and identify, in substance, the single planted law-of-small-numbers/illusory-correlation flaw, with no extraneous findings padding the count. Review B's writeup and fix are more careful — it flags that the note omits attempts/misses/baseline, while Review A's illustrative fix invents an unsupported '4-for-4' stat, an overclaim ironic in a review about overclaiming."
+}

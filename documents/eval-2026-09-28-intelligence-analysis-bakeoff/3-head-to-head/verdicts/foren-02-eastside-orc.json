@@ -1,0 +1,49 @@
+{
+  "case": "foren-02-eastside-orc",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 4,
+    "gold_caught": [
+      "overconfident single-source sourcing",
+      "absence of evidence treated as evidence of absence",
+      "conflating information with judgment"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Certainty escalates from hedged 'likely' in the Executive Summary to unhedged 'confirms' in the Analysis, with no confidence level ever stated separate from likelihood (Standard #2).",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 9
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "overconfident single-source sourcing",
+      "absence of evidence treated as evidence of absence",
+      "conflating information with judgment"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Certainty escalates from 'likely' (BLUF) to 'confirms' (Analysis) with no confidence level stated separately from likelihood.",
+        "ruling": "real"
+      },
+      {
+        "summary": "The 'absence of incidents' data point is not independent corroboration of CI-7 — both trace back to the same underlying event (the August arrests), so treating them as two converging sources is itself a sourcing error.",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 8
+  },
+  "winner": "A",
+  "rationale": "Both reviews independently identify all three planted flaws, state the correct (Full) review level, and propose the same core techniques (ACH, source quality-of-information check, calibrated ICD-203 language), with B contributing a sharp extra observation that the two 'corroborating' data points are not actually independent. A wins narrowly because it gives the 'conflating information with judgment' flaw a full standalone finding with quote, mechanism, and a concrete fix (marking information/judgment/assumption explicitly), whereas B only surfaces that same flaw as a terse scorecard note without a dedicated fix, making its treatment of that gold item noticeably thinner."
+}

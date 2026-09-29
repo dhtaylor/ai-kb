@@ -1,0 +1,46 @@
+{
+  "case": "fin-05-credit-spread-forecast",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "illusory correlation on PCE-spread 'tandem' claim (labeled explicitly as illusory correlation, confound proposed: growth regime rather than gold's Fed rate cycle, but same substance)",
+      "single-source overconfidence on 'high confidence' LEI call (labeled as 'oversensitivity to consistency / law of small numbers' rather than gold's 'single-source overconfidence', but same substance: confidence not calibrated to a thin, single-series evidentiary base)"
+    ],
+    "gold_missed": [
+      "anchoring (95 bps landing only 7bps above the January 88bps call despite two newly cited risks) — not raised as a weakness anywhere; the fact that the revision is tied to the prior call is instead credited as a strength under Standard #7 (a different, legitimate point about transparency, but it leaves the anchoring bias itself unflagged)"
+    ],
+    "extras": [
+      {
+        "summary": "LEI-implied widening doesn't scale with the stated rule: the memo's own rate is 8-12bps per 0.5-point LEI decline, but April's decline was 1.0 point (double), yet the same 8-12bps range is applied without adjustment or justification — implying ~16-24bps if the stated rate is taken at face value",
+        "ruling": "real — this is a self-contained, textual internal-consistency error (no outside knowledge needed) that directly undermines the 'high confidence' directional call and the 90-100bps range; a careful analyst would want this flagged"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "anchoring on the revision magnitude (labeled explicitly as anchoring, matches gold precisely: 95bps vs 88bps despite two new risk inputs)",
+      "illusory correlation / reverse causality on the inflation-spread link (labeled explicitly as illusory correlation, matches gold, also adds a reverse-causality/ACH angle)",
+      "law of small numbers on the LEI relationship (labeled as 'law of small numbers' rather than gold's 'single-source overconfidence', but same substance: confidence asserted without stating instance count or corroborating basis)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Scorecard rates Standard #9 'Fair' and states a simple time-series chart of the LEI/PCE relationships would make the memo more checkable, treating the absence of a chart as a minor gap",
+        "ruling": "nitpick — a 16-line macro-outlook memo update doesn't clearly call for a chart; Review A's N/A treatment of the same standard is the more proportionate read, and this scorecard note is marginal rather than a substantive flaw"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "winner": "B",
+  "rationale": "Review B is the only one to catch all three planted flaws (anchoring, illusory correlation, and small-numbers/single-source overconfidence) with clearly matching substance and mostly matching labels, while Review A missed anchoring entirely and instead credited the same revision behavior as a strength. Review A's extra finding (the LEI 0.5-vs-1.0-point scaling inconsistency) is a genuine, well-argued bonus catch, but it does not offset missing one of the three core planted flaws, so B is more useful to the author overall."
+}

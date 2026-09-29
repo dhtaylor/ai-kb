@@ -1,0 +1,56 @@
+{
+  "case": "sport-02-thornton-draft",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 4,
+    "gold_caught": [
+      "confirmation bias (ATS #4 / AoA) — caught directly via 'No alternative considered' / 'No significant negatives identified' finding",
+      "conjunction inflation (ATS #8) — caught in substance, embedded within the Standard-2 uncertainty finding: explicitly names that the year-2 / years-3-5 / year-4 'will' claims chain and compound ('three sequential will claims compound, they don't just add up to one confident story'), rather than presented as its own separate bullet"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Comparable (Paul George, pre-injury) is asserted with no stated similarity criteria, no base rate for comp-hit rate, and no alternative comp considered",
+        "ruling": "real"
+      },
+      {
+        "summary": "Interpretive labels ('defensive intangibles', 'under pressure') folded into the SUPPORTING DATA bullets without a signal phrase separating reported fact from analyst judgment",
+        "ruling": "nitpick"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 9
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 4,
+    "gold_caught": [
+      "confirmation bias (ATS #4 / AoA) — caught directly via 'No alternative hypothesis or downside case considered' finding"
+    ],
+    "gold_missed": [
+      "conjunction inflation (ATS #8) — B's parallel finding ('Overclaimed certainty') stays at generic miscalibration ('will' stated as fact, no numeric confidence), but never identifies that the year-2/years-3-5/year-4 claims are independently uncertain and that stacking them compounds the uncertainty; this is a related but substantively different point, not a relabeling of the same flaw"
+    ],
+    "extras": [
+      {
+        "summary": "Overclaimed certainty / best-guess-uncertainty-drop — 'will' used for future outcomes with no calibrated likelihood or evidence base for the stated confidence",
+        "ruling": "real"
+      },
+      {
+        "summary": "Single-game performance (28 pts in SEC championship) elevated to a stable 'performs under pressure' trait — law of small numbers / vividness",
+        "ruling": "real"
+      },
+      {
+        "summary": "Comparable (Paul George) is a single elite-outlier anchor with no stated base rate for the outcome distribution",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": false,
+    "fix_quality": 5,
+    "score": 7
+  },
+  "winner": "A",
+  "rationale": "A catches both planted flaws — it explicitly names the compounding of the three chained 'will' claims (conjunction inflation) as part of its uncertainty finding, while B's parallel finding only flags generic miscalibration and never identifies that stacking three independently uncertain projections is itself the problem, leaving that gold flaw uncaught. A also lands inside the key's expected finding count once its one nitpick is set aside, whereas B's three legitimate-but-uncounted extras push it over the range despite comparably strong, concrete fixes."
+}

@@ -1,0 +1,42 @@
+{
+ "sci-02-mrna-flu-vaccine-brief": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "geo-01-strait-flash": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "sport-01-lillard-clutch": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "clim-01-arctic-briefing": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "news-02-congestion-pricing-oped": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "fin-03-solaris-equity-memo": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "sci-01-breakfast-diabetes": {
+  "A": "legacy",
+  "B": "new"
+ },
+ "biz-04-atlas-board-update": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "tech-01-kafka-events-store-spike": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "fin-05-credit-spread-forecast": {
+  "A": "new",
+  "B": "legacy"
+ }
+}

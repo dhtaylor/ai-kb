@@ -960,3 +960,22 @@ generalises: **a clean control is a claim, and it needs the same scrutiny as a p
 independent reviewers converge on the same "false positive", check the key before the reviewer. One
 genuine weakness in the port survives the amendment: it missed one planted flaw, a number that looks
 sourced but isn't, in three of four rounds.
+
+**Bake-off against the legacy skill (2026-09-26 to 2026-09-28).** Archived, with protocol, blind
+mapping and verdicts, in `documents/eval-2026-09-28-intelligence-analysis-bakeoff/`. The two skills
+reviewed held-out cases from the corpus, blind judges scored each pair, and one run went to each
+case.
+
+- **First, on 10 held-out cases, the legacy skill won 6–3–1.** The new skill lost mostly on review
+  level: forms that no list named were promoted to the full rubric.
+- **Two level rules followed:** unlisted forms default to Medium and short messages to Light, and a
+  title does not set the level.
+- **Then, head to head on the 6 remaining cases, the new skill won 4–2.** It caught 13 of 13 planted
+  flaws against 11, and its finding count was in range on 6 of 6 against 4.
+
+The title rule itself failed. Both of the cases it targeted stayed at the full rubric under both
+skills, so the skills now tie on level and miss at the same boundary. Two biases pull in opposite
+directions: the legacy skill was built on this corpus, and the last wording was written after
+seeing two of the final cases. The fair reading is that the new skill has moved from behind to at
+least level, probably ahead. Settling it needs cases neither skill has seen. The owner kept the
+legacy skill in place.

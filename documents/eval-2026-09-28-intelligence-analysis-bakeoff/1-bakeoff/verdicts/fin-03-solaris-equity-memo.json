@@ -1,0 +1,45 @@
+{
+  "case": "fin-03-solaris-equity-memo",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": ["buried BLUF", "conjunction / scenario inflation"],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "IRA policy-uncertainty dismissal ('viewed as low probability') is unsupported, despite being the single largest swing factor in the model (ATS #2)",
+        "ruling": "real"
+      },
+      {
+        "summary": "12x EV/EBITDA re-rate multiple used to derive the price target is asserted with no comp set, historical range, or methodology (ATS #1)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": false,
+    "fix_quality": 4,
+    "score": 8
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": ["buried BLUF", "conjunction / scenario inflation"],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "24% margin assumption and 12x EV/EBITDA multiple are unsupported valuation methodology (ATS #1)",
+        "ruling": "real"
+      },
+      {
+        "summary": "IRA policy-uncertainty dismissal ('low probability') is unsupported and in tension with the model's dependence on that same condition (ATS #2 / #8)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": false,
+    "fix_quality": 4,
+    "score": 8
+  },
+  "winner": "tie",
+  "rationale": "Both reviews are substantively identical: each correctly names both gold-planted flaws, mislabels the memo's rigor level as 'Full' rather than the key's 'Medium,' and surfaces the same two additional real (not nitpick) weaknesses — the unsupported 12x EV/EBITDA multiple and the unsupported 'low probability' dismissal of the IRA risk — pushing both past the key's 2-3 expected count with equally concrete, proportionate fixes. The only differences are cosmetic (ordering of weaknesses and minor phrasing), with no consistent quality edge to either side."
+}

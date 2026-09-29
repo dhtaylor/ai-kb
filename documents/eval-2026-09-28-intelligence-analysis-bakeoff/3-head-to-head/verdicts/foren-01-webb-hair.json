@@ -1,0 +1,47 @@
+{
+  "case": "foren-01-webb-hair",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "base-rate neglect / prosecutor's fallacy (transposed conditional, drives the 99.99% figure)",
+      "missing alternative hypothesis (recommends closing alternative leads without weighing them)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Buried bottom line / BLUF placement (ATS #6) — recommendation and judgment appear only in the final lines, after lab-background narrative",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": [
+      "base-rate neglect / prosecutor's fallacy (transposed conditional, drives the 99.99% figure)",
+      "missing alternative hypothesis (recommends closing alternative leads without weighing them)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Buried BLUF (ATS #6) — same structural issue as Review A",
+        "ruling": "real"
+      },
+      {
+        "summary": "Method/source reliability of hair microscopy and the 1-in-10,000 figure's derivation never characterized (ATS #1) — subjective, examiner-dependent method with no stated reference population or validation basis",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": false,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "winner": "B",
+  "rationale": "Both reviews caught the two planted flaws (prosecutor's fallacy and missing alternative hypothesis) and both mislabeled the review level as Full when the key specifies Medium, so they are even on those dimensions. B adds a genuinely real, well-grounded third weakness — the uncharacterized reliability and provenance of the hair-microscopy match statistic itself — with a slightly more precise and proportionate fix (likelihood-ratio framing), giving it marginally more value to the author despite nominally exceeding the key's expected finding count."
+}

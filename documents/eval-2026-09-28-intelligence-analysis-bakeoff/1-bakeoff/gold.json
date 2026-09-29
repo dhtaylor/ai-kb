@@ -1,0 +1,186 @@
+{
+ "sci-02-mrna-flu-vaccine-brief": {
+  "level": "Medium",
+  "gold": [],
+  "expected_finding_count": "0-1",
+  "is_control": true,
+  "form": "research-brief",
+  "domain": "science"
+ },
+ "geo-01-strait-flash": {
+  "level": "Light",
+  "gold": [
+   {
+    "flaw": "vague estimative language",
+    "standard_or_bias": "ATS #2",
+    "why": "'likely to push this further soon' assigns no probability band and no timeframe; 'soon' is undefined, making the judgment unactionable and unverifiable."
+   }
+  ],
+  "expected_finding_count": "0-1",
+  "is_control": false,
+  "form": "email",
+  "domain": "geopolitics"
+ },
+ "sport-01-lillard-clutch": {
+  "level": "Light",
+  "gold": [
+   {
+    "flaw": "illusory correlation / law of small numbers",
+    "standard_or_bias": "ATS #8 / illusory correlation",
+    "why": "four buzzer-beaters is too small a sample to support a stable 'no pressure' trait claim; a short streak is treated as trait evidence without base-rate comparison."
+   }
+  ],
+  "expected_finding_count": "0-1",
+  "is_control": false,
+  "form": "scout-note",
+  "domain": "sports"
+ },
+ "clim-01-arctic-briefing": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "buried BLUF",
+    "standard_or_bias": "ATS #6",
+    "why": "the analytic judgment (possible tipping-point threshold warranting priority attention) appears only in the final paragraph."
+   },
+   {
+    "flaw": "vague estimative language",
+    "standard_or_bias": "ATS #2",
+    "why": "'may be increasing' and 'could represent' carry no calibrated probability; the reader cannot distinguish a low-confidence possibility from a high-confidence concern."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false,
+  "form": "briefing-note",
+  "domain": "climate"
+ },
+ "news-02-congestion-pricing-oped": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "correlation reported as causation",
+    "standard_or_bias": "correlation-causation / ATS #3",
+    "why": "the 8-point approval gain is attributed exclusively to congestion-pricing success; other drivers in the same 3-month window are not acknowledged or controlled."
+   },
+   {
+    "flaw": "mirror-imaging",
+    "standard_or_bias": "mirror-imaging / ATS #8",
+    "why": "'constituents across the board want less traffic and are willing to pay' universalizes the author's perspective; low-income car-dependent commuters who experience the toll as a burden are not modeled."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false,
+  "form": "op-ed",
+  "domain": "everyday"
+ },
+ "fin-03-solaris-equity-memo": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "buried BLUF",
+    "standard_or_bias": "ATS #6",
+    "why": "the BUY rating and $21 target appear only in the final sentence; the memo opens with background and modeling rather than the conclusion."
+   },
+   {
+    "flaw": "conjunction / scenario inflation",
+    "standard_or_bias": "conjunction fallacy / ATS #2",
+    "why": "the $21 target requires three independent conditions to hold simultaneously, but their joint probability is not discounted — presented as base case rather than one scenario in a range."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false,
+  "form": "equity-note",
+  "domain": "finance"
+ },
+ "sci-01-breakfast-diabetes": {
+  "level": "Medium",
+  "gold": [
+   {
+    "flaw": "correlation reported as causation",
+    "standard_or_bias": "correlation-causation / ATS #3",
+    "why": "an observational association is presented as a causal mechanism ('skipping breakfast disrupts... driving insulin resistance'); design cannot establish directionality or rule out confounders."
+   },
+   {
+    "flaw": "source limitations uncharacterized",
+    "standard_or_bias": "ATS #1",
+    "why": "self-reported breakfast frequency, unmeasured confounders, and observational-design limits are not mentioned; the source is presented as more definitive than its design supports."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false,
+  "form": "article-paragraph",
+  "domain": "science"
+ },
+ "biz-04-atlas-board-update": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "conflating reported information with analyst judgment",
+    "standard_or_bias": "ATS #3",
+    "why": "the Head of Product quote and Customer Success characterization are internal stakeholder opinions presented as independent evidence that the product 'resonates strongly'."
+   },
+   {
+    "flaw": "base-rate neglect / planning fallacy",
+    "standard_or_bias": "ATS #8 / planning fallacy",
+    "why": "'four more weeks at 82% complete' applies no base-rate adjustment for final-stage work expansion; the $8M ARR projection has no comparator anchor."
+   },
+   {
+    "flaw": "missing alternative hypothesis",
+    "standard_or_bias": "ATS #4",
+    "why": "'no course corrections are required' forecloses without argument the scenarios of verbal commitments not converting, sub-50% close rate, or timeline slip."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false,
+  "form": "board-update",
+  "domain": "business-strategy"
+ },
+ "tech-01-kafka-events-store-spike": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "single-source vendor sourcing",
+    "standard_or_bias": "ATS #1",
+    "why": "all performance claims cite only Confluent's own engineering blog — a vendor with a commercial interest; no independent benchmark or third-party evaluation."
+   },
+   {
+    "flaw": "vague estimative language",
+    "standard_or_bias": "ATS #2",
+    "why": "'Kafka should scale fine as we grow to enterprise tier' gives no growth projection, no enterprise-tier load definition, and no headroom analysis."
+   },
+   {
+    "flaw": "missing alternative",
+    "standard_or_bias": "ATS #4",
+    "why": "only Kafka/Confluent is evaluated; no alternative (Postgres events table, Kinesis, DynamoDB Streams, Redis Streams) is named or weighed."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false,
+  "form": "spike-recommendation",
+  "domain": "tech"
+ },
+ "fin-05-credit-spread-forecast": {
+  "level": "Full",
+  "gold": [
+   {
+    "flaw": "illusory correlation",
+    "standard_or_bias": "illusory correlation / ATS #8",
+    "why": "the 24-month PCE–spread 'tandem' is asserted as evidence inflation supports credit quality, without controlling for the confounding Fed rate cycle that plausibly drove both."
+   },
+   {
+    "flaw": "anchoring",
+    "standard_or_bias": "anchoring / ATS #8",
+    "why": "the revised 95 bps moves only 7 bps from the January 88 bps call despite two named incremental risks; proximity to the prior number looks like an anchor."
+   },
+   {
+    "flaw": "single-source overconfidence",
+    "standard_or_bias": "ATS #1 / ATS #2",
+    "why": "'high confidence' rests solely on an 18-month LEI correlation from a single series; no corroborating signals cited or characterized."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false,
+  "form": "macro-outlook",
+  "domain": "finance"
+ }
+}

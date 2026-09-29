@@ -1,0 +1,26 @@
+{
+ "geo-03-sahel-briefing": {
+  "A": "legacy",
+  "B": "new"
+ },
+ "sport-02-thornton-draft": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "foren-01-webb-hair": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "foren-02-eastside-orc": {
+  "A": "new",
+  "B": "legacy"
+ },
+ "tech-02-p1-postmortem-latency": {
+  "A": "legacy",
+  "B": "new"
+ },
+ "news-01-db-storage-slack": {
+  "A": "legacy",
+  "B": "new"
+ }
+}

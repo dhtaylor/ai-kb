@@ -1,0 +1,1 @@
+heads up — prod DB storage hit 78% this morning, up from our usual ~60% for this time of month. probably a spike from the weekend batch job. flagging for @infra-team to investigate.

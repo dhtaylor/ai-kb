@@ -1,0 +1,46 @@
+{
+  "case": "biz-04-atlas-board-update",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "base-rate neglect / planning fallacy (partial: caught explicitly for the $6.8M ARR plug in Weakness 1, citing 'base-rate neglect' by name; the timeline 82%-complete planning-fallacy component is not separately identified as base-rate neglect, only mentioned in passing under the alternatives weakness)",
+      "missing alternative hypothesis (full: Weakness 2 directly quotes 'No course corrections are required at this time' and unpacks the unstated verbal-commit-non-conversion, timeline-slip, and competitive-risk scenarios, with a premortem fix)"
+    ],
+    "gold_missed": [
+      "conflating reported information with analyst judgment (the Head of Product quote and Customer Success characterization are never raised as a standalone finding; only a scorecard aside about Standard #3 touches 'resonating strongly' language, without naming the quotes as stakeholder opinion presented as evidence)"
+    ],
+    "extras": [
+      {
+        "summary": "The 'verbally committed' caveat on the three beta converters is dropped when the $360K is counted at full value in the ARR math (Weakness 3)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 6
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": true,
+    "finding_count": 4,
+    "gold_caught": [
+      "conflating reported information with analyst judgment (full: Weakness 3 names the Head of Product and Customer Success quotes as uncorroborated, motivated internal sources cited to support the 'resonating strongly' claim, matching the gold substance under a source-quality label)",
+      "base-rate neglect / planning fallacy (full: Weakness 1 flags the $6.8M new-logo figure as an unsupported plug with no historical conversion rate; Weakness 4 explicitly names the 82%-complete-to-October extrapolation a 'planning-fallacy trap' with no base-rate adjustment)",
+      "missing alternative hypothesis (partial: Weakness 4 develops the timeline-slip alternative in full; the broader foreclosure of 'no course corrections required' across verbal-commit and close-rate risk is only noted in the Standard #4/#8 scorecard rows, not built into its own dedicated weakness)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Every forecast in the memo (revenue and schedule) is a bare point estimate with no probability or confidence language anywhere (Weakness 2)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "winner": "B",
+  "rationale": "B correctly called the document Full-level per the key (a board funding decision) while A understated it as Medium, and B's findings covered all three planted flaws in substance, including the internal-source conflation that A only touched in a scorecard footnote rather than as a real finding. Both reviews offer concrete, proportionate, well-labeled fixes and one legitimate extra finding, but B's stronger key alignment and fuller flaw coverage make it more useful to the author."
+}

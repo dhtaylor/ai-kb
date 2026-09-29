@@ -1,0 +1,43 @@
+{
+  "case": "tech-02-p1-postmortem-latency",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "conflating information with judgment — root cause stated as confirmed fact (A's #2: 'Causal mechanism asserted as fact, not distinguished from what was observed')",
+      "buried BLUF (A's #1: 'Buried BLUF')"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "No alternative explanation considered for what the v3.9.1 rollback actually fixed (ATS #4, analysis of alternatives)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "B": {
+    "level_stated": "Medium",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "conflating information with judgment — root cause stated as confirmed fact (B's #1: 'A reported recovery is written up as a confirmed cause')",
+      "buried BLUF (B's #3: 'The bottom line is buried behind the chronology')"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "No competing explanation named or ruled out (ATS #4, analysis of alternatives)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "winner": "B",
+  "rationale": "Both reviews catch the same two planted flaws (unconfirmed root cause stated as fact, buried BLUF) plus the same legitimate extra about unconsidered alternatives, with concrete, proportionate fixes and correct Medium-level framing. B's threat-ordering is more defensible — it ranks the evidentiary gap (unconfirmed causal mechanism) above the presentation issue (buried BLUF), and its closing 'one change' recommendation targets that evidentiary gap directly, whereas A's closing recommendation is a formatting fix that leaves the more consequential unconfirmed-cause problem unaddressed."
+}

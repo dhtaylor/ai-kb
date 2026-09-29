@@ -1,0 +1,18 @@
+TO: Board of Directors
+FROM: CEO
+RE: Project Atlas — Product Launch Update, Q2 2025
+
+EXECUTIVE SUMMARY
+Project Atlas, our enterprise workflow-automation module, is on track for a Q4 2025 General Availability launch. Beta feedback confirms the product is resonating strongly with target buyers, and we project Atlas will generate $8M in ARR within 12 months of GA.
+
+BETA FEEDBACK
+All seven beta customers rated overall satisfaction at 4.2/5 or above. Three customers — Meridian Logistics, Apex Financial, and Northbrook Health — have verbally committed to conversion at GA. Per our Head of Product: 'Atlas solves a problem enterprise customers have been waiting years for.' Our Customer Success team characterizes the response as 'best-in-class for an enterprise beta.'
+
+TIMELINE AND BUDGET
+Development is 82% complete. Engineering estimates four more weeks of remaining work, putting GA in early October — six weeks ahead of our Q4 milestone. Budget is on track at $2.1M spent against a $3.0M total authorization. Team velocity has been strong throughout.
+
+GROWTH PROJECTION
+Atlas will reach $8M ARR within 12 months. Enterprise buyers are actively seeking workflow-automation tools (Gartner, 2024). We have three committed beta converters (at our $120K average ACV = $360K) and a pipeline of 14 qualified prospects. Converting seven of those 14 — a 50% close rate — yields $840K in year-one ARR. The remaining $6.8M is expected from new logo acquisition through our standard outbound motion.
+
+RECOMMENDATION
+Approve continued development through GA. No course corrections are required at this time.

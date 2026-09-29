@@ -1,0 +1,14 @@
+P1 Postmortem — API Latency Spike, 2026-06-14 (DRAFT)
+
+Timeline:
+- 14:32 UTC: p99 API latency crossed 4,000 ms; SLA alert triggered.
+- 14:38 UTC: On-call engineer acknowledged, began investigation.
+- 14:51 UTC: v3.9.1 rolled back after logs showed elevated query times on the /user-events endpoint.
+- 14:55 UTC: Latency returned to baseline. Incident duration: ~23 minutes.
+
+Root cause: The v3.9.1 release introduced a missing index on the `events` table, causing full-table scans under concurrent write load.
+
+Action items:
+1. Backfill the missing index on `events`.
+2. Add an EXPLAIN-based slow-query check to the CI pipeline to catch missing indexes pre-deploy.
+3. Review tables added in the last three sprints for missing indexes.

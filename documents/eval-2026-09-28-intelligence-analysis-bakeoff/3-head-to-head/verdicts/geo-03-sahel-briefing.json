@@ -1,0 +1,50 @@
+{
+  "case": "geo-03-sahel-briefing",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": [
+      "conjunction/scenario inflation (weakness #3, correctly labeled ATS #2; matches gold's four-step chain critique with per-link probability fix)",
+      "absence-of-evidence treated as evidence-of-absence (weakness #2; review labels it Standard #4 'analysis of alternatives' rather than gold's ATS #8, but the quoted text and substance are identical to the gold flaw — label mismatch, substance match)"
+    ],
+    "gold_missed": [
+      "missing/ignored alternative hypothesis (ATS #4): review's weakness #2 raises the JNIM/ISGS insurgency as a threat to the *stability* judgment, but never identifies competing trajectories for the Africa Corps *expansion forecast itself* (e.g., AES cohesion fracturing, a transactional/limited presence) that the key calls out — so the actual planted flaw is not addressed, despite the coincidental standard label."
+    ],
+    "extras": [
+      {
+        "summary": "Buried BLUF — ASSESSMENT follows a BACKGROUND paragraph instead of leading (weakness #1, ranked most severe)",
+        "ruling": "nitpick — the document is 10 lines with clearly labeled sections; a reader loses nothing by skipping to 'ASSESSMENT:'. Ranking this as the single most threatening weakness (ahead of the conjunction fallacy and the evidence-of-absence error) overstates its severity relative to the analytic-validity flaws."
+      },
+      {
+        "summary": "Core cohesion judgment and forecast are not attributed to any specific source; COLLECTION BASIS is a generic undifferentiated list (weakness #4)",
+        "ruling": "nitpick — a collection-basis line naming source categories is the customary convention for a short-form briefing at this length; demanding per-claim attribution and independence characterization applies Full-level sourcing rigor to a product the key rates Medium, which is over-reading the form."
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": [
+      "absence-of-evidence treated as evidence-of-absence (weakness #1; review labels it Standard #3 rather than gold's ATS #8, but the quoted text and substance match exactly — label mismatch, substance match)",
+      "missing/ignored alternative hypothesis (weakness #2, labeled Standard #4 matching gold's ATS #4 label; explicitly names 'AES cohesion fracturing under economic or security strain' as the unexamined alternative, closely mirroring the key's own example)",
+      "conjunction/scenario inflation (weakness #3, labeled ATS #2 matching gold; includes a worked example of compound-probability arithmetic, e.g. three 70% steps compounding to ~34%)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Bottom line arrives after background (weakness #4, explicitly ranked last and self-qualified as not threatening the conclusion's validity)",
+        "ruling": "nitpick — same over-reading as in Review A, but B correctly calibrates it as the least severe item rather than the most severe, and it is honest that it doesn't affect the judgment's correctness."
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 9
+  },
+  "winner": "B",
+  "rationale": "Review B identifies all three planted flaws with precise substantive matches — most notably naming an AES-cohesion-fracturing alternative that almost verbatim matches the key's missing-alternative-hypothesis flaw, which Review A never actually addresses despite touching a related standard — and pairs each finding with a concrete, technique-specific fix (a Light ACH pass, worked compound-probability arithmetic). Review A only substantively catches two of the three gold flaws and miscalibrates severity by ranking a minor BLUF-placement nitpick as its single most threatening weakness."
+}

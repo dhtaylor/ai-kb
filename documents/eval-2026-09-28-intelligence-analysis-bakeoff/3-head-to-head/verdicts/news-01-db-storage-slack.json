@@ -1,0 +1,32 @@
+{
+  "case": "news-01-db-storage-slack",
+  "A": {
+    "level_stated": "Light",
+    "level_ok": true,
+    "finding_count": 0,
+    "gold_caught": ["unverified causal attribution stated as probable fact (identified and judged adequately hedged, not flagged as a defect)"],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Optional 'freebie' suggestion to note whether 78% is a one-time reading or already trending, since infra-team will ask",
+        "ruling": "nitpick"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 8
+  },
+  "B": {
+    "level_stated": "Light",
+    "level_ok": true,
+    "finding_count": 0,
+    "gold_caught": ["unverified causal attribution stated as probable fact (identified and judged adequately hedged, not flagged as a defect)"],
+    "gold_missed": [],
+    "extras": [],
+    "count_ok": true,
+    "fix_quality": 3,
+    "score": 7
+  },
+  "winner": "A",
+  "rationale": "Both reviews correctly scope to Light level, correctly identify the causal-attribution claim as the one analytic line and correctly judge it adequately hedged (zero findings, within the key's 0-1 range, no false positives). Review A edges ahead by offering a concrete, proportionate optional add (check whether 78% is trending) that gives the author something actionable, whereas Review B's closing note ('nothing needs to change') adds no value beyond confirming soundness."
+}

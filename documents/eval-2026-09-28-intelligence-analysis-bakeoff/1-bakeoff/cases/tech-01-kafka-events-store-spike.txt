@@ -1,0 +1,6 @@
+Spike Finding: Events Store Selection for Activity-Feed Service
+Recommendation: Apache Kafka (Confluent Cloud)
+
+We ran a two-day spike to evaluate an events store for the new activity-feed service. Kafka is the right choice: it provides durable, replayable event logs, and Confluent's engineering blog reports throughput exceeding 1 million events/sec per broker at sub-10 ms p99 latency. Our firehose currently produces ~8,000 events/day across all tenants, so Kafka should scale fine as we grow to enterprise tier. The built-in retention log gives us event replay at no extra implementation cost, which the team has flagged as a future need.
+
+Next step: provision a Confluent Cloud Standard cluster; estimated stand-up 2 days.

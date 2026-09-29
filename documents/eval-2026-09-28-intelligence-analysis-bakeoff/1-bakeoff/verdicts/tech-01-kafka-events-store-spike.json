@@ -1,0 +1,53 @@
+{
+  "case": "tech-01-kafka-events-store-spike",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": [
+      "single-source vendor sourcing",
+      "vague estimative language",
+      "missing alternative"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Standard #3: 'built-in retention log gives us event replay at no extra implementation cost, which the team has flagged as a future need' is asserted as fact with no source for the team's stated need or the 'no extra cost' claim",
+        "ruling": "real"
+      },
+      {
+        "summary": "Standard #6: reasoning doesn't fully support the exclusivity of the claim given #1 and #4",
+        "ruling": "nitpick"
+      },
+      {
+        "summary": "Standard #8: 'Kafka is the right choice' stated with more certainty than the evidence supports",
+        "ruling": "nitpick"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "B": {
+    "level_stated": "Medium",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "single-source vendor sourcing",
+      "missing alternative",
+      "vague estimative language"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Standard #8: confidence not aligned to evidence quality because cited evidence overshoots the actual requirement",
+        "ruling": "nitpick"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "winner": "A",
+  "rationale": "Both reviews correctly position the BLUF, both misjudge review depth as Medium against the key's Full, and both land the same two headline findings (vendor-only sourcing and missing alternatives) with the identical 8,000/day-vs-1M/sec arithmetic; A additionally develops the 'enterprise tier' growth claim into a full weakness with a calibrated, ICD-203-style fix and separately catches the unsupported 'no extra cost'/unattributed team-need claim, whereas B only footnotes the growth claim in a hedged scorecard line (even rating it as tolerable for a spike) and rates the unsupported-claim standard as 'Good', missing it. A's fixes are concrete and proportionate across all three gold flaws, giving the author more complete and actionable coverage."
+}

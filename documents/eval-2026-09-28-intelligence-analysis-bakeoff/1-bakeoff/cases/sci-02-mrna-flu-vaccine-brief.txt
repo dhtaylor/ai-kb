@@ -1,0 +1,7 @@
+Research Brief: mRNA Flu Vaccine Efficacy — Phase II Preliminary Data
+
+Bottom line: Early Phase II data suggest mRNA-based flu vaccines may produce a stronger antibody response than traditional egg-derived formulations, but the evidence is immunogenicity-only and is insufficient to support a policy change recommendation.
+
+A Moderna-sponsored randomized controlled trial (NCT04899336; n = 601; Lancet, April 2026) found that mRNA-1020 generated a geometric mean titer 2.1× higher than a licensed quadrivalent inactivated vaccine at day 28. The study was powered for this immunogenicity endpoint but was not designed to measure symptomatic influenza incidence. The trial sponsor has a commercial interest in the outcome; independent replication has not been published.
+
+The incumbent technology retains several advantages: a longer real-world safety record, single-dose annual administration compatible with existing campaign infrastructure, and established cold-chain logistics. The mRNA candidate requires a two-dose priming series for flu-naive cohorts. Phase III efficacy trials are ongoing; a recommendation to shift national formulation policy would be premature until clinical-endpoint data from an independent trial are available.

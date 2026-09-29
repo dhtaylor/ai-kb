@@ -1,0 +1,47 @@
+{
+  "case": "sci-01-breakfast-diabetes",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "correlation reported as causation - explicit, clearly identified with quotes and mechanism explained",
+      "source limitations uncharacterized - partially caught: confounding and reverse causation are raised in detail (finding 2), but framed under ATS #4 (analysis of alternatives) rather than ATS #1 (source limitations), and the self-reported-breakfast-frequency measurement limitation named in the gold rationale is never mentioned"
+    ],
+    "gold_missed": [
+      "self-reported breakfast frequency as an uncharacterized measurement limitation"
+    ],
+    "extras": [
+      {
+        "summary": "single observational study treated as sufficient evidentiary basis for a national dietary-guideline recommendation (ATS #1 corroboration)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 8
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "correlation reported as causation - explicit, clearly identified with quotes and mechanism explained",
+      "source limitations uncharacterized - partially caught: confounding is raised in detail (finding 2), but framed under ATS #4 (analysis of alternatives) rather than ATS #1 (source limitations), and the self-reported-breakfast-frequency measurement limitation named in the gold rationale is never mentioned"
+    ],
+    "gold_missed": [
+      "self-reported breakfast frequency as an uncharacterized measurement limitation"
+    ],
+    "extras": [
+      {
+        "summary": "single uncorroborated study used to justify a national policy recommendation (ATS #1 corroboration)",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "winner": "A",
+  "rationale": "Both reviews find essentially the same three substantive weaknesses (causal overclaim, unaddressed confounding/reverse-causation, and a single uncorroborated study driving a policy ask) with equally concrete, proportionate fixes, so their content is nearly a wash. A is preferred because it correctly reviews at the key's stated Medium level, while B misclassifies the item as Full level despite it being a one-paragraph news blurb, which risks pushing the author toward disproportionately heavy tradecraft expectations (e.g., ICD 203 ladders, visual-info scoring) for a short item."
+}

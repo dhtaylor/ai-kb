@@ -1,0 +1,47 @@
+{
+  "case": "clim-01-arctic-briefing",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "buried BLUF (Weakness 2, Standard #6 — judgment withheld until final two sentences)",
+      "vague estimative language (Weakness 3, Standard #2 — 'could represent' has no calibrated probability; note: A explicitly credits the parallel phrase 'may be increasing' as a properly-hedged strength rather than part of this flaw, so only the 'could represent' half of the gold flaw is flagged as a weakness)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "No alternative hypothesis considered for the combined tipping-point claim (Standard #4, analysis of alternatives), tied to the 'illusory correlation' bias with a light-ACH fix",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "buried BLUF (Weakness 1, Standard #6 — judgment arrives only in paragraph 3)",
+      "vague estimative language (Weakness 3, Standard #2, framed as 'confidence/urgency mismatch' — 'could represent' is unquantified yet paired with an unhedged call to action; like A, B also credits the 'may be increasing' methane caveat as an adequately-flagged strength rather than as vague language)"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "No competing explanation considered for the tipping-point claim (Standard #4), additionally noting that this year's minimum was 'sixth-lowest' (not a record), which cuts against an accelerating-threshold framing",
+        "ruling": "real"
+      },
+      {
+        "summary": "Scorecard note that the Northern Sea Route '12%' statistic (and the tipping-point judgment itself) cite no source, under Standard #1 — mentioned only in the scorecard cell, not developed into a numbered weakness with its own fix",
+        "ruling": "real"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 7
+  },
+  "winner": "A",
+  "rationale": "Both reviews converge on the same three substantive weaknesses (buried BLUF, missing analysis of alternatives, uncalibrated estimative language) with equally concrete, level-appropriate fixes, but A correctly identifies the product as Medium rigor per the key while B mislabels it Full without actually applying any additional Full-level scrutiny to justify that label (its extra standards rows are marked N/A). B partly offsets this with two legitimate extra catches (the 'sixth-lowest, not a record' inconsistency and the unsourced NSR statistic), but the core level miscalibration is the more consequential error for the author."
+}

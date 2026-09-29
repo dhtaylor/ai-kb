@@ -1,0 +1,115 @@
+{
+ "geo-03-sahel-briefing": {
+  "level": "Medium",
+  "form": "briefing",
+  "gold": [
+   {
+    "flaw": "missing / ignored alternative hypothesis",
+    "standard_or_bias": "ATS #4",
+    "why": "only one trajectory (progressive Africa Corps expansion to regional dominance) is presented; alternatives such as AES cohesion fracturing or a transactional/limited presence are not weighed."
+   },
+   {
+    "flaw": "conjunction / scenario inflation",
+    "standard_or_bias": "ATS #2 / conjunction fallacy",
+    "why": "'will very likely' governs a four-step causal chain; each link multiplies uncertainty, making the compound claim far less probable than the single-step label implies."
+   },
+   {
+    "flaw": "absence-of-evidence treated as evidence-of-absence",
+    "standard_or_bias": "ATS #8",
+    "why": "'no significant ECOWAS pressure has materialized... which confirms durable domestic stability' treats absence of external intervention as confirmation of internal stability."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false
+ },
+ "sport-02-thornton-draft": {
+  "level": "Full",
+  "form": "prospect-evaluation",
+  "gold": [
+   {
+    "flaw": "confirmation bias",
+    "standard_or_bias": "ATS #4 / confirmation bias",
+    "why": "exclusively positive evidence is cited; no weaknesses, poor stretches, or how he was attacked. 'No significant negatives identified' does not substitute for adversarial review."
+   },
+   {
+    "flaw": "conjunction inflation",
+    "standard_or_bias": "ATS #8 / conjunction inflation",
+    "why": "the 'high-confidence cornerstone' conclusion stacks three independently uncertain projections and treats their conjunction as high-confidence."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false
+ },
+ "foren-01-webb-hair": {
+  "level": "Medium",
+  "form": "case-assessment",
+  "gold": [
+   {
+    "flaw": "base-rate neglect / prosecutor's fallacy",
+    "standard_or_bias": "ATS #8 / prosecutor's fallacy",
+    "why": "transposes the conditional: '1 in 10,000' is P(match | random person), not P(Webb is source | match). Without a prior that Webb was present, the '99.99%' is unfounded."
+   },
+   {
+    "flaw": "missing alternative hypothesis",
+    "standard_or_bias": "ATS #4",
+    "why": "recommends closing alternative leads without evaluating benign explanations for the match (prior lawful visit, acquaintance, collection cross-contamination)."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false
+ },
+ "foren-02-eastside-orc": {
+  "level": "Full",
+  "form": "threat-assessment",
+  "gold": [
+   {
+    "flaw": "overconfident single-source sourcing",
+    "standard_or_bias": "ATS #1",
+    "why": "all operational intelligence rests on a single uncorroborated informant (CI-7); no surveillance, financial, or independent reporting, and the source's access/track record/incentives are not characterized."
+   },
+   {
+    "flaw": "absence of evidence treated as evidence of absence",
+    "standard_or_bias": "ATS #4 / absence-of-evidence",
+    "why": "the six-week incident gap is treated as 'confirmation' of dormancy; it equally supports geographic shift, signature change, or a tactical pause."
+   },
+   {
+    "flaw": "conflating information with judgment",
+    "standard_or_bias": "ATS #3",
+    "why": "CI-7's raw report ('spooked', 'suspended indefinitely') is treated as a confirmed conclusion ('the network is dormant') with no intervening reliability evaluation."
+   }
+  ],
+  "expected_finding_count": "3-5",
+  "is_control": false
+ },
+ "tech-02-p1-postmortem-latency": {
+  "level": "Medium",
+  "form": "incident-postmortem",
+  "gold": [
+   {
+    "flaw": "conflating information with judgment — root cause stated as confirmed fact",
+    "standard_or_bias": "ATS #3",
+    "why": "the 'Root cause' asserts the missing index as established, but the timeline evidence is only rollback→recovery correlation; no EXPLAIN plan, slow-query log, or schema diff is cited."
+   },
+   {
+    "flaw": "buried BLUF",
+    "standard_or_bias": "ATS #6",
+    "why": "opens with a timestamped chronology; the reader must pass four timeline entries before reaching impact, cause, or remediation."
+   }
+  ],
+  "expected_finding_count": "2-3",
+  "is_control": false
+ },
+ "news-01-db-storage-slack": {
+  "level": "Light",
+  "form": "chat-message",
+  "gold": [
+   {
+    "flaw": "unverified causal attribution stated as probable fact",
+    "standard_or_bias": "ATS #3",
+    "why": "'probably a spike from the weekend batch job' attributes the anomaly to a cause before investigation — the only genuine analytic claim; noting it is appropriate, but adding findings for absent BLUF/alternatives would be over-review."
+   }
+  ],
+  "expected_finding_count": "0-1",
+  "is_control": false
+ }
+}

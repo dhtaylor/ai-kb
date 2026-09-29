@@ -1,0 +1,45 @@
+{
+  "case": "sci-02-mrna-flu-vaccine-brief",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": true,
+    "finding_count": 2,
+    "gold_caught": [],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "BLUF's 'may produce a stronger antibody response' is flagged as an undefined, direction-less hedge that should be replaced with a calibrated likelihood term (e.g. 45-65%) plus a separately stated confidence level",
+        "ruling": "nitpick"
+      },
+      {
+        "summary": "Incumbent-vaccine advantages (safety record, single-dose logistics, cold chain) are stated with no citation/basis while the mRNA trial is heavily sourced/characterized, called a one-sided sourcing asymmetry",
+        "ruling": "nitpick"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 3,
+    "score": 6
+  },
+  "B": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 2,
+    "gold_caught": [],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "BLUF generalizes a single unreplicated trial of one candidate (mRNA-1020) to the whole class 'mRNA-based flu vaccines', a law-of-small-numbers overgeneralization",
+        "ruling": "real"
+      },
+      {
+        "summary": "The 2.1x geometric-mean-titer ratio driving the BLUF is reported as a bare point estimate with no confidence interval or p-value",
+        "ruling": "nitpick"
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 5
+  },
+  "winner": "A",
+  "rationale": "A correctly pins the review to the key's Medium level (explicitly reasoning that form, not topical stakes, sets the level), while B misdiagnoses the product as Full level on a stakes-based rationale the gold contradicts, which inflates its checklist and rigor bar beyond what a short Medium brief warrants. Both reviews manufacture two findings on an intentionally clean control brief; A's two are both defensible-but-marginal (demanding numeric probability ranges and citations for common-knowledge incumbent facts), while B lands one genuinely strong catch (class-wide claim from a single-candidate, unreplicated trial) alongside one weaker ask (missing CI on the point estimate) — a real edge in substance that is nonetheless outweighed by the foundational level-selection error."
+}

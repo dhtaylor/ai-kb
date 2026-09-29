@@ -1,0 +1,38 @@
+{
+  "case": "news-02-congestion-pricing-oped",
+  "A": {
+    "level_stated": "Full",
+    "level_ok": false,
+    "finding_count": 4,
+    "gold_caught": [
+      "correlation-as-causation (labeled 'illusory correlation presented as established causation', Weakness 1) — solid substantive match, names the missing-alternative-explanation mechanism",
+      "mirror-imaging (labeled 'overgeneralization beyond what the evidence measures', Weakness 2) — weaker match: reframes as an evidence/overclaim issue and never names the unmodeled dissenting subgroup (e.g. toll-burdened commuters) the key's rationale turns on"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {"summary": "Buried bottom line / BLUF ordering (Weakness 3): recommendation arrives only in the final clause", "ruling": "nitpick — applies an IC-style BLUF convention to a 3-sentence op-ed paragraph where the 'buried' point is trivially visible on a single read; not unreasonable but marginal for the genre and length"},
+      {"summary": "Unsourced statistics (Weakness 4): neither the 11% nor the 8-point figure is attributed to a dataset/pollster", "ruling": "real — a genuine sourcing gap (ATS #1) underlying the entire evidentiary base for the recommendation, though the demand for named pollster/sample size/field dates is pitched at a rigor level above what Medium (or op-ed) warrants, likely a symptom of A's mistaken Full-level framing"}
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 6
+  },
+  "B": {
+    "level_stated": "Medium",
+    "level_ok": true,
+    "finding_count": 3,
+    "gold_caught": [
+      "correlation-as-causation (labeled 'Illusory correlation — approval bump attributed to the policy with no alternative explanation considered', Weakness 1) — solid match",
+      "mirror-imaging (labeled 'Overclaimed generalization — \"across the board\" support inferred from one aggregate metric', Weakness 3) — stronger match: explicitly raises that toll-paying commuters 'may be net-unhappy even while the city overall approves of the mayor,' which gestures directly at the unmodeled dissenting subgroup the key's rationale describes"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {"summary": "Buried BLUF (Weakness 2): interpretive claim and recommendation both follow the raw data sentences", "ruling": "nitpick — same over-application of an IC BLUF convention to a very short op-ed as Review A's equivalent finding; defensible but marginal"}
+    ],
+    "count_ok": true,
+    "fix_quality": 5,
+    "score": 8
+  },
+  "winner": "B",
+  "rationale": "Both reviews catch the same two planted flaws and share the same borderline 'buried BLUF' extra, but B correctly states the Medium review level from the gold key while A misclassifies it as Full — an error that also inflates A's scrutiny into a disproportionately rigorous fourth finding (named-pollster sourcing) better suited to a formal assessment than a three-sentence op-ed. B's treatment of the mirror-imaging flaw also more precisely names the unmodeled, toll-burdened subgroup the key's rationale turns on, making it the more calibrated and proportionate review overall."
+}

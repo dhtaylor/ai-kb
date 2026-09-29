@@ -1,0 +1,53 @@
+{
+  "case": "geo-01-strait-flash",
+  "A": {
+    "level_stated": "Medium",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "vague estimative language (ATS #2) - caught as Weakness 3, 'Uncalibrated timeframe and no confidence stated separately from likelihood'; label differs from gold ('vague estimative language') but substance matches: flags 'soon' as unbounded and notes likelihood/confidence not separated"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Weakness 1: single hypothesis / no analysis of alternatives (ATS #4), with a named cognitive-bias label ('over-attributing coherence/design') and a prescribed ACH fix",
+        "ruling": "nitpick - a 3-sentence watch-officer flash email is not the format for a competing-hypotheses workup; demanding formal ACH here is disproportionate to the key's stated Light rigor level and its 0-1 expected finding count. Labeling a specific cognitive bias from a 4-line memo is also a stretch beyond what the text supports."
+      },
+      {
+        "summary": "Weakness 2: core tempo claim has no source characterization (ATS #1)",
+        "ruling": "nitpick - reasonable in the abstract, but this is a quick internal flash update, not a finished assessment; requiring a sourcing/QIC line is over-reach for the intended Light-level product and inflates the finding count well past the key's 0-1 expectation."
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 3,
+    "score": 6
+  },
+  "B": {
+    "level_stated": "Medium",
+    "level_ok": false,
+    "finding_count": 3,
+    "gold_caught": [
+      "vague estimative language (ATS #2) - caught as Weakness 3, 'Judgment and timeframe left uncalibrated'; label differs from gold but substance matches: flags 'soon' as undefined and no separate confidence level"
+    ],
+    "gold_missed": [],
+    "extras": [
+      {
+        "summary": "Weakness 1: no alternative explanation weighed (Standard #4), with suggested discriminators (exercise calendar, sortie composition, naval/rocket-force posture)",
+        "ruling": "nitpick - same over-reach as in Review A: full AoA tradecraft is disproportionate for a terse watch memo at the key's intended Light level, even though the discriminators suggested are concrete."
+      },
+      {
+        "summary": "Weakness 2: unsourced/uncharacterized tempo claim (Standard #1)",
+        "ruling": "nitpick - reasonable observation in isolation but not proportionate to a quick flash update; inflates findings beyond the 0-1 the key expects."
+      },
+      {
+        "summary": "Scorecard note under Standard #7: 'third consecutive week' implies prior coverage exists, but the memo doesn't say whether this judgment is consistent with last week's",
+        "ruling": "nitpick - speculative reading into a routine phrase; the product never claims to reconcile with prior reporting, and demanding that of a short flash email over-reads the format."
+      }
+    ],
+    "count_ok": true,
+    "fix_quality": 4,
+    "score": 7
+  },
+  "winner": "B",
+  "rationale": "Both reviews are structurally near-identical, both misstate the level as Medium against the key's Light, and both pad the same single gold-matching flaw with the same two disproportionate extra findings (AoA, sourcing) that over-apply full tradecraft rigor to a 3-sentence watch-officer email. B edges ahead because its fixes are more concrete and operationally specific (named ADIZ-transit baseline, sortie composition, a stated disconfirming observable) and its (still incorrect) level justification is a defensible judgment call, whereas A backs its wrong level with a specific, likely-fabricated claim that the reference material lists this form at Medium."
+}
