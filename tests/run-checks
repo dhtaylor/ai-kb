@@ -469,6 +469,122 @@ case_run "no --yes: its side effect never happened" 1 "" -- test -e "$TMP/vgate-
 "$ENGINE/scripts/kb-verify" "$TMP/vgate" --all --yes >/dev/null 2>&1
 case_run "--yes: the command actually runs" 0 "" -- test -e "$TMP/vgate-sentinel"
 
+# ------------------------------------------- kb-verify: Verifier fixture ----
+# Exit criterion (§5A "Testing the librarian agents"): against a fact seeded stale
+# and wrong, the Verifier must produce a flag, not a false-fresh stamp. Deliberate
+# divergence from the plan text: §9.13 records the built design — a failure is
+# reported and the fact left untouched, never written to contradictions.md,
+# because automating the choice between a stale fact, a wrong assertion and a
+# real contradiction destroys the evidence a human needs; this fixture asserts
+# the built design, not the plan's original wording.
+#
+# The fixture's "local system" is a config file beside the facts; each Recheck
+# greps it. One default (non --all) run below exercises staleness filtering,
+# the untouched wrong fact, and the restamped true fact together.
+# Dates are computed, never typed: a literal "today" turns this into a test that
+# fails on its own the next morning.
+VTODAY=$(date +%F)
+build_clean "$TMP/vfixture"
+printf 'port=8080\n' > "$TMP/vfixture/system-config.txt"
+
+fm stale-wrong general > "$TMP/vfixture/stale-wrong.md"
+cat >> "$TMP/vfixture/stale-wrong.md" <<'EOF'
+# Stale Wrong
+
+## Port
+
+The service listens on port 9090.
+
+Source: manual
+Verified: 2026-01-01 · by: human · method: query
+Recheck: grep -q '^port=9090$' system-config.txt
+EOF
+
+fm stale-true general > "$TMP/vfixture/stale-true.md"
+cat >> "$TMP/vfixture/stale-true.md" <<'EOF'
+# Stale True
+
+## Port
+
+The service listens on port 8080.
+
+Source: manual
+Verified: 2026-01-01 · by: human · method: query
+Recheck: grep -q '^port=8080$' system-config.txt
+EOF
+
+fm fresh-fact general > "$TMP/vfixture/fresh-fact.md"
+cat >> "$TMP/vfixture/fresh-fact.md" <<EOF
+# Fresh Fact
+
+## Timeout
+
+The request timeout is 30 seconds.
+
+Source: manual
+Verified: $VTODAY · by: agent · method: query
+Recheck: touch "$TMP/vfixture-sentinel"
+EOF
+
+printf -- '- [stale-wrong](stale-wrong.md) — a stale, wrong fact\n- [stale-true](stale-true.md) — a stale, true fact\n- [fresh-fact](fresh-fact.md) — a fresh fact\n' >> "$TMP/vfixture/INDEX.md"
+cp "$TMP/vfixture/stale-wrong.md" "$TMP/vfixture/stale-wrong.md.orig"
+
+case_run "verifier fixture: stale wrong fact is reported failing, not false-fresh" 1 \
+  "FAIL stale-wrong.md § Port" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vfixture" --yes --apply
+
+case_run "verifier fixture: stale wrong fact's file is byte-for-byte unchanged" 0 "" -- \
+  cmp -s "$TMP/vfixture/stale-wrong.md" "$TMP/vfixture/stale-wrong.md.orig"
+
+case_run "verifier fixture: stale true fact is restamped to today" 0 "Verified: $VTODAY" -- \
+  grep -F "Verified:" "$TMP/vfixture/stale-true.md"
+
+case_run "verifier fixture: fresh fact's Recheck is not run when it is not due" 1 "" -- \
+  test -e "$TMP/vfixture-sentinel"
+
+# Negative control for the line above: on a separate copy (the run just above already
+# restamped stale-true.md, so it cannot be reused), force selection with --all to prove
+# the sentinel assertion CAN fire — an assertion that cannot fail is worse than none
+# (§7, §9.13).
+build_clean "$TMP/vfixture-all"
+fm fresh-fact general > "$TMP/vfixture-all/fresh-fact.md"
+cat >> "$TMP/vfixture-all/fresh-fact.md" <<EOF
+# Fresh Fact
+
+## Timeout
+
+The request timeout is 30 seconds.
+
+Source: manual
+Verified: $VTODAY · by: agent · method: query
+Recheck: touch "$TMP/vfixture-all-sentinel"
+EOF
+printf -- '- [fresh-fact](fresh-fact.md) — a fresh fact\n' >> "$TMP/vfixture-all/INDEX.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vfixture-all" --all --yes >/dev/null 2>&1
+case_run "verifier fixture: --all forces the fresh fact's Recheck to run" 0 "" -- \
+  test -e "$TMP/vfixture-all-sentinel"
+
+# --yes without --apply: nothing is restamped at all. A fresh copy of the true fact
+# is needed because the first run above already restamped its stale-true.md.
+build_clean "$TMP/vfixture-noapply"
+printf 'port=8080\n' > "$TMP/vfixture-noapply/system-config.txt"
+fm stale-true general > "$TMP/vfixture-noapply/stale-true.md"
+cat >> "$TMP/vfixture-noapply/stale-true.md" <<'EOF'
+# Stale True
+
+## Port
+
+The service listens on port 8080.
+
+Source: manual
+Verified: 2026-01-01 · by: human · method: query
+Recheck: grep -q '^port=8080$' system-config.txt
+EOF
+printf -- '- [stale-true](stale-true.md) — a stale, true fact\n' >> "$TMP/vfixture-noapply/INDEX.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vfixture-noapply" --yes >/dev/null 2>&1
+case_run "verifier fixture: --yes without --apply restamps nothing" 0 "Verified: 2026-01-01" -- \
+  grep -F "Verified:" "$TMP/vfixture-noapply/stale-true.md"
+
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
 sed -i 's/^last_swept: never$/last_swept: 2026-09-21/' "$TMP/due/INDEX.md"
