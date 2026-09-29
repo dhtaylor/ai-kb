@@ -1,0 +1,426 @@
+#!/usr/bin/env python3
+"""kb-watch — the Watcher: currency checker for external/general facts. Detects; never edits a fact.
+
+Phase 4 step 5 (§5A "Sources of truth -> fact-checkers"; the boxed "The Watcher is speculative —
+scope it honestly"). The owner's decision for THIS step: a MINIMAL, OFFLINE Watcher. It compares a
+saved snapshot against a recorded baseline, both already on disk. It never fetches anything itself —
+live fetch is a later, isolated step (the plan's own SSRF/network-restricted-fetch scope). That is
+why this script imports no network module: no urllib.request, no http.client, no socket, no requests.
+Grep it if you doubt it.
+
+WHY A SCRIPT, NOT AN AGENT (the plan's strongest defence against a spoofed page steering a KB
+change): fetched/snapshotted text is never shown to a model by this tool. It is read as bytes,
+stripped to plain text with the standard library only, matched against an operator-authored regex,
+and the matched value is written to a queue entry as escaped, truncated DATA — never as an
+instruction, never as prose composed from the page. There is no LLM in this loop.
+
+THE ALLOWLIST (engine-side, never inside a library — kb/*): watcher/allowlist.json, a JSON list of
+entries:
+
+    {
+      "source_id": "<stable id — should match the library source stub's slug for traceability>",
+      "url": "<the source's URL, recorded on the drift signal only; NEVER fetched by this script>",
+      "library": "<path to the library root that owns this source, e.g. kb/azure-devops>",
+      "baseline_snapshot": "<path to the last-accepted snapshot — HTML or text>",
+      "current_snapshot": "<path to the latest snapshot on disk — produced by a separate, later,
+                            isolated fetch step; this script only ever reads it>",
+      "fields": [
+        {"name": "<field id>", "pattern": "<a Python regex with exactly one capture group,
+                                             applied to the whitespace-normalised plain text>"}
+      ]
+    }
+
+Relative paths ("library", "baseline_snapshot", "current_snapshot") resolve against the allowlist
+file's own directory, so the allowlist travels with the engine regardless of cwd.
+
+WHAT IT DOES, per entry:
+  1. Read both snapshots. A missing, empty, or unreadable snapshot (baseline OR current) is an
+     `unreachable` finding — NEVER silence, and NEVER folded into "unchanged" (§5A Cautions:
+     "provenance rot" — unreachable is not the same claim as unchanged).
+  2. Otherwise strip both to plain text (tags/scripts/styles removed, whitespace collapsed —
+     standard library only: html.parser) and, for each declared field, extract the value from each
+     side with its regex.
+  3. old == new -> nothing (including "not found" on both sides). old != new -> a `drift` finding:
+     exactly `field · old · new · source_url`, plus a stable id and today's date. No other text
+     from the page is ever carried through.
+
+THE QUEUE: reuses kb-audit's queue (`<library>/needs-attention.md`), its location convention (owned
+by the library it describes, not the engine), its frontmatter template (SKILL.md step 3, copied
+verbatim here), and its status vocabulary (open/acknowledged/resolved). kb-audit's SKILL.md does not
+mandate a byte-for-byte item grammar (no example exists in this repository yet), so this script picks
+one and states it plainly: a fenced ```yaml block of one-line records, the same convention the golden
+set already uses (CONVENTIONS §10, `check-golden`) for machine-parseable, human-readable structure.
+A future kb-audit sweep reads it the same way it reads its own findings.
+
+STABLE ID: 8 hex chars of sha1(f"{category}|{source_id}|{field}|{new}") — the plan's own spec
+("hash of source id + field + new value") plus `category` so a `drift` and an `unreachable` finding
+for the same field can never collide. Re-running on an unchanged drift produces the same id and is
+NOT re-added (dedupe). A value that changes again gets a new id and IS added, regardless of what
+status a human left on the earlier entry for the old value — matching §5A: "an already-acknowledged
+entry is not re-surfaced unless the source changes."
+
+ESCAPING (§5A drift-signal schema; the injection defence): `old`/`new` are page-derived and
+UNTRUSTED. Before they ever touch the queue file: embedded newlines/control characters are flattened
+to spaces (so injected content can never start a fresh markdown line — no new heading, no new fence,
+no frontmatter delimiter), a run of 3+ backticks is neutralised (cannot close/open a fence
+mid-record), the value is truncated to 200 characters, and backslashes/double-quotes are escaped for
+safe embedding in a double-quoted, single-line YAML-ish scalar. `source_id`/`field`/`source_url`/
+`date` are operator-authored (from the allowlist, not the page) and are not treated as hostile, but
+are still flattened to one line for hygiene.
+
+DETECTION ONLY: this script writes ONLY `<library>/needs-attention.md` — never a fact, a stamp, a
+source stub, or a library's INDEX.md (CONVENTIONS' router-line bookkeeping is deliberately left to a
+human or to kb-audit; "writes only the queue" is read literally here). A library's queue is created
+only when there is something to put in it (CONVENTIONS §3 / kb-audit SKILL.md step 3): a clean run
+touches nothing.
+
+DEFAULT IS WRITE, NOT --dry-run: the plan's three-band model (§5A "automate detection, gate
+mutation") puts drift *detection* — and the queue it produces — in the fully-automated band; the
+control is that the OUTPUT is a queue, never an edit, not that a human approves each write. This
+matches kb-audit's own precedent exactly: it writes `needs-attention.md` unattended, with no
+confirmation gate (documents/state-change-gates.md's entry for the kb-audit skill: "None —
+justified... needs none to stay unattended-safe"). `--dry-run` is the explicit opt-out for a human
+who wants to see what would be queued first.
+
+Usage: kb-watch <allowlist.json> [--dry-run]
+       kb-watch --dump <needs-attention.md>     # print every record this script can parse back out
+                                                 # of a queue file, one per line (id, category,
+                                                 # status, source_id, field, old, new, source_url,
+                                                 # date), tab-separated — the exit criterion for
+                                                 # "the queue still parses."
+Exit 0 on a clean run (whether or not anything was queued). Exit 2 on a usage or config error
+(bad JSON, a malformed entry, a library with no INDEX.md) — the run still processes every
+well-formed entry first.
+"""
+import datetime, hashlib, html.parser, json, pathlib, re, sys
+
+TODAY = datetime.date.today().isoformat()
+MAX_LEN = 200
+ID_RE = re.compile(r"^\s*-\s*id:\s*([0-9a-f]{8})\s*$")
+KV_RE = re.compile(r'^\s{2}(\w+):\s*"?(.*?)"?\s*$')
+FENCE_OPEN = "```yaml\n"
+FENCE_CLOSE = "```\n"
+
+
+# ------------------------------------------------------------------ plain-text stripping ----
+class _TextStripper(html.parser.HTMLParser):
+    """Standard library only. Drops <script>/<style> content; keeps everything else as text."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self._skip = 0
+        self.chunks = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ("script", "style"):
+            self._skip += 1
+
+    def handle_endtag(self, tag):
+        if tag in ("script", "style") and self._skip:
+            self._skip -= 1
+
+    def handle_data(self, data):
+        if not self._skip:
+            self.chunks.append(data)
+
+
+def strip_to_text(raw: str) -> str:
+    p = _TextStripper()
+    p.feed(raw)
+    p.close()
+    return re.sub(r"\s+", " ", "".join(p.chunks)).strip()
+
+
+def read_snapshot(path: pathlib.Path):
+    """(ok, text-or-reason). Missing/empty/unreadable is unreachable, never 'unchanged'."""
+    if not path.is_file():
+        return False, "snapshot file not found"
+    try:
+        raw = path.read_text(errors="replace")
+    except OSError as e:
+        return False, f"snapshot unreadable: {e}"
+    text = strip_to_text(raw)
+    if not text:
+        return False, "snapshot is empty after stripping to plain text"
+    return True, text
+
+
+def extract_field(text: str, pattern: str):
+    m = re.search(pattern, text)
+    if not m:
+        return None
+    return m.group(1) if m.lastindex else m.group(0)
+
+
+# ------------------------------------------------------------------------------- escaping ----
+def flatten(s: str) -> str:
+    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
+    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", s)
+    return s
+
+
+def yaml_scalar(value, untrusted: bool) -> str:
+    """A safe, single-line, double-quoted YAML-ish scalar. Untrusted values are additionally
+    truncated and have fence-breaking backtick runs neutralised, per the drift-signal schema."""
+    s = flatten("" if value is None else str(value))
+    if untrusted:
+        s = re.sub(r"`{3,}", "'''", s)
+        if len(s) > MAX_LEN:
+            s = s[:MAX_LEN] + " …[truncated]"
+    s = s.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{s}"'
+
+
+def stable_id(category: str, source_id: str, field: str, new_value) -> str:
+    raw = "" if new_value is None else str(new_value)
+    payload = f"{category}|{source_id}|{field}|{raw}".encode()
+    return hashlib.sha1(payload).hexdigest()[:8]
+
+
+# --------------------------------------------------------------------------- the allowlist ----
+def load_allowlist(path: pathlib.Path):
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"kb-watch: cannot read allowlist {path}: {e}", file=sys.stderr)
+        sys.exit(2)
+    if not isinstance(data, list):
+        print(f"kb-watch: {path} must be a JSON list of entries", file=sys.stderr)
+        sys.exit(2)
+    base = path.resolve().parent
+    entries, errors = [], []
+    for i, e in enumerate(data):
+        where = f"entry {i} ({e.get('source_id', '?')!r})" if isinstance(e, dict) else f"entry {i}"
+        if not isinstance(e, dict):
+            errors.append(f"{where}: not an object"); continue
+        missing = [k for k in ("source_id", "url", "library", "baseline_snapshot",
+                                "current_snapshot", "fields") if k not in e]
+        if missing:
+            errors.append(f"{where}: missing field(s) {missing}"); continue
+        fields = e["fields"]
+        if not isinstance(fields, list) or not fields:
+            errors.append(f"{where}: 'fields' must be a non-empty list"); continue
+        bad_field = False
+        for f in fields:
+            if not isinstance(f, dict) or "name" not in f or "pattern" not in f:
+                errors.append(f"{where}: each field needs 'name' and 'pattern'"); bad_field = True
+                continue
+            try:
+                rx = re.compile(f["pattern"])
+            except re.error as ex:
+                errors.append(f"{where}: field {f.get('name')!r} bad pattern: {ex}"); bad_field = True
+                continue
+            if rx.groups < 1:
+                errors.append(f"{where}: field {f.get('name')!r} pattern needs a capture group")
+                bad_field = True
+        if bad_field:
+            continue
+
+        def resolve(p):
+            pp = pathlib.Path(p)
+            return pp if pp.is_absolute() else (base / pp)
+
+        entries.append({
+            "source_id": e["source_id"], "url": e["url"],
+            "library": resolve(e["library"]),
+            "baseline_snapshot": resolve(e["baseline_snapshot"]),
+            "current_snapshot": resolve(e["current_snapshot"]),
+            "fields": fields,
+        })
+    return entries, errors
+
+
+# ------------------------------------------------------------------------------ the queue ----
+def library_domain_scope(library_root: pathlib.Path):
+    idx = library_root / "INDEX.md"
+    if not idx.is_file():
+        return None, None, f"{library_root} has no INDEX.md — not a library root"
+    text = idx.read_text(errors="replace")
+    d = re.search(r"^domain:\s*(.+)$", text, re.M)
+    s = re.search(r"^scope:\s*(.+)$", text, re.M)
+    if not d or not s:
+        return None, None, f"{idx} has no domain:/scope: in its frontmatter"
+    return d.group(1).strip(), s.group(1).strip(), None
+
+
+def existing_ids(queue_path: pathlib.Path):
+    if not queue_path.is_file():
+        return set()
+    return {m.group(1) for m in map(ID_RE.match, queue_path.read_text(errors="replace").splitlines())
+            if m}
+
+
+def render_record(rec: dict) -> str:
+    lines = [f"- id: {rec['id']}"]
+    for key in ("category", "status", "source_id", "field"):
+        lines.append(f"  {key}: {yaml_scalar(rec[key], untrusted=False)}")
+    lines.append(f"  old: {yaml_scalar(rec['old'], untrusted=True)}")
+    lines.append(f"  new: {yaml_scalar(rec['new'], untrusted=True)}")
+    lines.append(f"  source_url: {yaml_scalar(rec['source_url'], untrusted=False)}")
+    lines.append(f"  date: {yaml_scalar(rec['date'], untrusted=False)}")
+    return "\n".join(lines) + "\n\n"
+
+
+def new_queue_file(domain: str, scope: str) -> str:
+    fm = (
+        "---\n"
+        "name: needs-attention\n"
+        "description: Open findings from automated drift detection (kb-watch) and hygiene sweeps "
+        "(kb-audit), by severity.\n"
+        "memory_type: reference\n"
+        f"domain: {domain}\n"
+        f"scope: {scope}\n"
+        "metadata:\n"
+        "  type: index\n"
+        "  node_type: memory\n"
+        f"  created: {TODAY}\n"
+        "tags: [meta, hygiene, queue, watcher]\n"
+        "keywords: [needs attention, queue, findings, drift, watcher, unreachable]\n"
+        "---\n"
+        "# Needs attention\n\n"
+        "Findings from automated drift checks and hygiene sweeps. Detection only — nothing here "
+        "was fixed automatically. See CONVENTIONS.md §3 and "
+        "plugins/knowledge-tools/skills/kb-audit/SKILL.md for the queue's conventions.\n\n"
+    )
+    return fm + FENCE_OPEN + FENCE_CLOSE
+
+
+def append_records(queue_path: pathlib.Path, records: list):
+    body = "".join(render_record(r) for r in records)
+    if not queue_path.is_file():
+        domain, scope, err = library_domain_scope(queue_path.parent)
+        if err:
+            return err
+        queue_path.write_text(new_queue_file(domain, scope)[:-len(FENCE_CLOSE)] + body + FENCE_CLOSE)
+        return None
+    text = queue_path.read_text(errors="replace")
+    spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
+    if spans:
+        last = spans[-1]
+        insert_at = last.end() - len(FENCE_CLOSE)
+        text = text[:insert_at] + body + text[insert_at:]
+    else:
+        text = text.rstrip("\n") + "\n\n" + FENCE_OPEN + body + FENCE_CLOSE
+    queue_path.write_text(text)
+    return None
+
+
+# ---------------------------------------------------------------------------- record parse ----
+def parse_records(text: str):
+    """The same shape this script writes: '- id: x' opens a record, two-space-indented 'key:
+    value' lines fill it in. Mirrors check-golden's parser style (line-based, no yaml library)."""
+    records, cur = [], None
+    for raw in text.splitlines():
+        m = ID_RE.match(raw)
+        if m:
+            if cur:
+                records.append(cur)
+            cur = {"id": m.group(1)}
+            continue
+        if cur is not None:
+            kv = KV_RE.match(raw)
+            if kv:
+                cur[kv.group(1)] = re.sub(r"\\(.)", r"\1", kv.group(2))
+            elif raw.strip() == "" or raw.strip().startswith("```"):
+                pass
+            elif not raw.startswith("  "):
+                records.append(cur); cur = None
+    if cur:
+        records.append(cur)
+    return records
+
+
+# ------------------------------------------------------------------------------------ main ----
+def process_entry(entry: dict, dry_run: bool):
+    """Returns (findings_written_or_would_write, errors) for this one source."""
+    source_id, url, library = entry["source_id"], entry["url"], entry["library"]
+    findings, errors = [], []
+
+    ok_b, base_txt = read_snapshot(entry["baseline_snapshot"])
+    ok_c, cur_txt = read_snapshot(entry["current_snapshot"])
+    if not (ok_b and ok_c):
+        reason = base_txt if not ok_b else cur_txt
+        findings.append({"category": "unreachable", "status": "open", "source_id": source_id,
+                          "field": "-", "old": None, "new": reason, "source_url": url, "date": TODAY})
+    else:
+        for f in entry["fields"]:
+            old = extract_field(base_txt, f["pattern"])
+            new = extract_field(cur_txt, f["pattern"])
+            if old == new:
+                continue
+            findings.append({"category": "drift", "status": "open", "source_id": source_id,
+                              "field": f["name"],
+                              "old": old if old is not None else "(not found)",
+                              "new": new if new is not None else "(not found)",
+                              "source_url": url, "date": TODAY})
+
+    for finding in findings:
+        finding["id"] = stable_id(finding["category"], finding["source_id"], finding["field"],
+                                   finding["new"])
+
+    queue_path = library / "needs-attention.md"
+    seen = existing_ids(queue_path)
+    to_write = [f for f in findings if f["id"] not in seen]
+    skipped = len(findings) - len(to_write)
+
+    print(f"kb-watch: {source_id}: {len(findings)} finding(s), {skipped} already queued, "
+          f"{len(to_write)} new")
+    for f in to_write:
+        tag = "WOULD QUEUE" if dry_run else "queued"
+        print(f"  {tag} [{f['category']}] {f['id']}  {f['field']}: "
+              f"{f['old']!r} -> {f['new']!r}  ({queue_path})")
+
+    if to_write and not dry_run:
+        err = append_records(queue_path, to_write)
+        if err:
+            errors.append(f"{source_id}: {err}")
+    return to_write, errors
+
+
+def main(argv):
+    if argv[:1] == ["--dump"]:
+        if len(argv) != 2:
+            print("usage: kb-watch --dump <needs-attention.md>", file=sys.stderr); return 2
+        qp = pathlib.Path(argv[1])
+        if not qp.is_file():
+            print(f"kb-watch: {qp} does not exist", file=sys.stderr); return 2
+        for r in parse_records(qp.read_text(errors="replace")):
+            cols = [r.get(k, "") for k in
+                    ("id", "category", "status", "source_id", "field", "old", "new",
+                     "source_url", "date")]
+            print("\t".join(cols))
+        return 0
+
+    args = [a for a in argv if not a.startswith("--")]
+    flags = {a for a in argv if a.startswith("--")}
+    if len(args) != 1 or flags - {"--dry-run"}:
+        print(__doc__.strip().split("\n\n")[-1], file=sys.stderr)
+        return 2
+    dry_run = "--dry-run" in flags
+
+    entries, config_errors = load_allowlist(pathlib.Path(args[0]))
+    for e in config_errors:
+        print(f"kb-watch: CONFIG ERROR: {e}", file=sys.stderr)
+
+    if not entries:
+        print("kb-watch: no watchable sources configured" +
+              (" (allowlist is empty)" if not config_errors else ""))
+        return 2 if config_errors else 0
+
+    run_errors = []
+    total_new = 0
+    for entry in entries:
+        written, errors = process_entry(entry, dry_run)
+        total_new += len(written)
+        run_errors += errors
+
+    for e in run_errors:
+        print(f"kb-watch: ERROR: {e}", file=sys.stderr)
+
+    print(f"\nkb-watch: {len(entries)} source(s) checked, {total_new} new "
+          f"{'would-queue' if dry_run else 'queued'} finding(s)")
+    return 2 if (config_errors or run_errors) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
