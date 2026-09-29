@@ -133,8 +133,13 @@ a memo: review it at Medium. Two defaults cover the rest:
   email, a chat post or a flash note is a message, even when a headquarters sends it about a serious
   subject.
 - **A form no list names is Medium.** A news item, an op-ed, an equity note or a board update is
-  Medium unless it presents itself as a formal assessment, forecast, estimate, threat/risk analysis or
+  Medium unless it actually is a formal assessment, forecast, estimate, threat/risk analysis or
   strategy document. Only then is it Full.
+- **A title does not set the level. What the document is does.** A Full product is a finished,
+  standalone analytic product built to be relied on: key judgments stated as judgments, a stated
+  confidence, the reasoning and sourcing laid out to be checked. A short briefing, case note or update
+  headed "ASSESSMENT" or "INTELLIGENCE BRIEFING" is still a briefing, note or update. Review it at
+  Medium unless it has that structure.
 
 Promoting a product because it matters is the usual route to over-reviewing it.
 
