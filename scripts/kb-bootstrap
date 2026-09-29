@@ -23,16 +23,21 @@
 # not exist on macOS before Monterey and takes different arguments on BSD. python3
 # is already required by every check in scripts/, so this adds no dependency.
 #
-# Usage: kb-bootstrap [--check | --dry-run]
-#   --check, --dry-run   report what is configured and what would change; change
-#                        nothing. Exit 1 if anything would change.
+# GATE: this touches machine-level config outside this repository — a user-level
+# settings file, global git config, a shell rc — so, like kb-verify, it reports
+# by default and changes nothing until told. Usage: kb-bootstrap [--check | --apply]
+#   (no flag)     same as --check: report what is configured and what would
+#                 change; change nothing. Exit 1 if anything would change.
+#   --check,
+#   --dry-run     explicit spelling of the default, for scripts that want to say so.
+#   --apply       make the changes described above.
 set -uo pipefail
 
-mode=apply
+mode=check
 case "${1:-}" in
-  --check|--dry-run) mode=check ;;
+  --check|--dry-run|"") mode=check ;;
+  --apply) mode=apply ;;
   -h|--help) awk 'NR>1 && /^#/ {sub(/^# ?/, ""); print; next} NR>1 {exit}' "$0"; exit 0 ;;
-  "") ;;
   *) echo "kb-bootstrap: unknown option $1" >&2; exit 2 ;;
 esac
 
@@ -172,7 +177,7 @@ done
 echo
 [ "$old_hook" = yes ] && echo "note: the old hook script $cfg/hooks/kb-root.sh is no longer referenced — safe to delete."
 if [ "$mode" = check ]; then
-  [ "$drift" -eq 0 ] && echo "Everything is configured." || echo "Run kb-bootstrap to apply the changes above."
+  [ "$drift" -eq 0 ] && echo "Everything is configured." || echo "Run kb-bootstrap --apply to apply the changes above."
   exit "$drift"
 fi
 echo "Done. Restart any open Claude Code session and terminal to pick this up."

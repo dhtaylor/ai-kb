@@ -67,6 +67,20 @@ it happens to use, and prefer the shorter. If two names are genuinely equivalent
 rather than coin one**: renaming later rots the golden set and every `[[slug]]` pointing at the
 domain, so a cheap question now beats a migration later.
 
+## Step 2b — Confirm the plan before writing anything
+
+Every step from here on mutates: a new repository, a new directory tree, new files. State the plan
+and get explicit approval before Step 3 runs a single command:
+
+- the domain name and where it lives (`<engine>/kb/<domain>/`, or the project's `knowledge/` for a
+  `repo:` tier);
+- the `scope:` and the tier test that produced it (Step 1);
+- whether it will be seeded from source material (Step 4) or left an empty shelf.
+
+If the user already gave an unambiguous instruction that covers all three (named the domain, stated
+or confirmed the tier, and said what if anything to seed it with), proceed without re-asking — this
+is a confirmation of the plan, not a second interrogation of decisions already made.
+
 ## Step 3 — Scaffold the library. It is a repository, not a folder.
 
 A domain library is its **own git repository**, installed under the engine at
@@ -106,7 +120,7 @@ find_engine() {
 ENGINE=$(find_engine)
 if [ -z "$ENGINE" ]; then
   echo "domain pre-commit: engine not found — structural checks SKIPPED."
-  echo "  Run kb-bootstrap on this machine, or clone this library under an engine's kb/."
+  echo "  Run kb-bootstrap --apply on this machine, or clone this library under an engine's kb/."
   exit 0
 fi
 
@@ -287,6 +301,12 @@ results verbatim.
 State plainly what is **not** covered: a new domain has no facts yet, so nothing about currency,
 contradictions or retrieval has been tested. A domain passing these checks is structurally sound —
 it is not verified, and should not be described as if it were.
+
+**Stop here for approval before committing.** Everything so far exists only in an uncommitted
+working tree — that is the draft, the same way `kb-update-domain` gates a fold at its own review
+step. Show what was created (the file list, and, if seeded, Step 4's fact-by-fact comparison against
+its source) and do not run `git commit` inside the new library until the human approves it. If they
+do not, leave it uncommitted and say so — an uncommitted `git init` costs nothing to discard.
 
 ## Refusals
 

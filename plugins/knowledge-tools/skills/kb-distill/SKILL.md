@@ -144,6 +144,11 @@ Present, before committing:
 
 Then run the engine's `scripts/check-kb <library>` and report the result and its limits.
 
+**Stop here for review. Only after the human approves do you commit.** The facts above are already
+written into the library's working tree, not the library's history — that is the draft, the same
+gate `kb-update-domain` applies to a fold. If nothing is approved, leave the working tree as it is
+and say so; an uncommitted distillation costs nothing to discard or revise.
+
 ## Refusals
 
 Stop rather than proceed, if:

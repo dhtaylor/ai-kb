@@ -46,11 +46,11 @@ Requirements: git, bash, Python 3 (standard library only) and Claude Code.
 git clone https://github.com/dhtaylor/ai-kb.git ~/kb-engine
 mkdir -p ~/kb-engine/kb
 git clone <library-url> ~/kb-engine/kb/<library-name>     # each library you have access to
-~/kb-engine/scripts/kb-bootstrap                          # register the engine on this machine
+~/kb-engine/scripts/kb-bootstrap --apply                  # register the engine on this machine
 ```
 
-Then restart your terminal and any open Claude Code session. Run `kb-bootstrap --check` at any time
-to confirm the setup without changing anything.
+Then restart your terminal and any open Claude Code session. Run `kb-bootstrap` (no flag, same as
+`--check`) at any time to see what it would change without changing anything.
 
 In each project where you want knowledge captured, run `kb-init`. Do this in every clone, because
 git does not clone hook configuration.

@@ -125,7 +125,7 @@ if [ -n \"\$kb_engine\" ] && [ -x \"\$kb_engine/scripts/check-kb\" ]; then
     && \"\$kb_engine/scripts/check-scope\" knowledge \\
     && \"\$kb_engine/scripts/check-xlinks\" \"\$kb_engine/kb\" knowledge || exit 1
 else
-  echo \"knowledge: engine not found (run kb-bootstrap on this machine) — structural checks skipped\"
+  echo \"knowledge: engine not found (run kb-bootstrap --apply on this machine) — structural checks skipped\"
 fi"
 
 if [ "$is_git" -eq 1 ]; then
@@ -187,7 +187,7 @@ if [ "$is_git" -eq 1 ]; then
   fi
 fi
 
-[ -n "${KB_ENGINE_ROOT:-}$(git config --get kb.engineRoot 2>/dev/null)" ] || notes+=("no engine registered on this machine — the hook will skip its checks until kb-bootstrap is run")
+[ -n "${KB_ENGINE_ROOT:-}$(git config --get kb.engineRoot 2>/dev/null)" ] || notes+=("no engine registered on this machine — the hook will skip its checks until kb-bootstrap --apply is run")
 
 # 6. Report -------------------------------------------------------------------
 echo "kb-init: $name  ($root)"

@@ -142,6 +142,12 @@ Then report:
 State what the checks do not cover: whether a fact landed in the file where a reader would look
 for it, and whether the golden set still tests the questions worth asking.
 
+**Stop here for review. Only after the human approves do you commit.** Every move, split, merge and
+rename above already happened in the working tree, not in the library's history — that is the draft,
+the same gate `kb-update-domain` applies to a fold. If nothing is approved, leave the reshape
+uncommitted and say so; nothing here is final until it is committed, and for a rename, not until
+every reference update lands in that same commit.
+
 ## Refusals
 
 Stop rather than proceed, if:

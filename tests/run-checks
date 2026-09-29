@@ -404,6 +404,35 @@ tool_fixture "$TMP/toolscope/badtier/agents/fx.md" tools bogus "Read, Grep, Glob
 case_run "unknown tier fails" 1 "unknown tier" -- \
   "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/badtier"
 
+# ----------------------------------------------------------- kb-bootstrap ----
+# kb-bootstrap writes machine-level config OUTSIDE this repo (a settings file,
+# global git config, a shell rc) — the highest-blast-radius script here — so it
+# must default to report-only, exactly like kb-verify's --yes. Build a fixture
+# "engine" (the script needs CONVENTIONS.md, a marketplace.json and an
+# executable kb-session-start to accept a directory as one) plus a hermetic
+# HOME, so this test can never touch the real ~/.claude or ~/.gitconfig.
+BFX="$TMP/bootstrap-fx"; mkdir -p "$BFX/scripts" "$BFX/.claude-plugin"
+cp "$ENGINE/scripts/kb-bootstrap" "$BFX/scripts/kb-bootstrap"; chmod +x "$BFX/scripts/kb-bootstrap"
+printf '# fixture contract\n' > "$BFX/CONVENTIONS.md"
+printf '{"name":"fx-market","plugins":[{"name":"fx-plugin"}]}\n' > "$BFX/.claude-plugin/marketplace.json"
+printf '#!/usr/bin/env bash\ntrue\n' > "$BFX/scripts/kb-session-start"
+chmod +x "$BFX/scripts/kb-session-start"
+BHOME="$TMP/bootstrap-home"; mkdir -p "$BHOME"
+
+case_run "no flag: reports drift, changes nothing" 1 "would-set" -- \
+  env -i HOME="$BHOME" PATH="$PATH" "$BFX/scripts/kb-bootstrap"
+case_run "no flag: settings.json was not created" 1 "" -- test -e "$BHOME/.claude/settings.json"
+case_run "no flag: global git config was not touched" 1 "" -- \
+  env -i HOME="$BHOME" PATH="$PATH" git config --global --get kb.engineRoot
+case_run "--check: same report-only behaviour, spelled out" 1 "would-set" -- \
+  env -i HOME="$BHOME" PATH="$PATH" "$BFX/scripts/kb-bootstrap" --check
+
+env -i HOME="$BHOME" PATH="$PATH" "$BFX/scripts/kb-bootstrap" --apply >/dev/null 2>&1
+case_run "--apply: settings.json now names the fixture engine" 0 "$BFX" -- \
+  cat "$BHOME/.claude/settings.json"
+case_run "--apply: global git config now names the fixture engine" 0 "$BFX" -- \
+  env -i HOME="$BHOME" PATH="$PATH" git config --global --get kb.engineRoot
+
 # ------------------------------------------------------------- kb-verify ----
 build_clean "$TMP/vpass"
 printf 'Recheck: true\n' >> "$TMP/vpass/widgets.md"
@@ -427,6 +456,18 @@ build_clean "$TMP/vnone"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vnone/widgets.md"
 case_run "stale section with no assertion is named, not skipped" 0 "no assertion" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vnone" --all
+
+# kb-verify's own --yes gate (§3 of its docstring): without it, a Recheck command
+# is printed, never executed. Prove it with an observable side effect — a rewritten
+# date can be missed by eye, a file that must-not-exist cannot.
+build_clean "$TMP/vgate"
+printf 'Recheck: touch "%s/vgate-sentinel"\n' "$TMP" >> "$TMP/vgate/widgets.md"
+case_run "no --yes: the command is printed, not run" 0 "NOT run" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vgate" --all
+case_run "no --yes: its side effect never happened" 1 "" -- test -e "$TMP/vgate-sentinel"
+
+"$ENGINE/scripts/kb-verify" "$TMP/vgate" --all --yes >/dev/null 2>&1
+case_run "--yes: the command actually runs" 0 "" -- test -e "$TMP/vgate-sentinel"
 
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"

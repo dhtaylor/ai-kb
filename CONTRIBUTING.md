@@ -16,22 +16,25 @@ is the path through it, not a summary of it.
 git clone https://github.com/dhtaylor/ai-kb.git ~/kb-engine      # the engine, anywhere you like
 mkdir -p ~/kb-engine/kb
 git clone <library-url> ~/kb-engine/kb/<library-name>            # each library you need
-~/kb-engine/scripts/kb-bootstrap                                 # register it on this machine
+~/kb-engine/scripts/kb-bootstrap --apply                         # register it on this machine
 ```
 
-`kb-bootstrap` takes no arguments: the engine is wherever the script lives. It writes
+The engine is wherever the script lives; nothing else is typed. It writes
 `~/.claude/settings.json` (the engine path, the plugin, the session hook), `git config --global
-kb.engineRoot`, a `PATH` block in your shell rc, and `core.hooksPath` in each installed library. It
-merges with what is already there, backs a file up before changing it, and is safe to run again —
-run it again whenever the engine moves, or when you clone another library.
+kb.engineRoot`, a `PATH` block in your shell rc, and `core.hooksPath` in each installed library —
+but only with `--apply`. It merges with what is already there, backs a file up before changing it,
+and is safe to run again — run it again whenever the engine moves, or when you clone another library.
 
 **Then restart your terminal and any open Claude Code session.** A shell profile is read at shell
 start, and Claude reads its settings and plugin content once per session.
 
-Check it whenever you are unsure:
+**Gated, like `kb-verify`.** Run with no flag (or `--check`) at any time to see what it would do
+without changing anything:
 
 ```bash
-kb-bootstrap --check      # reports drift, changes nothing, exits 1 if anything is out of step
+kb-bootstrap               # reports drift, changes nothing, exits 1 if anything is out of step
+kb-bootstrap --check       # the same, spelled out
+kb-bootstrap --apply       # makes the changes above
 ```
 
 ### In each project
@@ -192,8 +195,9 @@ is true, whether its source still says so, or whether it landed where a reader w
 ## When something looks wrong
 
 **"knowledge: engine not found — structural checks skipped"** — this machine has no engine
-registered. Run `kb-bootstrap`. The hook deliberately skips rather than failing, so an unconfigured
-machine is not blocked from working, which does mean an unbootstrapped clone is unguarded.
+registered. Run `kb-bootstrap --apply`. The hook deliberately skips rather than failing, so an
+unconfigured machine is not blocked from working, which does mean an unbootstrapped clone is
+unguarded.
 
 **A commit went through unchecked** — either the above, or `core.hooksPath` is unset in that clone.
 Run `kb-init` in it.
@@ -215,7 +219,7 @@ from where it belongs rather than restating it.
 A library is its own repository, one domain, self-contained: its facts, its sources, its archived
 evidence and its golden set travel together, so it stays useful wherever it is cloned. Use
 `kb-create-domain` to scaffold one, give it a remote, and clone it into `kb/` on each machine that
-needs it — then `kb-bootstrap` again to wire its hook.
+needs it — then `kb-bootstrap --apply` again to wire its hook.
 
 Nothing registers a library anywhere. It is discovered by being present under `kb/`, and the session
 hook enumerates what it finds. A machine that has not cloned a library gets a warning, never a
