@@ -587,7 +587,7 @@ case_run "verifier fixture: --yes without --apply restamps nothing" 0 "Verified:
 
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
-sed -i 's/^last_swept: never$/last_swept: 2026-09-21/' "$TMP/due/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$TMP/due/INDEX.md"   # computed: a typed date expires
 case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due"
 
 build_clean "$TMP/overdue"
