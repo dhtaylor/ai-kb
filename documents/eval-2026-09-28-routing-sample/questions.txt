@@ -1,0 +1,12 @@
+Q01: Why is a "database story" a bad way to split a piece of work?
+Q02: What is the 5 Whys technique used for when shaping a user story?
+Q03: Why is rhythmic monotony (uniform sentence length) treated as a real signal rather than a weak one?
+Q04: Does heavy em-dash use by itself prove a document is AI-written?
+Q05: What is the common work-item category that "User Story," "Product Backlog Item," "Issue," and "Requirement" all belong to?
+Q06: Where should I look to learn what makes a piece of acceptance criteria good, beyond which Azure DevOps field holds it?
+Q07: Does the Read tool expand shell environment variables given in a file_path?
+Q08: If a project redeclares an already-registered marketplace with its own git source, which source does Claude Code actually use?
+Q09: In Analysis of Competing Hypotheses, is the most likely hypothesis the one with the most evidence for it?
+Q10: Are likelihood and confidence the same axis when expressing an analytic judgment?
+Q11: Does rotating a leaked secret remove it from git history?
+Q12: Why did nobody notice check-kb importing PyYAML until the regression suite ran it in CI?

@@ -540,6 +540,9 @@ none is attributed to a tool because the source names none. That is a deliberate
 ### Phase 4 — Orchestration + safety hardening
 Thin orchestrator (**routes, capped fan-out**, §5A) over the domain workers; full least-privilege tool audit;
 state-changing commands armed with confirmation gates.
+**Orchestrator not built (2026-09-28, ADR-0011):** a routing sample put 12 of 12 answers in the
+right library, with no content read from an unneeded one, so `kb-retrieve` already routes, passes
+through and stays within two libraries. ADR-0011 records when to reopen this.
 **Exit:** Verifier fixture test and Watcher replay test pass; high-blast-radius PR policy enforced.
 
 ### Phase 5 — Steady state, librarians & team onboarding

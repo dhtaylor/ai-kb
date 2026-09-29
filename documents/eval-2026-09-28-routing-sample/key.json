@@ -1,0 +1,86 @@
+[
+ {
+  "case": "positive",
+  "question": "Why is a \"database story\" a bad way to split a piece of work?",
+  "expected_file": "story-splitting-spidr.md",
+  "lib": "agile-requirements",
+  "id": "Q01"
+ },
+ {
+  "case": "positive",
+  "question": "What is the 5 Whys technique used for when shaping a user story?",
+  "expected_file": "elicitation-techniques.md",
+  "lib": "agile-requirements",
+  "id": "Q02"
+ },
+ {
+  "case": "positive",
+  "question": "Why is rhythmic monotony (uniform sentence length) treated as a real signal rather than a weak one?",
+  "expected_file": "structural-and-rhetorical-patterns.md",
+  "lib": "ai-writing-signals",
+  "id": "Q03"
+ },
+ {
+  "case": "positive",
+  "question": "Does heavy em-dash use by itself prove a document is AI-written?",
+  "expected_file": "punctuation-and-formatting-tells.md",
+  "lib": "ai-writing-signals",
+  "id": "Q04"
+ },
+ {
+  "case": "positive",
+  "question": "What is the common work-item category that \"User Story,\" \"Product Backlog Item,\" \"Issue,\" and \"Requirement\" all belong to?",
+  "expected_file": "user-story-work-item.md",
+  "lib": "azure-devops",
+  "id": "Q05"
+ },
+ {
+  "case": "cross-root",
+  "question": "Where should I look to learn what makes a piece of acceptance criteria good, beyond which Azure DevOps field holds it?",
+  "expected_file": "user-story-work-item.md",
+  "lib": "azure-devops",
+  "id": "Q06"
+ },
+ {
+  "case": "positive",
+  "question": "Does the Read tool expand shell environment variables given in a file_path?",
+  "expected_file": "tool-semantics.md",
+  "lib": "claude-code-runtime",
+  "id": "Q07"
+ },
+ {
+  "case": "positive",
+  "question": "If a project redeclares an already-registered marketplace with its own git source, which source does Claude Code actually use?",
+  "expected_file": "behaviour-loading.md",
+  "lib": "claude-code-runtime",
+  "id": "Q08"
+ },
+ {
+  "case": "positive",
+  "question": "In Analysis of Competing Hypotheses, is the most likely hypothesis the one with the most evidence for it?",
+  "expected_file": "structured-analytic-techniques.md",
+  "lib": "intelligence-analysis",
+  "id": "Q09"
+ },
+ {
+  "case": "positive",
+  "question": "Are likelihood and confidence the same axis when expressing an analytic judgment?",
+  "expected_file": "analytic-writing-craft.md",
+  "lib": "intelligence-analysis",
+  "id": "Q10"
+ },
+ {
+  "case": "positive",
+  "question": "Does rotating a leaked secret remove it from git history?",
+  "expected_file": "secret-governance.md",
+  "lib": "knowledge-architecture",
+  "id": "Q11"
+ },
+ {
+  "case": "positive",
+  "question": "Why did nobody notice check-kb importing PyYAML until the regression suite ran it in CI?",
+  "expected_file": "guardrail-verification.md",
+  "lib": "knowledge-architecture",
+  "id": "Q12"
+ }
+]
