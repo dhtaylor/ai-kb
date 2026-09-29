@@ -1,0 +1,250 @@
+#!/usr/bin/env python3
+"""check-blast — detect high-blast-radius changes, so they can be gated rather than merged quietly.
+
+Phase 4 step 6 (combination plan §5A "The automation principle", the "Never automated" band and
+its "Enforce it, don't just declare it" bullet): resolving a contradiction, deleting knowledge, and
+promoting repo -> general are never automated. This is the CI gate that enforces that bullet: "A CI
+gate blocks auto-merge of any PR that deletes a knowledge/ file, resolves a contradictions.md entry,
+or moves a file repo->general, unless a label writable only by a domain owner (not the agent
+identity) is set."
+
+THE OWNER'S DECISION FOR THIS STEP (recorded in documents/state-change-gates.md): a CI gate, admin
+bypass kept. The plan's paired bullet — 2 reviewers + a 24h window for high-blast-radius facts — is
+left DORMANT until a second owner exists: ADR-0002 already establishes that a single contributor
+cannot constitute two approvals or a second reviewer, and the same reasoning applies unchanged to
+two reviewers on a high-blast PR. Nothing here builds that half.
+
+DETECTION ONLY. This script changes nothing — it reads a diff and reports every high-blast finding
+on stdout. Gating on a positive finding (failing a required status check, requiring a label to pass)
+is CI's job, wired into .github/workflows/guardrails.yml and documents/library-guardrails.yml, never
+this script's.
+
+TWO REPO KINDS, told apart by what sits at the repo root — the same distinction CONVENTIONS §1/§2
+draws in prose: CONVENTIONS.md exists ONLY in the engine (ADR-0007 — "the engine holds no domains";
+a library holds content, not the contract), and a root INDEX.md exists ONLY in a library ("INDEX.md
+at the library root is the domain router"; the engine has no domain to route, so it has none). A
+repo with neither is not one check-blast recognizes — usage error, not a silent guess at which
+rules apply.
+
+WHAT COUNTS AS A "FACT FILE" (library repos): any tracked *.md file, outside documents/, plugins/,
+scripts/, .github/, .githooks/, .claude-plugin/, .claude/ and .git/ (the same NON_KB exclusion
+check-kb and check-scope already use), EXCEPT an INDEX.md at any level (a router, not a fact) and a
+*-golden.md (the test oracle, not a fact — its own removal is already check-golden's job: "a library
+with content and no oracle is untested by construction"). documents/ holds archived EVIDENCE
+(CONVENTIONS §6), not the facts themselves, which is why it is excluded here rather than overlooked.
+
+CONFLICTED-MARKER REMOVAL: counts occurrences of the inline `status: CONFLICTED` marker (CONVENTIONS
+§8) in a file's old and new content — matched by path, or by old-path -> new-path across a detected
+rename. A drop in count is a contradiction being resolved outside the review §8 requires ("do not
+silently pick a winner"). Checked over every tracked knowledge file, not only "fact files" as
+defined above, because a state leaf (a `<domain>-contradictions.md` register) can carry the same
+inline marker syntax.
+
+SCOPE PROMOTION: ADR-0004 draws one tier boundary explicitly — repo:<project> is a different HOME
+(the project repository) from product:<vendor> / org:<company> / general, which all share ONE home
+(the general root) and differ only in how wide a claim they make. Within that shared home, the
+combination plan's own three-tier language (§2: "product/org-general, cross-repo" named as a single
+middle tier, sitting between repo-specific and personal) ranks product: and org: together — both
+narrower than an unqualified `general` claim, which asserts a truth with no vendor or company
+qualifier at all. That gives the strict order used here:
+
+    repo:<project>   <   { product:<vendor>, org:<company> }   <   general
+
+A change from a narrower rank to a strictly higher rank is a promotion and is flagged.
+product:<vendor> <-> org:<company> is a lateral reclassification (same rank, not a promotion toward
+general) and is deliberately NOT flagged — §5A's named hazard is a fact moving toward the general
+tier, not a fact being reclassified within it.
+
+ENGINE-SIDE: any change — add, edit, delete or rename — that touches CONVENTIONS.md (the contract)
+or a file under documents/decisions/ (the record). CODEOWNERS already marks both `@dhtaylor` at the
+highest review bar; this is CI saying the same thing where a human reviewer might not be looking.
+
+THE LABEL: `owner-approved`. Chosen over something like "high-blast-approved" because it names WHO
+is attesting, not what is being approved — matching §5A's own phrasing, "a label writable only by a
+domain owner." It reads the same on a library PR or an engine PR. NOTE (see
+documents/state-change-gates.md): today, with one collaborator on each repository, this label is
+writable by anyone with triage access — "writable only by a domain owner" is a property of there
+being exactly one collaborator, not of any permission this script or the workflow enforces.
+
+Usage: check-blast <base> <head> [--labels <comma,list>]
+  Run inside a git repository (library or engine) that already has both <base> and <head> as
+  resolvable commits (a shallow clone with the wrong depth will fail the diff, not silently pass).
+  --labels   the PR's labels (e.g. names from github.event.pull_request.labels[].name), comma-
+             separated. If 'owner-approved' is among them, findings still print, but the exit code
+             is 0 rather than 1 — detection is not suppressed, only the gate is.
+Exit 0 if no high-blast finding (or the owner label is present); 1 if any finding and no owner
+label; 2 on a usage error (bad arguments, not a git repository, base/head do not resolve, or the
+repo root has neither CONVENTIONS.md nor INDEX.md).
+"""
+import pathlib, re, subprocess, sys
+
+NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
+          ".claude-plugin", ".claude", ".git"}
+OWNER_LABEL = "owner-approved"
+CONFLICTED_RE = re.compile(r"^\s*status:\s*CONFLICTED\b", re.M)
+SCOPE_RE = re.compile(r"^scope:\s*(\S+)\s*$", re.M)
+# ADR-0004 / plan §2: repo: is a different HOME; product:/org: share the general
+# root and are ranked together, narrower than an unqualified general claim.
+RANK = {"repo": 0, "product": 1, "org": 1, "general": 2}
+
+
+def run(*args):
+    return subprocess.run(args, capture_output=True, text=True)
+
+
+def repo_root():
+    p = run("git", "rev-parse", "--show-toplevel")
+    return pathlib.Path(p.stdout.strip()) if p.returncode == 0 else None
+
+
+def repo_kind(root: pathlib.Path):
+    if (root / "CONVENTIONS.md").is_file():
+        return "engine"
+    if (root / "INDEX.md").is_file():
+        return "library"
+    return None
+
+
+def in_kb(path: str) -> bool:
+    parts = pathlib.Path(path).parts
+    return path.endswith(".md") and not (NON_KB & set(parts))
+
+
+def is_fact_file(path: str) -> bool:
+    if not in_kb(path):
+        return False
+    name = pathlib.Path(path).name
+    return name != "INDEX.md" and not name.endswith("-golden.md")
+
+
+def tier_rank(scope: str):
+    return RANK.get(scope.split(":", 1)[0])
+
+
+def show(ref: str, path: str):
+    """Content of path at ref, or None if it does not exist there."""
+    p = run("git", "show", f"{ref}:{path}")
+    return p.stdout if p.returncode == 0 else None
+
+
+def diff_entries(base: str, head: str):
+    """[(status, old_path_or_None, new_path_or_None)], with rename detection (-M)."""
+    p = run("git", "diff", "--name-status", "-M", base, head)
+    if p.returncode != 0:
+        return None, p.stderr
+    out = []
+    for line in p.stdout.splitlines():
+        if not line.strip():
+            continue
+        fields = line.split("\t")
+        status = fields[0]
+        if status.startswith("R"):
+            old_path, new_path = fields[1], fields[2]
+        elif status == "A":
+            old_path, new_path = None, fields[1]
+        elif status == "D":
+            old_path, new_path = fields[1], None
+        else:  # M, T, C ...
+            old_path, new_path = fields[1], fields[1]
+        out.append((status, old_path, new_path))
+    return out, None
+
+
+def find_blast(base: str, head: str, kind: str):
+    entries, err = diff_entries(base, head)
+    if err is not None:
+        return None, err
+    findings = []
+
+    if kind == "library":
+        for status, old_path, new_path in entries:
+            if old_path and is_fact_file(old_path) and new_path != old_path:
+                if new_path is None:
+                    findings.append((old_path, "fact file deleted"))
+                else:
+                    findings.append((old_path, f"fact file renamed to {new_path} — the slug "
+                                                f"changes; a citation naming the old slug goes dead"))
+
+            if not (old_path and new_path and in_kb(old_path) and in_kb(new_path)):
+                continue
+            old_text, new_text = show(base, old_path), show(head, new_path)
+            if old_text is None or new_text is None:
+                continue
+
+            old_n, new_n = len(CONFLICTED_RE.findall(old_text)), len(CONFLICTED_RE.findall(new_text))
+            if new_n < old_n:
+                findings.append((new_path, f"removes a CONFLICTED marker ({old_n} -> {new_n}) — "
+                                            f"resolving a contradiction is never automated (CONVENTIONS §8)"))
+
+            old_m, new_m = SCOPE_RE.search(old_text), SCOPE_RE.search(new_text)
+            if old_m and new_m and old_m.group(1) != new_m.group(1):
+                old_scope, new_scope = old_m.group(1), new_m.group(1)
+                old_rank, new_rank = tier_rank(old_scope), tier_rank(new_scope)
+                if old_rank is not None and new_rank is not None and new_rank > old_rank:
+                    findings.append((new_path, f"scope promoted {old_scope} -> {new_scope} — "
+                                                f"toward the general tier (ADR-0004)"))
+
+    elif kind == "engine":
+        for status, old_path, new_path in entries:
+            touched = {p for p in (old_path, new_path) if p}
+            label = new_path or old_path
+            if "CONVENTIONS.md" in touched:
+                findings.append((label, "CONVENTIONS.md changed — the contract every library conforms to"))
+            if any(p.startswith("documents/decisions/") and p.endswith(".md") for p in touched):
+                findings.append((label, "decision record changed — the record of why, not just what"))
+
+    return findings, None
+
+
+def main(argv):
+    labels, pos = set(), []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--labels":
+            if i + 1 >= len(argv):
+                print("usage: check-blast <base> <head> [--labels <comma,list>]", file=sys.stderr)
+                return 2
+            labels = {s.strip() for s in argv[i + 1].split(",") if s.strip()}
+            i += 2
+        elif a.startswith("--labels="):
+            labels = {s.strip() for s in a.split("=", 1)[1].split(",") if s.strip()}
+            i += 1
+        else:
+            pos.append(a)
+            i += 1
+    if len(pos) != 2:
+        print("usage: check-blast <base> <head> [--labels <comma,list>]", file=sys.stderr)
+        return 2
+    base, head = pos
+
+    root = repo_root()
+    if root is None:
+        print("check-blast: not a git repository", file=sys.stderr)
+        return 2
+    kind = repo_kind(root)
+    if kind is None:
+        print(f"check-blast: {root} has neither CONVENTIONS.md nor INDEX.md at its root — "
+              f"not a recognized repo kind", file=sys.stderr)
+        return 2
+
+    findings, err = find_blast(base, head, kind)
+    if err is not None:
+        print(f"check-blast: cannot diff {base}..{head}: {err.strip()}", file=sys.stderr)
+        return 2
+
+    for path, reason in findings:
+        print(f"BLAST {path}: {reason}")
+
+    approved = OWNER_LABEL in labels
+    if findings:
+        note = f" — '{OWNER_LABEL}' label present, not blocking" if approved else ""
+        print(f"\ncheck-blast: {len(findings)} high-blast finding(s) in {kind} repo{note}")
+    else:
+        print(f"\ncheck-blast: clean ({kind} repo, {base}..{head})")
+
+    return 0 if (not findings or approved) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

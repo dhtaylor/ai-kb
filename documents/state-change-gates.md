@@ -44,3 +44,50 @@ in the sense that it changes what a compliant run does and gives a human somethi
 before the mutation becomes durable (a git commit); it is not real in the sense of being able to stop
 a run that ignores it. That gap is exactly why `scripts/kb-bootstrap` and `scripts/kb-verify` gate
 with a command-line flag instead: a flag is checked by the interpreter, not honored by an agent.
+
+## The high-blast-radius gate (Phase 4 step 6)
+
+`scripts/check-blast` is the one gate in this table enforced by CI rather than by a skill's
+procedure text or a `tools:` allowlist — a flag checked by a status check, not a request a model is
+trained to honor, which is the same reason `kb-bootstrap` and `kb-verify` gate with a flag instead
+of a stop instruction (above).
+
+**What it blocks.** The plan's §5A "Never automated" band, made mechanical: in a domain library, a
+PR that deletes or renames away a fact file, removes an inline `status: CONFLICTED` marker
+(resolving a contradiction — CONVENTIONS §8), or changes a fact's `scope:` to a strictly wider tier
+per ADR-0004 (`repo:` → `{product:, org:}` → `general`); in the engine, a PR touching
+`CONVENTIONS.md` or anything under `documents/decisions/`. It runs as part of the existing
+`guardrails` job in both `.github/workflows/guardrails.yml` (engine) and
+`documents/library-guardrails.yml` (the per-library template), so it is covered by the `guardrails`
+required status check already in place on the public engine repository (verified via
+`gh api repos/dhtaylor/ai-kb/branches/main/protection`: `contexts: ["guardrails"]`).
+
+**The label.** `owner-approved`, read from the pull request's own labels
+(`github.event.pull_request.labels`, via `$GITHUB_EVENT_PATH` — no token added, matching the rest of
+this workflow's anonymous-fetch design). Present, a high-blast finding still prints but no longer
+fails the check. The `pull_request` trigger includes `labeled`/`unlabeled`, so adding or removing the
+label re-runs the check without a new commit.
+
+**Admin push bypasses it, with a warning.** On `push` (the same admin-exemption path ADR-0002
+already documents for the rest of this workflow) `check-blast` runs but a nonzero exit is caught and
+printed as a `::warning::` rather than failing the job — the push has already landed by the time CI
+runs, so failing the build would not have stopped it, only hidden that it happened after the fact.
+This is the same asymmetry ADR-0002 already names for every other check in this workflow, not a new
+one introduced here.
+
+**The 2-reviewer + 24h rule is dormant, not built.** The plan's paired bullet for high-blast-radius
+facts — two reviewers and a 24-hour window — is recorded here as an explicit non-goal for this pass,
+for the same reason ADR-0002 gives for deferring CODEOWNERS review generally: a single contributor
+cannot constitute two reviewers any more than they can constitute two approvals on their own pull
+request, or avoid self-merge. Building it now would be either theatre (nothing to enforce it against)
+or an outright block on every change. Revisit together with ADR-0002's own trigger: when a second
+contributor joins.
+
+**"Writable only by a domain owner" is a label on the honor system today.** §5A's own wording
+requires the label be writable only by a domain owner, not the agent identity. GitHub label
+permissions are not that granular: anyone with triage access or above can apply or remove any label,
+and on a private repository with one collaborator, that collaborator *is* everyone with triage
+access. So today `owner-approved` is exactly as enforceable as CODEOWNERS was before branch
+protection (ADR-0002) — real machinery, sitting idle until there is a second collaborator whose
+access is *not* triage-or-above on this repository, at which point restricting who may apply the
+label becomes a real, checkable claim rather than a name on a gate nobody else can reach.

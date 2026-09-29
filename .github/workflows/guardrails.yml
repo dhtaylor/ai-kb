@@ -17,6 +17,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 jobs:
@@ -52,6 +53,27 @@ jobs:
           before="${{ github.event.before }}"
           case "$before" in ''|0000000000000000000000000000000000000000) before="${{ github.sha }}~1" ;; esac
           ./scripts/check-stamps "$before..${{ github.sha }}" || exit 1
+
+      # Phase 4 step 6 (§5A "Never automated"): a PR that deletes/renames-away a
+      # fact file, removes a CONFLICTED marker, promotes a scope, or touches
+      # CONVENTIONS.md / documents/decisions/ is blocked from this required
+      # status check unless the PR carries the 'owner-approved' label — read from
+      # the event payload, no token needed, none may be added. On a direct push
+      # (the admin-bypass path, ADR-0002) this only warns: a push has already
+      # landed by the time this runs, so failing the build here would not have
+      # stopped it, only hidden that it happened.
+      - name: High-blast-radius scan
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            labels=$(jq -r '[.pull_request.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
+            ./scripts/check-blast "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" --labels "$labels"
+          else
+            before="${{ github.event.before }}"
+            case "$before" in ''|0000000000000000000000000000000000000000) before="${{ github.sha }}~1" ;; esac
+            ./scripts/check-blast "$before" "${{ github.sha }}" || \
+              echo "::warning::check-blast found high-blast-radius change(s) on a direct push — see the log above"
+          fi
 
       - name: Guardrail regression suite
         run: ./tests/run-checks -v

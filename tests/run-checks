@@ -875,6 +875,98 @@ case_run "kb-watch: no network module imported" 1 "" -- \
   grep -E '^import (urllib|http\.client|socket|requests)|^from (urllib|http\.client|socket|requests) ' \
   "$ENGINE/scripts/kb-watch"
 
+# ---------------------------------------------------------------- check-blast ----
+# Phase 4 step 6 (§5A "Never automated" + "Enforce it, don't just declare it"):
+# detect deleting/renaming-away a fact file, removing a CONFLICTED marker,
+# promoting a scope, and editing the engine's contract or decision record — so CI
+# can gate a PR on the finding rather than a human happening to notice the diff.
+# Detection only: these fixtures prove it fires on the right diff and only that
+# diff, each one a committed base plus a single offending commit on top.
+
+blast_base() { # blast_base <dir> [scope] -- a committed library, ready for a second commit
+  build_clean "$1" "${2:-general}"
+  git -C "$1" -c user.email=t@t -c user.name=t commit -qm base >/dev/null 2>&1
+}
+
+BL1="$TMP/blast/delete"; blast_base "$BL1"
+rm "$BL1/widgets.md"
+sed -i '/widgets.md) — what widgets do/d' "$BL1/INDEX.md"
+git -C "$BL1" add -A; git -C "$BL1" -c user.email=t@t -c user.name=t commit -qm "delete fact" >/dev/null 2>&1
+case_run "check-blast: deleted fact file" 1 "widgets.md: fact file deleted" -- \
+  sh -c "cd '$BL1' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+BL2="$TMP/blast/rename"; blast_base "$BL2"
+git -C "$BL2" mv widgets.md gizmos.md
+sed -i 's/widgets.md) — what widgets do/gizmos.md) — what widgets do/' "$BL2/INDEX.md"
+git -C "$BL2" add -A; git -C "$BL2" -c user.email=t@t -c user.name=t commit -qm "rename fact" >/dev/null 2>&1
+case_run "check-blast: renamed-away fact file" 1 "widgets.md: fact file renamed to gizmos.md" -- \
+  sh -c "cd '$BL2' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+BL3="$TMP/blast/conflict"; blast_base "$BL3"
+printf '\n## Disputed\n\nstatus: CONFLICTED · since: 2026-01-01\n\nClaim A: 12. Claim B: 20.\n' >> "$BL3/widgets.md"
+git -C "$BL3" add -A; git -C "$BL3" -c user.email=t@t -c user.name=t commit -qm "add conflict" >/dev/null 2>&1
+sed -i '/status: CONFLICTED/d' "$BL3/widgets.md"
+git -C "$BL3" add -A; git -C "$BL3" -c user.email=t@t -c user.name=t commit -qm "resolve conflict" >/dev/null 2>&1
+case_run "check-blast: CONFLICTED marker removed" 1 "widgets.md: removes a CONFLICTED marker (1 -> 0)" -- \
+  sh -c "cd '$BL3' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+BL4="$TMP/blast/promote"; blast_base "$BL4" "product:acme"
+sed -i 's/^scope: product:acme$/scope: general/' "$BL4/widgets.md"
+git -C "$BL4" add -A; git -C "$BL4" -c user.email=t@t -c user.name=t commit -qm "promote scope" >/dev/null 2>&1
+case_run "check-blast: scope promoted toward general" 1 "widgets.md: scope promoted product:acme -> general" -- \
+  sh -c "cd '$BL4' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+# A lateral reclassification (same rank) is not a promotion and must not fire.
+BL4B="$TMP/blast/lateral"; blast_base "$BL4B" "product:acme"
+sed -i 's/^scope: product:acme$/scope: org:acme/' "$BL4B/widgets.md"
+git -C "$BL4B" add -A; git -C "$BL4B" -c user.email=t@t -c user.name=t commit -qm "lateral reclass" >/dev/null 2>&1
+case_run "check-blast: lateral product<->org reclass is not a promotion" 0 "clean (library repo" -- \
+  sh -c "cd '$BL4B' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+BL5="$TMP/blast/benign"; blast_base "$BL5"
+sed -i 's/A widget holds up to 12 things\./A widget holds up to 12 thing./' "$BL5/widgets.md"
+git -C "$BL5" add -A; git -C "$BL5" -c user.email=t@t -c user.name=t commit -qm "typo fix" >/dev/null 2>&1
+case_run "check-blast: benign typo passes" 0 "clean (library repo" -- \
+  sh -c "cd '$BL5' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+# owner-approved label: findings still print, exit becomes 0. A different label
+# does not suppress anything.
+case_run "check-blast: owner label suppresses failure but still prints the finding" 0 \
+  "widgets.md: fact file deleted" -- \
+  sh -c "cd '$BL1' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD --labels owner-approved"
+case_run "check-blast: wrong label still fails" 1 "widgets.md: fact file deleted" -- \
+  sh -c "cd '$BL1' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD --labels some-other-label"
+
+# An engine-shaped repo: root CONVENTIONS.md, no root INDEX.md.
+BLE="$TMP/blast/engine"; mkdir -p "$BLE/documents/decisions"
+printf '# fixture contract\n\nSection one.\n' > "$BLE/CONVENTIONS.md"
+printf '# ADR-0001\n\nOriginal text.\n' > "$BLE/documents/decisions/0001-fixture.md"
+git init -q "$BLE"; git -C "$BLE" add -A
+git -C "$BLE" -c user.email=t@t -c user.name=t commit -qm base >/dev/null 2>&1
+
+sed -i 's/Section one\./Section one, revised./' "$BLE/CONVENTIONS.md"
+git -C "$BLE" add -A; git -C "$BLE" -c user.email=t@t -c user.name=t commit -qm "edit contract" >/dev/null 2>&1
+case_run "check-blast: CONVENTIONS.md edit in engine repo" 1 "CONVENTIONS.md changed" -- \
+  sh -c "cd '$BLE' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+sed -i 's/Original text\./Revised text./' "$BLE/documents/decisions/0001-fixture.md"
+git -C "$BLE" add -A; git -C "$BLE" -c user.email=t@t -c user.name=t commit -qm "edit adr" >/dev/null 2>&1
+case_run "check-blast: decision record edit in engine repo" 1 \
+  "documents/decisions/0001-fixture.md: decision record changed" -- \
+  sh -c "cd '$BLE' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+# usage / repo-kind errors
+case_run "check-blast: usage error on bad arg count" 2 "usage" -- "$ENGINE/scripts/check-blast" onlyone
+
+mkdir -p "$TMP/blast/neither"; git init -q "$TMP/blast/neither"
+printf 'x\n' > "$TMP/blast/neither/file.txt"; git -C "$TMP/blast/neither" add -A
+git -C "$TMP/blast/neither" -c user.email=t@t -c user.name=t commit -qm base >/dev/null 2>&1
+printf 'y\n' >> "$TMP/blast/neither/file.txt"; git -C "$TMP/blast/neither" add -A
+git -C "$TMP/blast/neither" -c user.email=t@t -c user.name=t commit -qm second >/dev/null 2>&1
+case_run "check-blast: repo with neither CONVENTIONS.md nor INDEX.md is a usage error" 2 \
+  "not a recognized repo kind" -- \
+  sh -c "cd '$TMP/blast/neither' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
 # ------------------------------------------------------------------- done ----
 echo
 if [ "$FAIL" -eq 0 ]; then

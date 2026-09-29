@@ -21,6 +21,7 @@ on:
   push:
     branches: ["**"]
   pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
   workflow_dispatch:
 
 jobs:
@@ -54,6 +55,26 @@ jobs:
 
       - name: Secret scan (full history + worktree)
         run: "$ENGINE/scripts/check-secrets --all"
+
+      # Phase 4 step 6 (§5A "Never automated"): a PR that deletes/renames-away a
+      # fact file, removes a CONFLICTED marker, or promotes a scope is blocked
+      # from this required status check unless it carries the 'owner-approved'
+      # label — read from the event payload, no token needed, none may be added,
+      # exactly like the rest of this workflow's anonymous-fetch design. On a
+      # direct push (admin-bypass, ADR-0002) this only warns: the push has
+      # already landed by the time CI runs.
+      - name: High-blast-radius scan
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            labels=$(jq -r '[.pull_request.labels[].name] | join(",")' "$GITHUB_EVENT_PATH")
+            "$ENGINE/scripts/check-blast" "${{ github.event.pull_request.base.sha }}" \
+              "${{ github.event.pull_request.head.sha }}" --labels "$labels"
+          else
+            before="${{ github.event.before }}"
+            case "$before" in ''|0000000000000000000000000000000000000000) before="${{ github.sha }}~1" ;; esac
+            "$ENGINE/scripts/check-blast" "$before" "${{ github.sha }}" || \
+              echo "::warning::check-blast found high-blast-radius change(s) on a direct push — see the log above"
+          fi
 
       # check-xlinks is NOT run here, and that is not an oversight: it resolves
       # [[library:slug]] BETWEEN installed libraries, and a library on its own
