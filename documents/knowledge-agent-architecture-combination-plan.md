@@ -543,6 +543,13 @@ state-changing commands armed with confirmation gates.
 **Orchestrator not built (2026-09-28, ADR-0011):** a routing sample put 12 of 12 answers in the
 right library, with no content read from an unneeded one, so `kb-retrieve` already routes, passes
 through and stays within two libraries. ADR-0011 records when to reopen this.
+**Phase 4 is complete (2026-09-29, ADR-0012).** Both exit criteria pass as regression tests with
+proven traps: the Verifier fixture test (a stale, wrong fact is reported and left byte-for-byte
+unchanged) and the Watcher replay test (`kb-watch`, offline and model-free). The high-blast-radius
+policy is enforced in CI for pull requests, in the engine and all six libraries, and confirmed
+running in GitHub Actions. A direct push by the owner stays a logged bypass. Scoped to one
+maintainer: tool scopes are enforced only for subagents, there are no service accounts, and the
+2-reviewer rule is dormant. ADR-0012 records each limit and what reopens it (§9.18).
 **Exit:** Verifier fixture test and Watcher replay test pass; high-blast-radius PR policy enforced.
 
 ### Phase 5 — Steady state, librarians & team onboarding
@@ -982,3 +989,24 @@ directions: the legacy skill was built on this corpus, and the last wording was 
 seeing two of the final cases. The fair reading is that the new skill has moved from behind to at
 least level, probably ahead. Settling it needs cases neither skill has seen. The owner kept the
 legacy skill in place.
+
+### 9.18 Phase 4: a control's real strength belongs beside the control (2026-09-29)
+
+Phase 4 was written for a team, and the build found three places where the plan's controls meant
+less here than they said.
+
+- **A declared scope is not an enforced one.** Only a subagent's `tools:` is an allowlist. A skill's
+  `allowed-tools:` pre-approves tools and restricts nothing. The lint now checks that the
+  declaration is present and consistent, and says it enforces nothing more. Without that audit, six
+  skills would have carried least-privilege claims that the runtime ignores.
+- **The riskiest script had the backwards default.** `kb-bootstrap` rewrote user settings, global git
+  config and a shell rc unless told `--check`. It now reports unless told `--apply`. Nobody had
+  noticed, because it had only ever been run on purpose.
+- **Tests go stale on the calendar.** Two regression cases typed a literal date. One was a new
+  fixture caught in review, the other had already shipped and would have failed about a month
+  later. Dates in tests are now computed.
+
+The two librarian tests the plan demanded, for the Verifier and the Watcher, both pass with traps
+proven by breaking the code. The orchestrator was measured and not built (ADR-0011). The high-blast
+gate runs in GitHub Actions across seven repositories, and its pull-request path is still
+exercised only locally.
