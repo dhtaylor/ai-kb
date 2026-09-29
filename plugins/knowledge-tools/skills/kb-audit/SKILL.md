@@ -1,6 +1,8 @@
 ---
 name: kb-audit
 description: Sweep a knowledge base for decay — dead links, orphaned files, stale or missing currency stamps, index bloat, empty routed leaves, ageing contradictions and scope misfiling — and build a prioritised needs-attention queue. Detection only; it proposes and never mutates. Use as the acceptance gate after a wave of knowledge work, or as a recurring hygiene sweep. Do NOT use it to fix what it finds.
+allowed-tools: Read, Grep, Glob, Bash, Write, Edit
+tier: curation
 ---
 
 # kb-audit

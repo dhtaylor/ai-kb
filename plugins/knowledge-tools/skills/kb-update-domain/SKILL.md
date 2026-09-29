@@ -1,6 +1,8 @@
 ---
 name: kb-update-domain
 description: Fold source material — a spec, vendor page, legacy document, prior agent prompt, or system output — into an existing knowledge domain, with per-section provenance, dedup and supersede handling, and contradictions flagged rather than resolved. Use when new source material needs to become durable knowledge in a domain that already exists. Do NOT use to create a domain (kb-create-domain), reshape a lumpy one (kb-organize-domain), or distill session notes (kb-distill).
+allowed-tools: Read, Grep, Glob, Bash, Write, Edit
+tier: curation
 ---
 
 # kb-update-domain

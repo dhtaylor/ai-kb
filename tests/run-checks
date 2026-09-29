@@ -361,6 +361,49 @@ git -C "$TMP/bits2" update-index --chmod=-x scripts/do-thing 2>/dev/null
 case_run "shebang script recorded non-executable, whatever its name" 1 "do-thing" -- \
   "$ENGINE/scripts/check-exec-bits" "$TMP/bits2"
 
+# --------------------------------------------------------- check-tool-scope ----
+# tool_fixture <path> <key: tools|allowed-tools> <tier, or "" to omit> <tools value, or "" to omit>
+tool_fixture() {
+  local path="$1" key="$2" tier="$3" tools="$4"
+  mkdir -p "$(dirname "$path")"
+  {
+    echo "---"
+    echo "name: fx"
+    echo "description: a test fixture."
+    [ -n "$tools" ] && echo "$key: $tools"
+    [ -n "$tier" ] && echo "tier: $tier"
+    echo "---"
+    echo "# fx"
+  } > "$path"
+}
+
+mkdir -p "$TMP/toolscope/clean/agents" "$TMP/toolscope/clean/skills/kb-x"
+tool_fixture "$TMP/toolscope/clean/agents/fx.md" tools retrieval "Read, Grep, Glob"
+tool_fixture "$TMP/toolscope/clean/skills/kb-x/SKILL.md" allowed-tools curation "Read, Write, Bash"
+case_run "clean tool-scope fixture passes" 0 "clean" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/clean"
+
+mkdir -p "$TMP/toolscope/notier/agents"
+tool_fixture "$TMP/toolscope/notier/agents/fx.md" tools "" "Read, Grep, Glob"
+case_run "file missing a tier fails" 1 "no tier:" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/notier"
+
+mkdir -p "$TMP/toolscope/noscope/agents"
+tool_fixture "$TMP/toolscope/noscope/agents/fx.md" tools retrieval ""
+case_run "file missing a tool-scope field fails" 1 "no tools:" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/noscope"
+
+mkdir -p "$TMP/toolscope/overreach/agents"
+tool_fixture "$TMP/toolscope/overreach/agents/fx.md" tools retrieval "Read, Grep, Glob, Write"
+case_run "retrieval-tier file declaring Write fails" 1 \
+  "outside the 'retrieval' tier's allowance" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/overreach"
+
+mkdir -p "$TMP/toolscope/badtier/agents"
+tool_fixture "$TMP/toolscope/badtier/agents/fx.md" tools bogus "Read, Grep, Glob"
+case_run "unknown tier fails" 1 "unknown tier" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/badtier"
+
 # ------------------------------------------------------------- kb-verify ----
 build_clean "$TMP/vpass"
 printf 'Recheck: true\n' >> "$TMP/vpass/widgets.md"

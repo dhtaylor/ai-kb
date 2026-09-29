@@ -1,6 +1,8 @@
 ---
 name: kb-create-domain
 description: Stand up a new semantic knowledge domain that does not exist yet, in the correct knowledge tier, conforming to the knowledge conventions — folder, INDEX router, frontmatter, provenance, golden set, and the router chain above it. Use when a fact needs a home and no domain covers it, or when seeding a domain from source material. Do NOT use to add facts to a domain that already exists (that is kb-update-domain) or to reshape a lumpy one (kb-organize-domain).
+allowed-tools: Read, Grep, Glob, Bash, Write
+tier: curation
 ---
 
 # kb-create-domain

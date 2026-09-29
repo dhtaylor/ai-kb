@@ -2,6 +2,7 @@
 description: Capture what this session learned as an episodic note in the nearest knowledge tree. Records; does not classify.
 argument-hint: "[title] [--into TREE]"
 allowed-tools: Bash, Write
+tier: curation
 ---
 
 Write an episodic note about what this session established, then file it with the engine's

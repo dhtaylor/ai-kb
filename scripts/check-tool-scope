@@ -1,0 +1,162 @@
+#!/usr/bin/env python3
+"""check-tool-scope — the tier is declared and internally consistent. That is all this proves.
+
+§5A calls least-privilege a prerequisite and names the service account each agent authenticates
+as the PRIMARY control, `permissions.deny`-style config only the client-side one. This repository
+has no service accounts to name — there is no deploy target, no live system, nothing an agent can
+reach beyond this checkout. So this lint is the client-side control alone, and it is honest about
+being only that.
+
+WHAT THE FRONTMATTER FIELDS ACTUALLY DO (verified against code.claude.com, since the
+claude-code-runtime library does not yet cover this):
+
+  * A SUBAGENT's `tools:` (plugins/*/agents/*.md) is a real allowlist. Per the docs: "The subagent
+    can't edit files, write files, or use any MCP tools" when `tools:` omits them. This is the one
+    field here that actually restricts.
+  * A SKILL's or COMMAND's `allowed-tools:` (plugins/*/skills/*/SKILL.md, plugins/*/commands/*.md
+    — commands are skills under the hood) does NOT restrict. Per the docs: "It does not restrict
+    which tools are available: every tool remains callable, and your permission settings still
+    govern tools that are not listed." It only pre-approves the named tools for the turn that
+    invokes it, skipping a permission prompt; the grant clears on the next message. A command or
+    skill can call any tool the session already permits, listed or not.
+
+So for five of these nine files, `allowed-tools:` is a **declaration of intent**, not a fence — a
+lie the frontmatter cannot itself tell, because nothing in the runtime holds it to it. This lint
+checks that the declaration is present, well-formed, and internally consistent with a stated tier.
+It does NOT prove a skill or command is incapable of using an undeclared tool — only `tools:` on a
+subagent does that. Read every finding below with that distinction in mind.
+
+THE TIERS (keep this table small — it is the whole contract):
+
+  retrieval     read-only research (kb-retrieve).                Read, Grep, Glob.
+  curation      may write knowledge: the five kb-* maintenance    Read, Grep, Glob, Write, Edit,
+                skills. Bash is for the engine's own check-*      Bash.
+                scripts and git — never an arbitrary command.
+  verification  runs an assertion and reports it (kb-verify's     Bash.
+                own shape); nothing in the current behaviour
+                layer holds this tier, but the value is real.
+  analysis      read-only retrieval, plus Write — the             Read, Grep, Glob, Write.
+                intelligence-analysis skill, whose procedure
+                confines that Write to one user-level coaching
+                log outside every repo. This lint cannot see
+                WHERE a Write call points, only that the tool
+                is declared; confining it is the procedure's
+                job, not this lint's.
+
+HONEST LIMIT: this is a client-side, declaration-only check. It has no service account to verify
+against, cannot see what a skill's Bash calls actually run, and cannot stop a skill or command from
+calling a tool it never declared — see above. It raises the floor (every file says what tier it
+claims and what tools that implies); it is not the ceiling.
+
+Usage: check-tool-scope [path ...]
+Exit 0 clean, 1 on any finding.
+"""
+import pathlib, re, sys
+
+TIERS = {
+    "retrieval":    {"Read", "Grep", "Glob"},
+    "curation":     {"Read", "Grep", "Glob", "Write", "Edit", "Bash"},
+    "verification": {"Bash"},
+    "analysis":     {"Read", "Grep", "Glob", "Write"},
+}
+
+# (glob pattern relative to a scan root, the frontmatter key that carries its tool scope)
+KINDS = [
+    ("*/agents/*.md",        "tools"),
+    ("*/commands/*.md",      "allowed-tools"),
+    ("*/skills/*/SKILL.md",  "allowed-tools"),
+]
+
+
+def default_targets():
+    root = pathlib.Path("plugins")
+    out = []
+    for pattern, key in KINDS:
+        for f in sorted(root.glob(pattern)):
+            out.append((f, key))
+    return out
+
+
+def classify(path: pathlib.Path):
+    """Same rule as default_targets, applied to an explicit path argument."""
+    parts = path.parts
+    if "agents" in parts:
+        return "tools"
+    if "commands" in parts:
+        return "allowed-tools"
+    if path.name == "SKILL.md":
+        return "allowed-tools"
+    return None
+
+
+def targets(args):
+    if not args:
+        return default_targets()
+    out = []
+    for a in args:
+        p = pathlib.Path(a)
+        files = [p] if p.is_file() else sorted(p.rglob("*.md"))
+        for f in files:
+            key = classify(f)
+            if key:
+                out.append((f, key))
+    return out
+
+
+def frontmatter(text: str):
+    m = re.match(r"^---\n(.*?\n)---\n", text, re.S)
+    return m.group(1) if m else None
+
+
+def field(fm: str, key: str):
+    """A frontmatter scalar, key at column 0. This repo's convention is a single-line,
+    comma-separated value (every file that carries one today is written that way); a YAML
+    block-list value is not parsed and reads as absent."""
+    m = re.search(rf"^{re.escape(key)}:[ \t]*(.+?)[ \t]*$", fm, re.M)
+    return m.group(1).strip() if m and m.group(1).strip() else None
+
+
+def main(argv) -> int:
+    files = targets(argv[1:])
+    defects = []
+    for f, key in files:
+        text = f.read_text(errors="replace")
+        fm = frontmatter(text)
+        if fm is None:
+            defects.append(f"{f}: no frontmatter")
+            continue
+
+        tier = field(fm, "tier")
+        if tier is None:
+            defects.append(f"{f}: no tier:")
+        elif tier not in TIERS:
+            defects.append(f"{f}: unknown tier '{tier}' — must be one of {', '.join(TIERS)}")
+
+        raw = field(fm, key)
+        if raw is None:
+            defects.append(f"{f}: no {key}:")
+        elif tier in TIERS:
+            declared = [t.strip() for t in raw.split(",") if t.strip()]
+            allowance = TIERS[tier]
+            extra = [t for t in declared if t not in allowance]
+            if extra:
+                defects.append(
+                    f"{f}: {key}: declares {', '.join(extra)} — outside the '{tier}' tier's "
+                    f"allowance ({', '.join(sorted(allowance))})")
+
+    for d in defects:
+        print(f"FAIL {d}")
+
+    scanned = f"{len(files)} file(s) scanned"
+    if not files:
+        print("check-tool-scope: no behaviour-layer files found — nothing to check")
+        return 0
+    if defects:
+        print(f"\ncheck-tool-scope: {len(defects)} finding(s), {scanned}.")
+        return 1
+    print(f"check-tool-scope: clean ({scanned})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

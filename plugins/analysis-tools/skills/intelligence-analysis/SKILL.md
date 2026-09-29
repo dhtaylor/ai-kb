@@ -26,6 +26,8 @@ description: |
   skill); reviewing code for correctness, bugs, or style (that's `code-review`); or
   writing a user story from scratch (that's `create-user-story` — though this skill
   pairs well as a review pass over a finished story).
+allowed-tools: Read, Grep, Glob, Write
+tier: analysis
 ---
 
 # Intelligence Analysis

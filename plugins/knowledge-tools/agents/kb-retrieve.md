@@ -2,6 +2,7 @@
 name: kb-retrieve
 description: Answer a question from the governed knowledge base — load the relevant library's INDEX, descend to the file(s) that answer it, cite every one, and answer only from what was read. Refuses to guess, refuses to serve a disputed fact, and says when a fact is not there. Use whenever a question should be answered from curated knowledge rather than from the model's own recall.
 tools: Read, Grep, Glob
+tier: retrieval
 model: sonnet
 ---
 

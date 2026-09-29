@@ -2,6 +2,7 @@
 description: Scaffold a project knowledge tree — knowledge/INDEX.md, plus .claude/ and CLAUDE.md only if absent. Non-destructive and safe to re-run.
 argument-hint: "[--name NAME] [DIR]"
 allowed-tools: Bash
+tier: curation
 ---
 
 Run the engine's `kb-init` script and report its output verbatim:

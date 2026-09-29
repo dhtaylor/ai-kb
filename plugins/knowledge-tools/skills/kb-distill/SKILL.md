@@ -1,6 +1,8 @@
 ---
 name: kb-distill
 description: Turn episodic material — session logs, meeting notes, debugging transcripts, dump records — into durable semantic facts, separating what was observed from what was concluded or merely speculated, and citing the episodic note as the source. Use when session notes contain knowledge worth keeping. Do NOT use to fold external documents (kb-update-domain), create a domain (kb-create-domain), or delete the episodic record.
+allowed-tools: Read, Grep, Glob, Bash, Write, Edit
+tier: curation
 ---
 
 # kb-distill
