@@ -1,5 +1,7 @@
 # ai-kb
 
+New contributor capturing your first fact? Start with [CAPTURE.md](CAPTURE.md) — one page.
+
 A governed knowledge base for AI coding agents, with the tooling that keeps it honest.
 
 The idea: an agent should **retrieve** what a team knows, rather than **recall** it from training

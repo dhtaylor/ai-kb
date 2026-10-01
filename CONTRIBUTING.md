@@ -1,5 +1,7 @@
 # Working with the knowledge base
 
+New to capturing a fact? Read [CAPTURE.md](CAPTURE.md) first — one page, nothing else required.
+
 This repository is the **engine**: the contract, the tooling and the skills. It holds no facts.
 Facts live in **domain libraries** — one repository per domain, cloned into `kb/` — and in each
 project's own `knowledge/` tree. The separation is the point: behaviour here, knowledge there, and
