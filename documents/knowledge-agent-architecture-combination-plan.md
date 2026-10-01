@@ -1010,3 +1010,8 @@ The two librarian tests the plan demanded, for the Verifier and the Watcher, bot
 proven by breaking the code. The orchestrator was measured and not built (ADR-0011). The high-blast
 gate runs in GitHub Actions across seven repositories, and its pull-request path is still
 exercised only locally.
+
+**Update, 2026-10-01: the pull-request path is now proven in GitHub Actions.** PR #1, which carried
+ADR-0012, was blocked by `check-blast` with no label. Once the owner added `owner-approved`, it
+re-ran and passed, still printing the finding, and the post-merge run on `main` was clean. ADR-0012's
+"not yet run" line stands as the record of when it was decided. This line supersedes it.
