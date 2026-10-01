@@ -651,6 +651,199 @@ build_clean "$TMP/overdue"
 sed -i 's/^last_swept: never$/last_swept: 2026-01-01/' "$TMP/overdue/INDEX.md"
 case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/overdue"
 
+# ------------------------------------------------------- kb-due --nudge ----
+# Phase 5 step 3: one nudge covers sweep-due, facts due for recheck (reusing kb-verify's
+# own selection, never running it), open queue items (parsed with kb-watch's own
+# parse_records), and episodic notes awaiting distillation. Silence is still the point: nothing due in
+# any category prints nothing, exit 0.
+
+# A fixture engine, so --nudge is exercised through engine/kb/* the way kb-session-start
+# actually calls it, not just through a single tree argument.
+NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
+
+# 1. Nothing due anywhere: fresh sweep, a fresh agent-stamped fact with no Recheck, no
+#    queue, no episodic/. --nudge must print nothing at all.
+build_clean "$NFX/kb/nothing-due"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/nothing-due/INDEX.md"
+case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
+  bash -c '[ -z "$("$1" "$2" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$NFX"
+
+# 2. A stale fact carrying a Recheck: due for recheck, and the Recheck must NOT run —
+#    proven with a sentinel file, the same technique kb-verify's own fixture uses.
+build_clean "$NFX/kb/recheck-due"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/recheck-due/INDEX.md"
+NUDGE_SENTINEL="$TMP/nudge-sentinel"
+rm -f "$NUDGE_SENTINEL"
+fm stale-recheck general > "$NFX/kb/recheck-due/stale-recheck.md"
+cat >> "$NFX/kb/recheck-due/stale-recheck.md" <<EOF
+# Stale Recheck
+
+## Port
+
+The service listens on some port.
+
+Source: manual
+Verified: 2026-01-01 · by: agent · method: manual
+Recheck: touch "$NUDGE_SENTINEL"
+EOF
+printf -- '- [stale-recheck](stale-recheck.md) — a stale fact with a Recheck\n' >> "$NFX/kb/recheck-due/INDEX.md"
+case_run "nudge: a stale fact with Recheck is reported due" 0 "1 fact due for recheck" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+case_run "nudge: names the exact kb-verify command" 0 "kb-verify recheck-due --yes" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+case_run "nudge: the Recheck assertion itself is never run" 1 "" -- test -e "$NUDGE_SENTINEL"
+
+# 3. An open queue item, built by actually running kb-verify --yes on a failing fact, so
+#    the queue format being counted is the real one kb-verify writes — not a hand-rolled
+#    stand-in. A second failing fact gives a second entry, which is then acknowledged by
+#    hand (flipping only its status:, the one field a human triaging the queue would
+#    change) to prove an acknowledged item is excluded from the count.
+build_clean "$NFX/kb/queue-due"
+cat >> "$NFX/kb/queue-due/widgets.md" <<'EOF'
+Recheck: false
+EOF
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: human · method: query/' "$NFX/kb/queue-due/widgets.md"
+fm second-fact general > "$NFX/kb/queue-due/second-fact.md"
+cat >> "$NFX/kb/queue-due/second-fact.md" <<'EOF'
+# Second Fact
+
+## Thing
+
+Another claim.
+
+Source: manual
+Verified: 2026-01-01 · by: human · method: query
+Recheck: false
+EOF
+printf -- '- [second-fact](second-fact.md) — a second stale, wrong fact\n' >> "$NFX/kb/queue-due/INDEX.md"
+"$ENGINE/scripts/kb-verify" "$NFX/kb/queue-due" --yes >/dev/null 2>&1
+case_run "nudge fixture: kb-verify queued exactly two open findings" 0 "" -- \
+  sh -c "[ \$(grep -c '^- id:' '$NFX/kb/queue-due/needs-attention.md') = 2 ]"
+case_run "nudge: two open queue items are counted" 0 "2 open queue item" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/queue-due" --nudge
+case_run "nudge: grouped by category" 0 "2 stale-recheck" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/queue-due" --nudge
+# Acknowledge one entry — a human's triage action, nothing kb-due itself ever does.
+sed -i '0,/status: "open"/s//status: "acknowledged"/' "$NFX/kb/queue-due/needs-attention.md"
+case_run "nudge: an acknowledged item is not counted" 0 "1 open queue item" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/queue-due" --nudge
+case_run "nudge: acknowledged count does not also read as two" 1 "" -- \
+  bash -c '"$1" /nonexistent "$2" --nudge | grep -qF "2 open queue item"' _ \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due"
+
+# 4. Episodic notes: no marker in this codebase distinguishes a distilled note from an
+#    undistilled one (kb-distill leaves free-text prose, never a frontmatter field or
+#    other machine-checkable sentinel — see kb-distill/SKILL.md Step 5 and the real
+#    "## Distilled" / "## Distillation record" notes already in kb/claude-code-runtime
+#    and kb/knowledge-architecture, which spell the heading two different ways). The
+#    honest proxy is therefore a raw count, named as exactly that.
+build_clean "$NFX/kb/episodic-due"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/episodic-due/INDEX.md"
+mkdir -p "$NFX/kb/episodic-due/episodic"
+for n in 1 2; do
+  printf -- '---\nname: 2026-01-0%s-note\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\nmetadata: {type: episodic, node_type: memory, created: 2026-01-0%s}\ntags: [fx, episodic]\nkeywords: [episodic]\n---\n# note %s\n' \
+    "$n" "$n" "$n" > "$NFX/kb/episodic-due/episodic/2026-01-0$n-note.md"
+done
+printf -- '---\nname: episodic-index\ndescription: fixture\nmemory_type: reference\ndomain: fx\nscope: general\nmetadata: {type: index, node_type: router, created: 2026-01-01}\ntags: [fx]\nkeywords: [episodic]\n---\n# Episodic\n' \
+  > "$NFX/kb/episodic-due/episodic/INDEX.md"
+case_run "nudge: episodic notes are counted, INDEX.md excluded" 0 "2 episodic notes awaiting distillation" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/episodic-due" --nudge
+# A distilled note is not awaiting distillation. Both spellings in use are recognised: the
+# canonical "## Distilled" (kb-distill Step 5) and older notes' "## Distillation record".
+# Counting them would ask about the same notes at every session start, forever.
+for h in "Distilled $(date +%F)" "Distillation record"; do
+  f="$NFX/kb/episodic-due/episodic/2026-01-0$(( ${#h} % 7 + 3 ))-done.md"
+  printf -- '---\nname: %s\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\nmetadata: {type: episodic, node_type: memory, created: 2026-01-01}\ntags: [fx, episodic]\nkeywords: [episodic]\n---\n# done\n\n## %s\nFacts went to x.md.\n' \
+    "$(basename "$f" .md)" "$h" > "$f"
+done
+case_run "nudge: distilled notes (either heading spelling) are not counted" 0 "2 episodic notes awaiting distillation" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/episodic-due" --nudge
+
+# 5. A malformed (unreadable) queue file: one-line warning, never a crash, exit 0 — and
+#    every other tree and category still gets reported. Root only: chmod 000 has no
+#    effect for root, so the negative control would be vacuous there.
+if [ "$(id -u)" != "0" ]; then
+  build_clean "$NFX/kb/malformed-queue"
+  cat > "$NFX/kb/malformed-queue/needs-attention.md" <<'EOF'
+---
+name: needs-attention
+description: fixture
+memory_type: reference
+domain: fx
+scope: general
+metadata: {type: index, node_type: memory, created: 2026-01-01}
+tags: [meta]
+keywords: [queue]
+---
+# Needs attention
+
+```yaml
+- id: aaaaaaaa
+  category: drift
+  status: open
+  source_id: x
+  field: y
+  old: "a"
+  new: "b"
+  source_url: "-"
+  date: "2026-01-01"
+```
+EOF
+  chmod 000 "$NFX/kb/malformed-queue/needs-attention.md"
+  out=$("$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/malformed-queue" --nudge 2>&1); rc=$?
+  chmod 644 "$NFX/kb/malformed-queue/needs-attention.md"   # restore so TMP cleanup can remove it
+  case_run "nudge: malformed queue file never crashes the hook" 0 "" -- test "$rc" = 0
+  case_run "nudge: malformed queue file is reported as a one-line warning" 0 "" -- \
+    bash -c 'printf "%s" "$1" | grep -q "could not read needs-attention.md"' _ "$out"
+fi
+
+# -------------------------------------------- kb-session-start + --nudge, hermetic ----
+# End-to-end: a fixture engine (this repo's own scripts, a throwaway CONVENTIONS.md, one
+# fixture library) run as the real SessionStart hook would, with a hermetic HOME so this
+# can never touch ~/.claude, and a cwd outside any git repo so the project-tree branch
+# stays inert.
+SFX="$TMP/session-fx"; mkdir -p "$SFX/scripts" "$SFX/kb"
+for f in kb-session-start kb-due kb-verify kb-watch; do
+  cp "$ENGINE/scripts/$f" "$SFX/scripts/$f"; chmod +x "$SFX/scripts/$f"
+done
+printf '# fixture contract\n' > "$SFX/CONVENTIONS.md"
+SHOME="$TMP/session-home"; mkdir -p "$SHOME" "$TMP/session-cwd"
+
+build_clean "$SFX/kb/libdue"
+fm stale-recheck general > "$SFX/kb/libdue/stale-recheck.md"
+cat >> "$SFX/kb/libdue/stale-recheck.md" <<'EOF'
+# Stale Recheck
+
+## Port
+
+The service listens on some port.
+
+Source: manual
+Verified: 2026-01-01 · by: agent · method: manual
+Recheck: true
+EOF
+printf -- '- [stale-recheck](stale-recheck.md) — a stale fact with a Recheck\n' >> "$SFX/kb/libdue/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX/kb/libdue/INDEX.md"
+
+case_run "kb-session-start: nudge block appears when something is due" 0 \
+  "Due for a librarian's attention" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+case_run "kb-session-start: names the due library and its recheck count" 0 \
+  "libdue: 1 fact due for recheck" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+
+# A second fixture engine with nothing due at all: the block must be absent entirely.
+SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
+for f in kb-session-start kb-due kb-verify kb-watch; do
+  cp "$ENGINE/scripts/$f" "$SFX2/scripts/$f"; chmod +x "$SFX2/scripts/$f"
+done
+printf '# fixture contract\n' > "$SFX2/CONVENTIONS.md"
+build_clean "$SFX2/kb/libclean"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
+case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
+  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
+  "$TMP/session-cwd" "$SHOME" "$SFX2/scripts/kb-session-start"
+
 # --------------------------------------------------------- check-secrets ----
 # The check with the most expensive failure, and until now the only one with no
 # case here. The fixture's credential is ASSEMBLED at run time: written literally,

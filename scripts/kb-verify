@@ -95,7 +95,7 @@ output, not a mutation of any fact (documents/state-change-gates.md), so it foll
 exists because there is nothing for it to opt out of that --yes does not already gate.
 Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
-import datetime, hashlib, importlib.machinery, importlib.util, pathlib, re, subprocess, sys
+import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, subprocess, sys
 
 NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
           ".claude-plugin", ".claude", ".git"}
@@ -194,6 +194,43 @@ def horizon_and_budget(root: pathlib.Path):
     return (int(h.group(1)) if h else None), (int(b.group(1)) if b else None)
 
 
+def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
+    """A stamped section is due for recheck once its age exceeds its trust tier's TTL —
+    a tenth of the domain horizon for an agent stamp, the full horizon for a human one (§7).
+    Top-level (not nested in main()) so kb-due can import and call it: the two scripts must
+    judge staleness identically, and a condition copied into a second file is a condition
+    that can drift out from under the first."""
+    age = (TODAY - s["date"]).days
+    return age > (agent_ttl if s["by"] == "agent" else horizon)
+
+
+def kb_markdown(root: pathlib.Path):
+    """The tree's knowledge files, sorted. Excluded directories are PRUNED during the walk,
+    not filtered after it: rglob would descend into .git and the archived evidence, and on a
+    slow filesystem (a Windows drive under WSL) that walk alone took seconds on every session
+    start, since kb-due's nudge calls this from the SessionStart hook."""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in NON_KB]
+        out += [pathlib.Path(dirpath) / n for n in filenames
+                if n.endswith(".md") and not n.endswith("-golden.md")]
+    return sorted(out)
+
+
+def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=False):
+    """(due_sorted, found, with_cmd): every stamped section in the tree (`found`), the ones
+    that carry a Recheck: assertion (`with_cmd`), and the due subset — oldest stamp first,
+    NOT yet capped to a budget (`due_sorted`). Exposed so kb-due's nudge can report the same
+    'due to run' set this script would select by default, without re-deriving staleness."""
+    found = []
+    for f in kb_markdown(root):
+        found += sections(f)
+    with_cmd = [s for s in found if s["cmd"]]
+    due = [s for s in with_cmd if all_sections or is_due(s, horizon, agent_ttl)]
+    due.sort(key=lambda s: s["date"])
+    return due, found, with_cmd
+
+
 def sections(path: pathlib.Path):
     """Every stamped section: its heading, stamp line number, date, by, and assertion."""
     lines = path.read_text(errors="replace").split("\n")
@@ -243,22 +280,10 @@ def main(argv) -> int:
     budget = budget_override or budget or 5
     agent_ttl = max(1, horizon // 10)
 
-    found = []
-    for f in sorted(root.rglob("*.md")):
-        if NON_KB & set(f.relative_to(root).parts) or f.name.endswith("-golden.md"):
-            continue
-        found += sections(f)
-
-    def due(s):
-        age = (TODAY - s["date"]).days
-        return age > (agent_ttl if s["by"] == "agent" else horizon)
-
+    due, found, with_cmd = due_sections(root, horizon, agent_ttl, "--all" in flags)
     stamped = len(found)
-    with_cmd = [s for s in found if s["cmd"]]
-    selected = [s for s in with_cmd if "--all" in flags or due(s)]
-    selected.sort(key=lambda s: s["date"])
-    over_budget = max(0, len(selected) - budget)
-    selected = selected[:budget]
+    over_budget = max(0, len(due) - budget)
+    selected = due[:budget]
 
     print(f"kb-verify: {root}  (horizon {horizon}d, agent TTL {agent_ttl}d, budget {budget})")
     print(f"  {stamped} stamped section(s), {len(with_cmd)} with a Recheck assertion, "
@@ -267,7 +292,7 @@ def main(argv) -> int:
 
     # The facts no command can settle. Naming them is the point: a verifier that
     # only reports what it can check reads as though everything else were verified.
-    unverifiable = [s for s in found if not s["cmd"] and due(s)]
+    unverifiable = [s for s in found if not s["cmd"] and is_due(s, horizon, agent_ttl)]
     if unverifiable:
         print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
         for s in unverifiable:
