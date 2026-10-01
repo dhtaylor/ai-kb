@@ -558,6 +558,13 @@ maintainer: tool scopes are enforced only for subagents, there are no service ac
 freshness horizons in each INDEX; `kb-distill` on a cadence; `kb-audit` on a schedule.
 **Exit:** a contributor who has read only the 1-page guide can *capture* a fact correctly, and stale or
 drifted facts surface as a queue rather than rotting silently.
+**Phase 5 is complete (2026-10-01, ADR-0013).** Both exit criteria pass as tests. A fresh agent that
+read only `CAPTURE.md` (one page, 70 lines) captured a realistic session correctly. One end-to-end
+fixture shows a stale fact and a drifted source both reaching the library's queue and the
+session-start nudge, with the fact untouched and `check-kb` clean. The cadence is surfaced, not run
+unattended: `kb-due --nudge` names due sweeps, rechecks, open queue items and undistilled notes, and
+stays silent otherwise. The Verifier and the Watcher feed one routed queue. The Watcher's snapshots
+are saved by hand and kept local, starting with the source behind the azure-devops dispute (§9.19).
 
 ---
 
@@ -1010,3 +1017,30 @@ The two librarian tests the plan demanded, for the Verifier and the Watcher, bot
 proven by breaking the code. The orchestrator was measured and not built (ADR-0011). The high-blast
 gate runs in GitHub Actions across seven repositories, and its pull-request path is still
 exercised only locally.
+
+**Update, 2026-10-01: the pull-request path is now proven in GitHub Actions.** PR #1, which carried
+ADR-0012, was blocked by `check-blast` with no label. Once the owner added `owner-approved`, it
+re-ran and passed, still printing the finding, and the post-merge run on `main` was clean. ADR-0012's
+"not yet run" line stands as the record of when it was decided. This line supersedes it.
+
+### 9.19 Phase 5: the steady state is a set of truthful defaults (2026-10-01)
+
+Each piece of the steady state turned out to be judged mostly by what it says when nothing is
+wrong.
+
+- **A nudge that is wrong when idle gets ignored.** The first draft counted every episodic note as
+  awaiting distillation. All four real ones had already been distilled, so it would have asked
+  about them at every session start, forever. It is now silent on the real libraries, which is
+  true.
+- **The hook's cost is paid by every session.** The draft took the session-start hook from 0.06s to
+  3s, because a walk descended into `.git` before filtering. That cost is invisible in a test and
+  felt in every session. Pruning during the walk brought it to 0.34s.
+- **Detection output is still a file under the contract.** Neither queue writer routed the queue it
+  created, so the first real finding in a library would have blocked every commit there. A
+  detection tool that breaks the thing it watches is worse than none. Both writers now route it.
+- **A test that matches the header is not a test.** The end-to-end check for a drift record passed
+  with no drift recorded, because the word appears in the queue's own keywords line. The trap found
+  it, and the case now matches the record's category.
+- **A one-page guide is proved by a reader, not by a word count.** The agent that used it found three
+  real gaps, and the guide's own secret-redaction example was rejected by `check-secrets` because
+  it had the shape of a real credential.

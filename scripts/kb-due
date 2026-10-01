@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""kb-due — which knowledge trees are due for a hygiene sweep.
+"""kb-due — which knowledge trees are due for a hygiene sweep, and (with --nudge) everything
+else a librarian should act on.
 
 A cadence nobody is reminded of is a preference, not a cadence. The sweep itself
 (`kb-audit`) needs an agent and cannot be automated, so the machinery is only this:
@@ -16,15 +17,43 @@ WHAT IT READS, from each tree's INDEX.md:
                             nag and a 14d project a 1.4d one, surprising in both
                             directions. Default when absent: 30d.
 
-SILENCE IS THE POINT. Nothing due prints nothing (exit 0) in --quiet: a reminder
-that fires every session is ignored by the time it matters.
+SILENCE IS THE POINT. Nothing due prints nothing (exit 0) in --quiet or --nudge: a
+reminder that fires every session is ignored by the time it matters.
 
-Usage: kb-due <engine-root> [tree ...] [--quiet]
+--NUDGE (Phase 5): the owner's cadence decision for kb-audit AND kb-distill is "surfaced
+when due, never run unattended" — one nudge, not two. --quiet's sweep-only report is kept
+exactly as it was (every current caller of --quiet is unaffected); --nudge is additive and
+reports, per tree, everything a librarian should act on:
+
+  1. sweep due            — --quiet's own check, unchanged.
+  2. facts due for recheck — reuses kb-verify's own staleness selection (its horizon/agent-TTL
+                             test and its verifier_budget cap) by importing scripts/kb-verify
+                             as a module, exactly the way kb-verify itself imports scripts/kb-watch
+                             (SourceFileLoader, sys.dont_write_bytecode = True) — one judgment of
+                             "is this section due", not two copies of it that can drift apart.
+                             Only a count and the command (`kb-verify <library> --yes`) are
+                             printed; no assertion is ever run or even read here.
+  3. open queue items      — `status: open` records in the library's needs-attention.md, read
+                             with kb-watch's own `parse_records` (also imported, not re-specified)
+                             so a third copy of "what a queue record looks like" never exists.
+  4. episodic notes awaiting distillation — a note kb-distill has distilled carries a heading
+                             beginning "## Distill" (kb-distill Step 5 now names "## Distilled";
+                             older notes say "## Distillation record", which the same prefix
+                             matches). A note without one is counted.
+
+  A tree with nothing due in any of the four contributes no line at all. A failure computing one
+  category for one tree (a malformed needs-attention.md, an INDEX.md with no freshness_horizon) is
+  printed as a one-line warning to stderr and that category is skipped for that tree only — every
+  other tree and every other category still gets computed. This hook must never crash a session.
+
+Usage: kb-due <engine-root> [tree ...] [--quiet|--nudge]
   Scans <engine-root>/kb/* plus any further trees given (a project knowledge/ tree).
-  --quiet   print only overdue trees, and nothing at all when none are
+  --quiet   print only overdue trees, and nothing at all when none are (sweep only)
+  --nudge   print the full librarian nudge (sweep + recheck + queue + episodic), and
+            nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
-import datetime, pathlib, re, sys
+import datetime, importlib.machinery, importlib.util, pathlib, re, sys
 
 DEFAULT_INTERVAL = 30
 TODAY = datetime.date.today()
@@ -57,11 +86,118 @@ def status(tree: pathlib.Path):
     return {"tree": tree, "age": age, "interval": days, "due": age > days}
 
 
+# -------------------------------------------------------------------- --nudge ----
+def load_module(name: str, filename: str):
+    """Import an extensionless sibling script as a module, byte-identical to the file on
+    disk — not a copy. Same pattern kb-verify already uses to import kb-watch: no .py
+    suffix means spec_from_file_location can't infer a loader from the extension, so an
+    explicit SourceFileLoader is required, and bytecode caching is turned off first so an
+    engine script that only ever reads these trees doesn't litter scripts/__pycache__."""
+    path = pathlib.Path(__file__).resolve().parent / filename
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(name, str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def recheck_due(root: pathlib.Path, kb_verify):
+    """The exact set kb-verify would run by default, with --yes, right now: due_sections()
+    reuses kb-verify's own is_due() (horizon / agent-TTL test, §7), capped at its
+    verifier_budget. Returns None (not zero) when the tree declares no freshness_horizon —
+    that is not an overdue count of zero, it is "not computable", and the two must not read
+    the same in the nudge."""
+    horizon, budget = kb_verify.horizon_and_budget(root)
+    if horizon is None:
+        return None
+    budget = budget or 5
+    agent_ttl = max(1, horizon // 10)
+    due, _found, _with_cmd = kb_verify.due_sections(root, horizon, agent_ttl)
+    return due[:budget]
+
+
+def queue_due(root: pathlib.Path, kb_watch):
+    """(open_count, {category: count}) from the library's needs-attention.md, parsed with
+    kb-watch's own parse_records — the same record grammar kb-watch and kb-verify both write.
+    (0, {}) when there is no queue file at all; that is the normal, silent case."""
+    qpath = root / "needs-attention.md"
+    if not qpath.is_file():
+        return 0, {}
+    text = qpath.read_text(errors="replace")
+    records = kb_watch.parse_records(text)
+    open_recs = [r for r in records if r.get("status") == "open"]
+    cats = {}
+    for r in open_recs:
+        cats[r.get("category", "?")] = cats.get(r.get("category", "?"), 0) + 1
+    return len(open_recs), cats
+
+
+DISTILLED = re.compile(r"^##\s+Distill", re.M)
+
+
+def episodic_count(root: pathlib.Path):
+    """Episodic notes not yet distilled. kb-distill marks a note it has distilled with a heading
+    beginning `## Distill` ("## Distilled ...", or older notes' "## Distillation record"); a note
+    without one is counted. Counting every note instead would ask about the same, already-distilled
+    notes at every session start, which is how a nudge turns into noise nobody reads."""
+    edir = root / "episodic"
+    if not edir.is_dir():
+        return 0
+    return len([f for f in edir.glob("*.md")
+                if f.name != "INDEX.md" and not DISTILLED.search(f.read_text(errors="replace"))])
+
+
+def plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def nudge_for(s: dict, kb_verify, kb_watch):
+    """(line-or-None, [warning, ...]) for one tree's row from status(). A warning never
+    stops the other categories, this tree's own line, or any other tree — see module
+    docstring: a malformed or uncomputable category is reported once and skipped."""
+    tree, lbl = s["tree"], label(s["tree"])
+    parts, warnings = [], []
+
+    if s["due"]:
+        when = "never swept" if s["age"] is None else f"last swept {s['age']}d ago"
+        parts.append(f"sweep due ({when}, every {s['interval']}d)")
+
+    try:
+        due = recheck_due(tree, kb_verify)
+    except Exception as e:
+        warnings.append(f"{lbl}: could not compute facts due for recheck ({e}) — skipped")
+        due = None
+    if due:
+        parts.append(f"{plural(len(due), 'fact')} due for recheck (kb-verify {lbl} --yes)")
+
+    try:
+        qn, cats = queue_due(tree, kb_watch)
+    except Exception as e:
+        warnings.append(f"{lbl}: could not read needs-attention.md ({e}) — skipped")
+        qn, cats = 0, {}
+    if qn:
+        by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
+        parts.append(f"{plural(qn, 'open queue item')} ({by_cat})")
+
+    try:
+        en = episodic_count(tree)
+    except Exception as e:
+        warnings.append(f"{lbl}: could not count episodic notes ({e}) — skipped")
+        en = 0
+    if en:
+        parts.append(f"{plural(en, 'episodic note')} awaiting distillation")
+
+    line = f"{lbl}: " + "; ".join(parts) if parts else None
+    return line, warnings
+
+
 def main(argv) -> int:
+    nudge = "--nudge" in argv
     quiet = "--quiet" in argv
-    args = [a for a in argv if a != "--quiet"]
+    args = [a for a in argv if a not in ("--quiet", "--nudge")]
     if not args:
-        print("usage: kb-due <engine-root> [tree ...] [--quiet]", file=sys.stderr); return 0
+        print("usage: kb-due <engine-root> [tree ...] [--quiet|--nudge]", file=sys.stderr); return 0
     engine = pathlib.Path(args[0])
 
     trees = []
@@ -72,6 +208,23 @@ def main(argv) -> int:
 
     rows = [s for s in (status(t) for t in trees) if s]
     due = [s for s in rows if s["due"]]
+
+    if nudge:
+        kb_verify = load_module("kb_verify", "kb-verify")
+        kb_watch = load_module("kb_watch", "kb-watch")
+        lines, warnings = [], []
+        for s in rows:
+            line, warn = nudge_for(s, kb_verify, kb_watch)
+            if line:
+                lines.append(line)
+            warnings += warn
+        for w in warnings:
+            print(f"kb-due: {w}", file=sys.stderr)
+        if lines:
+            print("\n".join(lines))
+            print("Commands: kb-audit <library> for a sweep; kb-verify <library> --yes for "
+                  "the rechecks above; kb-distill for the episodic notes above.")
+        return 0
 
     if quiet:
         for s in due:

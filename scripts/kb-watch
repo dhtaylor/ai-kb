@@ -68,9 +68,11 @@ safe embedding in a double-quoted, single-line YAML-ish scalar. `source_id`/`fie
 `date` are operator-authored (from the allowlist, not the page) and are not treated as hostile, but
 are still flattened to one line for hygiene.
 
-DETECTION ONLY: this script writes ONLY `<library>/needs-attention.md` — never a fact, a stamp, a
-source stub, or a library's INDEX.md (CONVENTIONS' router-line bookkeeping is deliberately left to a
-human or to kb-audit; "writes only the queue" is read literally here). A library's queue is created
+DETECTION ONLY: this script writes ONLY `<library>/needs-attention.md` and, when it creates that
+file, the queue's one router line in the library's INDEX.md (`ensure_routed`). It never writes a fact,
+a stamp, or a source stub. The router line is not optional bookkeeping: CONVENTIONS §3 requires the
+queue to be routed, and an unrouted queue is an orphan that fails check-kb, which would block every
+commit in that library until someone routed it by hand. kb-audit adds the same line for the same reason. A library's queue is created
 only when there is something to put in it (CONVENTIONS §3 / kb-audit SKILL.md step 3): a clean run
 touches nothing.
 
@@ -265,7 +267,7 @@ def new_queue_file(domain: str, scope: str) -> str:
     fm = (
         "---\n"
         "name: needs-attention\n"
-        "description: Open findings from automated drift detection (kb-watch) and hygiene sweeps "
+        "description: Open findings from automated checks (kb-watch, kb-verify) and hygiene sweeps "
         "(kb-audit), by severity.\n"
         "memory_type: reference\n"
         f"domain: {domain}\n"
@@ -285,6 +287,32 @@ def new_queue_file(domain: str, scope: str) -> str:
     return fm + FENCE_OPEN + FENCE_CLOSE
 
 
+ROUTER_LINE = ("- [needs-attention](needs-attention.md) — open findings from automated checks and "
+               "sweeps; detection only, nothing here was fixed automatically\n")
+
+
+def ensure_routed(library_root: pathlib.Path):
+    """Add the queue's router line to the library's INDEX.md, once. Idempotent; returns an error or None."""
+    idx = library_root / "INDEX.md"
+    if not idx.is_file():
+        return f"{library_root} has no INDEX.md — not a library root"
+    text = idx.read_text(errors="replace")
+    if re.search(r"\]\(needs-attention\.md\)", text):
+        return None
+    lines = text.splitlines(keepends=True)
+    last = max((i for i, l in enumerate(lines) if l.startswith("- [")), default=None)
+    if last is None:
+        text = text.rstrip("\n") + "\n\n" + ROUTER_LINE
+    else:
+        j = last + 1                       # a router line may wrap onto indented continuation lines
+        while j < len(lines) and lines[j].startswith("  ") and lines[j].strip():
+            j += 1
+        lines.insert(j, ROUTER_LINE)
+        text = "".join(lines)
+    idx.write_text(text)
+    return None
+
+
 def append_records(queue_path: pathlib.Path, records: list):
     body = "".join(render_record(r) for r in records)
     if not queue_path.is_file():
@@ -292,7 +320,7 @@ def append_records(queue_path: pathlib.Path, records: list):
         if err:
             return err
         queue_path.write_text(new_queue_file(domain, scope)[:-len(FENCE_CLOSE)] + body + FENCE_CLOSE)
-        return None
+        return ensure_routed(queue_path.parent)
     text = queue_path.read_text(errors="replace")
     spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
     if spans:

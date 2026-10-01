@@ -1,1 +1,15 @@
-[]
+[
+  {
+    "source_id": "ms-learn-titles-ids-descriptions",
+    "url": "https://learn.microsoft.com/en-us/azure/devops/boards/queries/titles-ids-descriptions?view=azure-devops",
+    "library": "../kb/azure-devops",
+    "baseline_snapshot": "snapshots/ms-learn-titles-ids-descriptions.baseline.html",
+    "current_snapshot": "snapshots/ms-learn-titles-ids-descriptions.current.html",
+    "fields": [
+      {
+        "name": "acceptance-criteria-work-item-types",
+        "pattern": "AcceptanceCriteria, Data type=HTML (.+?) Description 1"
+      }
+    ]
+  }
+]

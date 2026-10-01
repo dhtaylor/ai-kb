@@ -117,7 +117,10 @@ Distilling does not consume the note. The note remains the evidence the fact poi
 deleting it orphans every backlink that cites it. Deletion is never automated and is not this
 skill's business.
 
-Note in the episodic file that it has been distilled, and where the facts went.
+Note in the episodic file that it has been distilled, and where the facts went, under a heading
+that starts `## Distilled` (for example `## Distilled 2026-09-30`). The session-start nudge counts a
+note as awaiting distillation until it carries a heading beginning `## Distill`; that also matches
+older notes' `## Distillation record`. A note left unmarked is asked about again every session.
 
 ## Step 6 — Golden set and routers
 
