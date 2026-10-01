@@ -1224,6 +1224,37 @@ case_run "check-blast: repo with neither CONVENTIONS.md nor INDEX.md is a usage 
 
 # ------------------------------------------------------------------- done ----
 echo
+# ------------------------------------------------- Phase 5 exit criterion ----
+# "Stale or drifted facts surface as a queue rather than rotting silently": the whole
+# chain in one library. A stale fact whose Recheck now fails AND a watched source that
+# drifted must both land in the library's queue, the session-start nudge must name both,
+# the fact must be untouched, and the library must still pass check-kb with its queue in it.
+X="$TMP/exit5"; build_clean "$X/kb/fx"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$X/kb/fx/INDEX.md"
+printf 'port=8080\n' > "$X/kb/fx/system-config.txt"
+fm service-port general > "$X/kb/fx/service-port.md"
+printf '%s\n' '# Service Port' '' '## Port' '' 'The service listens on port 9090.' '' \
+  'Source: manual' 'Verified: 2026-01-01 · by: human · method: query' \
+  "Recheck: grep -q '^port=9090\$' system-config.txt" >> "$X/kb/fx/service-port.md"
+printf -- '- [service-port](service-port.md) — the port the service listens on\n' >> "$X/kb/fx/INDEX.md"
+cp "$X/kb/fx/service-port.md" "$X/service-port.before"
+watch_snapshot "$X/snap/baseline.html" 255 "Home" 2026-01-01
+watch_snapshot "$X/snap/current.html"  500 "Home" 2026-01-01
+watch_allowlist "$X/allowlist.json" "$X/kb/fx" "$X/snap/baseline.html" "$X/snap/current.html"
+
+case_run "exit criterion: before checking, the nudge names the due recheck and no queue" 0 "fact due for recheck" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$X/kb/fx" --nudge
+"$ENGINE/scripts/kb-verify" "$X/kb/fx" --yes >/dev/null 2>&1
+"$ENGINE/scripts/kb-watch" "$X/allowlist.json" >/dev/null 2>&1
+case_run "exit criterion: the stale fact and the drift both land in one queue" 0 "" -- \
+  bash -c 'q="$1/needs-attention.md"; grep -qF "category: \"stale-recheck\"" "$q" && grep -qF "category: \"drift\"" "$q"' _ "$X/kb/fx"
+case_run "exit criterion: the nudge names both open items" 0 "2 open queue items" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$X/kb/fx" --nudge
+case_run "exit criterion: the stale fact itself is untouched" 0 "" -- \
+  cmp -s "$X/service-port.before" "$X/kb/fx/service-port.md"
+case_run "exit criterion: the library still passes check-kb with its queue in it" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$X/kb/fx"
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0
