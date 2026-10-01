@@ -585,6 +585,63 @@ printf -- '- [stale-true](stale-true.md) — a stale, true fact\n' >> "$TMP/vfix
 case_run "verifier fixture: --yes without --apply restamps nothing" 0 "Verified: 2026-01-01" -- \
   grep -F "Verified:" "$TMP/vfixture-noapply/stale-true.md"
 
+# ------------------------------------------- kb-verify: needs-attention queue ----
+# Phase 5 (plan §6 exit: "stale or drifted facts surface as a queue rather than rotting
+# silently"). Built on the Verifier fixture above: its first run (line ~532) already ran
+# stale-wrong.md's failing assertion under --yes --apply, so this is the queue that run
+# produced, not a fresh one — proving the queue write happens as a side effect of the
+# same run the byte-for-byte-unchanged check above already exercises, not a separate path.
+VQ="$TMP/vfixture/needs-attention.md"
+case_run "queue: a failing assertion under --yes writes exactly one entry" 0 "" -- \
+  sh -c "[ \$(grep -c '^- id:' '$VQ') = 1 ]"
+case_run "queue: entry names the failing file" 0 "" -- grep -qF 'file: "stale-wrong.md"' "$VQ"
+case_run "queue: entry names the section" 0 "" -- grep -qF 'section: "Port"' "$VQ"
+case_run "queue: entry carries the assertion" 0 "" -- grep -qF "grep -q '^port=9090\$' system-config.txt" "$VQ"
+case_run "queue: entry carries the stamp it carried when it failed" 0 "" -- \
+  grep -qF 'stamp: "2026-01-01 · by: human · method: query"' "$VQ"
+case_run "queue: entry is open, for a human to triage" 0 "" -- grep -qF 'status: "open"' "$VQ"
+case_run "queue: an assertion that ran and returned false is category stale-recheck" 0 "" -- \
+  grep -qF 'category: "stale-recheck"' "$VQ"
+case_run "queue: not miscategorized as the command-error variant" 1 "" -- \
+  grep -qF 'category: "stale-recheck-error"' "$VQ"
+case_run "queue: the passing stale-true fact gets no entry" 1 "" -- grep -qF 'file: "stale-true.md"' "$VQ"
+case_run "queue: frontmatter still exactly bounded" 0 "" -- sh -c "[ \$(grep -c '^---\$' '$VQ') = 2 ]"
+case_run "queue: fences still balanced" 0 "" -- sh -c "[ \$(( \$(grep -c '^\`\`\`' '$VQ') % 2 )) = 0 ]"
+case_run "queue: frontmatter domain/scope copied from the library's own INDEX.md" 0 "" -- \
+  grep -qF 'domain: fx' "$VQ"
+
+# Re-run the same fixture: the still-failing assertion reproduces the same stable id and
+# must dedupe, not pile up a second entry for the same unfixed claim.
+"$ENGINE/scripts/kb-verify" "$TMP/vfixture" --yes --apply >/dev/null 2>&1
+case_run "queue: re-run on the same failure dedupes, still exactly one entry" 0 "" -- \
+  sh -c "[ \$(grep -c '^- id:' '$VQ') = 1 ]"
+
+# A command that cannot be run at all (not a false assertion) is a different finding,
+# distinguishable by category — the shell's own 127 "not found" is the unambiguous case.
+build_clean "$TMP/vqueue-error"
+cat >> "$TMP/vqueue-error/widgets.md" <<'EOF'
+Recheck: this-command-does-not-exist-anywhere-xyz
+EOF
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: human · method: query/' "$TMP/vqueue-error/widgets.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vqueue-error" --yes >/dev/null 2>&1
+case_run "queue: a command that cannot be run is categorized distinctly" 0 "" -- \
+  grep -qF 'category: "stale-recheck-error"' "$TMP/vqueue-error/needs-attention.md"
+
+# Without --yes, nothing runs — so nothing is queued either, on a fixture that has never
+# been queued before (unlike vfixture/vqueue-error above, which already have been).
+build_clean "$TMP/vqueue-noyes"
+printf 'Recheck: false\n' >> "$TMP/vqueue-noyes/widgets.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vqueue-noyes" --all >/dev/null 2>&1
+case_run "queue: without --yes, no queue file is written" 1 "" -- \
+  test -e "$TMP/vqueue-noyes/needs-attention.md"
+
+# A queue is a file like any other (CONVENTIONS §3): created unrouted, it is an
+# orphan, check-kb fails, and the library's own pre-commit blocks every commit.
+case_run "kb-verify: queue is routed from the library's INDEX, exactly once" 0 "" -- \
+  bash -c '[ "$(grep -c "](needs-attention.md)" "$1")" = 1 ]' _ "$TMP/vfixture/INDEX.md"
+case_run "kb-verify: a library holding a fresh queue still passes check-kb" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/vfixture"
+
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$TMP/due/INDEX.md"   # computed: a typed date expires
@@ -874,6 +931,11 @@ case_run "kb-watch: --dry-run writes nothing" 1 "" -- \
 case_run "kb-watch: no network module imported" 1 "" -- \
   grep -E '^import (urllib|http\.client|socket|requests)|^from (urllib|http\.client|socket|requests) ' \
   "$ENGINE/scripts/kb-watch"
+
+case_run "kb-watch: queue is routed from the library's INDEX, exactly once" 0 "" -- \
+  bash -c '[ "$(grep -c "](needs-attention.md)" "$1")" = 1 ]' _ "$W1/kb/fx/INDEX.md"
+case_run "kb-watch: a library holding a fresh queue still passes check-kb" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$W1/kb/fx"
 
 # ---------------------------------------------------------------- check-blast ----
 # Phase 4 step 6 (§5A "Never automated" + "Enforce it, don't just declare it"):
