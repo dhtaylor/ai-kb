@@ -3,3 +3,7 @@
 # and is never tracked here. Content and behaviour are separate by
 # construction — see documents/decisions/0007-engine-content-separation.md
 kb/
+
+# Watcher snapshots are copies of third-party pages (ADR-0012: saved by hand, compared
+# offline). This repository is public, so they stay local; only the allowlist is tracked.
+watcher/snapshots/
