@@ -24,7 +24,7 @@ default into a project tree becomes one of many copies that will drift.
 
 In a Claude session: `/kb-capture`. From a terminal: `kb-capture`. Either way it writes a dated note
 under `episodic/` in the nearest knowledge tree and routes it — **never** straight into a domain's
-semantic fact files. Hand-writing a fact there skips the review this whole path exists to provide.
+semantic fact files. A note holding a credential or a personal identifier is refused (nothing filed; the draft is kept outside the tree). Hand-writing a fact there skips the review this whole path exists to provide.
 
 ## What a correct note contains
 

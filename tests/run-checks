@@ -1359,6 +1359,82 @@ case_run "exit criterion: the stale fact itself is untouched" 0 "" -- \
 case_run "exit criterion: the library still passes check-kb with its queue in it" 0 "clean" -- \
   "$ENGINE/scripts/check-kb" "$X/kb/fx"
 
+# ------------------------------------------------- kb-capture refuses secrets ----
+# Issue #9: a note holding a credential or identifier is refused BEFORE anything is
+# written, because retrieval reads the working tree before any commit hook runs.
+# Fixtures are assembled at run time, as above.
+cap_tree() { mkdir -p "$1"; git init -q "$1"; "$ENGINE/scripts/kb-init" "$1" >/dev/null 2>&1; }
+cap_snap() { (cd "$1" && find knowledge -type f -print0 | sort -z | xargs -0 sha256sum); }
+CAPPW="Abc12#def!""45(ghXYZ"
+cap_tree "$TMP/cap"
+printf 'Tried the login.\n%s = %s\nDidn'"'"'t test the rotation.\n' "pass""word" "$CAPPW" > "$TMP/cap-secret.txt"
+cp "$TMP/cap-secret.txt" "$TMP/cap-secret.orig"
+cap_snap "$TMP/cap" > "$TMP/cap.before"
+case_run "kb-capture --from refuses a labelled secret, showing SECRET? and the line" 1 "2:pass" -- \
+  bash -c "cd '$TMP/cap' && '$ENGINE/scripts/kb-capture' --title 'login trouble' --from '$TMP/cap-secret.txt'"
+case_run "kb-capture --from refusal prints SECRET?" 1 "SECRET?" -- \
+  bash -c "cd '$TMP/cap' && '$ENGINE/scripts/kb-capture' --title 'login trouble' --from '$TMP/cap-secret.txt'"
+case_run "refused capture leaves the tree byte-identical (no note, routers untouched)" 0 "" -- \
+  bash -c "cd '$TMP' && cmp -s <(cd cap && find knowledge -type f -print0 | sort -z | xargs -0 sha256sum) cap.before"
+case_run "refused capture leaves the --from file untouched, and says so" 1 "is untouched" -- \
+  bash -c "cd '$TMP/cap' && '$ENGINE/scripts/kb-capture' --title 'login trouble' --from '$TMP/cap-secret.txt'; rc=\$?; cmp -s '$TMP/cap-secret.txt' '$TMP/cap-secret.orig' || exit 9; exit \$rc"
+
+# stdin: the draft is kept, privately, outside the tree, and the printed path retries.
+mkdir -p "$TMP/captmp"
+out=$(cd "$TMP/cap" && TMPDIR="$TMP/captmp" "$ENGINE/scripts/kb-capture" --title 'login trouble' --from - < "$TMP/cap-secret.txt" 2>&1); rc=$?
+draft=$(printf '%s\n' "$out" | sed -n 's/^  Your draft is saved, private (mode 0600), outside the tree: //p')
+case_run "kb-capture via stdin refuses and names a saved draft" 0 "" -- \
+  bash -c '[ "$1" = 1 ] && [ -f "$2" ] && printf "%s" "$3" | grep -qF "SECRET?"' _ "$rc" "$draft" "$out"
+case_run "the saved draft is mode 0600 and outside the tree" 0 "" -- \
+  bash -c '[ "$(stat -c %a "$1")" = 600 ] && case "$1" in "$2"/*) exit 1;; esac' _ "$draft" "$TMP/cap"
+case_run "stdin refusal leaves the tree byte-identical" 0 "" -- \
+  bash -c "cd '$TMP' && cmp -s <(cd cap && find knowledge -type f -print0 | sort -z | xargs -0 sha256sum) cap.before"
+case_run "the draft's retry command succeeds once the secret is redacted" 0 "filed" -- \
+  bash -c 'sed -i "s/^.*=.*/vault key for the service login; owner: platform role/" "$1" && cd "$2" && "$3/scripts/kb-capture" --title "login trouble" --from "$1"' _ "$draft" "$TMP/cap" "$ENGINE"
+rm -f "$draft"
+
+# An email is refused as PII?
+cap_tree "$TMP/cap2"
+printf 'Asked jane.doe@corp''mail.io about the outage.\n' > "$TMP/cap-pii.txt"
+case_run "kb-capture refuses an email as PII?" 1 "PII?" -- \
+  bash -c "cd '$TMP/cap2' && '$ENGINE/scripts/kb-capture' --title 'outage' --from '$TMP/cap-pii.txt'"
+case_run "PII refusal writes nothing" 0 "" -- \
+  bash -c "! ls '$TMP/cap2/knowledge/episodic/'*.md >/dev/null 2>&1"
+
+# A clean note is filed and routed exactly as before.
+cap_tree "$TMP/cap3"
+printf 'Ran the build. It passed. Probably fine on CI too; did not test.\n' > "$TMP/cap-clean.txt"
+case_run "kb-capture files a clean note" 0 "filed" -- \
+  bash -c "cd '$TMP/cap3' && '$ENGINE/scripts/kb-capture' --title 'clean build' --from '$TMP/cap-clean.txt'"
+case_run "the clean note is written and routed" 0 "" -- \
+  bash -c "cd '$TMP/cap3/knowledge' && ls episodic/*-clean-build.md >/dev/null && grep -q 'clean-build' episodic/INDEX.md && grep -q 'episodic/INDEX.md' INDEX.md"
+
+# lint-allow clears a line, as in every other pass.
+cap_tree "$TMP/cap4"
+printf 'Example only: %s = %s  lint-allow: documented example\n' "pass""word" "$CAPPW" > "$TMP/cap-allow.txt"
+case_run "kb-capture files a note whose flagged line carries lint-allow" 0 "filed" -- \
+  bash -c "cd '$TMP/cap4' && '$ENGINE/scripts/kb-capture' --title 'example' --from '$TMP/cap-allow.txt'"
+
+# check-secrets --file: the same three passes on one file.
+printf 'ok\n%s = %s\n' "pass""word" "$CAPPW" > "$TMP/f-secret.txt"
+printf 'mail jane.doe@corp''mail.io please\n' > "$TMP/f-pii.txt"
+printf 'nothing to see here\n' > "$TMP/f-clean.txt"
+case_run "check-secrets --file catches a secret" 1 "SECRET?" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-secret.txt"
+case_run "check-secrets --file catches PII" 1 "PII?" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-pii.txt"
+case_run "check-secrets --file passes a clean file" 0 "clean" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-clean.txt"
+
+# --worktree sees what retrieval sees: untracked files too, but not ignored ones.
+mkdir -p "$TMP/wt"; git init -q "$TMP/wt"
+printf 'tracked and clean\n' > "$TMP/wt/a.md"; git -C "$TMP/wt" add -A >/dev/null 2>&1
+printf 'ignored.md\n' > "$TMP/wt/.gitignore"
+printf '%s = %s\n' "pass""word" "$CAPPW" > "$TMP/wt/ignored.md"
+case_run "--worktree does not scan an ignored file" 0 "clean" -- \
+  sh -c "cd '$TMP/wt' && '$ENGINE/scripts/check-secrets' --worktree"
+printf '%s = %s\n' "pass""word" "$CAPPW" > "$TMP/wt/untracked.md"
+case_run "--worktree catches a secret in an untracked file" 1 "untracked.md" -- \
+  sh -c "cd '$TMP/wt' && '$ENGINE/scripts/check-secrets' --worktree"
+
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0
