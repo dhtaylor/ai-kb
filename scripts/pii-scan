@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+"""pii-scan — pass three of check-secrets: personal identifiers in committed text.
+
+Reads one file, prints `LINE:text` for each line holding one (at most 3), exits 0
+either way — check-secrets decides what a hit means. Three rules, kept narrow
+because a hit blocks the commit:
+
+  email    an address: local part, at sign, dotted domain (a file extension as the final label, as in an image name with a 2x suffix, does not count).
+  account  an uppercase NetBIOS-style domain (2-15 chars), backslash, user name.
+           Not matched: backslash escapes (`\\n \\t \\x0b \\u010d`, and any user that
+           starts with an escape letter n t r f v a b 0), drive paths (`C:\\`, one
+           letter), UNC shares (`\\\\SERVER\\share`), lowercase `word\\word` (code, regex).
+  home     /home/<name>/, /Users/<name>/, C:\\Users\\<name>\\ (also under /mnt/<drive>/).
+           A placeholder is not a name: `<user>`, `$USER`, `%USERNAME%`, `~` never match,
+           and user, username, you, me, name, runner, public, default, shared are exempt.
+
+Exempt: any line carrying `lint-allow: <reason>`, and any identifier matching a line
+of pii-allowlist.txt (case-insensitive, `*` wildcards).
+
+HONEST LIMIT: identifiers only. It cannot see a personal NAME — that is a human call
+at the review gate. It misses `CORP\\nsmith`-style accounts (read as an escape).
+"""
+import fnmatch, os, re, sys
+
+NAME = r"[A-Za-z0-9][A-Za-z0-9._-]*"
+EMAIL = re.compile(r"(?<![\w.+%-])[A-Za-z0-9._%+-]+@(?:[A-Za-z0-9-]+\.)+([A-Za-z]{2,})\b")
+NOT_TLD = {"png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "md", "py", "sh", "json",
+           "yml", "yaml", "txt", "js", "ts", "css", "html", "csv"}
+ACCOUNT = re.compile(r"(?<![\w\\])([A-Z][A-Z0-9_-]{1,14})\\{1,2}([A-Za-z][\w.-]+)")
+ESCAPE = re.compile(r"[ntrfvab0]|x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}")
+HOME = re.compile(r"(?:(?<![\w.-])|(?<=/mnt/[a-z]))(/(?:home|Users)/" + NAME + ")")
+WINHOME = re.compile(r"(?<![\w])([A-Za-z]:\\{1,2}Users\\{1,2}" + NAME + ")")
+PLACEHOLDER = {"user", "username", "you", "me", "name", "runner", "public", "default", "shared"}
+
+
+def allowlist():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pii-allowlist.txt")
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError:
+        return []
+    return [l.strip().lower() for l in lines if l.strip() and not l.lstrip().startswith("#")]
+
+
+def identifiers(line):
+    for m in EMAIL.finditer(line):
+        if m.group(1).lower() not in NOT_TLD:
+            yield m.group()
+    for m in ACCOUNT.finditer(line):
+        if not ESCAPE.match(m.group(2)):
+            yield m.group()
+    for m in HOME.finditer(line):
+        yield m.group(1)
+    for m in WINHOME.finditer(line):
+        yield m.group(1)
+
+
+def personal(ident):
+    last = ident.replace("\\", "/").split("/")[-1].lower()
+    if ("/home/" in ident or "/Users/" in ident or "\\Users\\" in ident or "\\\\Users\\\\" in ident):
+        return last not in PLACEHOLDER
+    return True
+
+
+def main():
+    data = open(sys.argv[1], "rb").read()
+    if b"\0" in data:
+        return
+    allow = allowlist()
+    shown = 0
+    for n, line in enumerate(data.decode("utf-8", "replace").split("\n"), 1):
+        if "lint-allow" in line:
+            continue
+        if any(personal(i) and not any(fnmatch.fnmatchcase(i.lower(), a) for a in allow)
+               for i in identifiers(line)):
+            print(f"{n}:{line.strip()[:120]}")
+            shown += 1
+            if shown == 3:
+                break
+
+
+main()

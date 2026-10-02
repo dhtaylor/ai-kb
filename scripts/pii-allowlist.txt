@@ -1,0 +1,16 @@
+# pii-allowlist — standing identifiers that scripts/pii-scan (pass three of
+# check-secrets) must not flag. One per line; `#` starts a comment. Matched
+# case-insensitively against the whole identifier, `*` is a wildcard
+# (`*@example.com`). Shared by the engine and every library that runs check-secrets.
+# Add role aliases, service accounts and team lists here — never a person.
+
+# Commit-attribution alias (the Co-Authored-By trailer), not a person.
+noreply@anthropic.com
+
+# RFC 2606 reserved documentation domains: they cannot be anyone's real address.
+*@example.com
+*@example.org
+*@example.net
+*@*.example.com
+*@*.example.org
+*@*.example.net
