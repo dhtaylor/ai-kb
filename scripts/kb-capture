@@ -5,6 +5,13 @@
 # currency stamp, no judgment about what counts as a fact — that is distillation.
 # Doing it here is the ceremony that stops people capturing at all.
 #
+# ONE THING IT DOES REFUSE: a note holding a credential or a personal identifier
+# (the check-secrets passes, run on the body before anything is written). Retrieval
+# reads the working tree before any commit hook runs, so a note filed with a live
+# password in it is routable, and quotable, from the moment it lands. A refused
+# draft is kept outside the tree and its path printed; nothing is filed or routed.
+# `lint-allow: <reason>` on a line clears it, as everywhere else.
+#
 # THE ONE HARD RULE: preserve uncertainty in the words that show it. "Didn't
 # test", "probably", "the docs say" are what let distillation tell an observation
 # from a guess. A note that tidies hedges into confident prose poisons the next
@@ -51,7 +58,12 @@ domain=$(field domain); scope=$(field scope)
 [ -n "$title" ] || { [ -t 0 ] && [ -z "$from" ] && read -r -p "What happened, in one line? " title; }
 [ -n "$title" ] || { echo "kb-capture: a --title is required" >&2; exit 2; }
 
-tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT
+# The working copy is a private (0600) file under TMPDIR, never inside a git repo:
+# if the note is refused, this is the draft we hand back.
+tdir="${TMPDIR:-/tmp}"
+git -C "$tdir" rev-parse --show-toplevel >/dev/null 2>&1 && tdir=/tmp
+tmp=$(mktemp "$tdir/kb-capture-draft.XXXXXX") || exit 2
+trap '[ -n "${keep:-}" ] || rm -f "$tmp"' EXIT
 if [ -n "$from" ]; then
   if [ "$from" = "-" ]; then cat > "$tmp"; else cat "$from" > "$tmp" || exit 2; fi
 else
@@ -72,6 +84,28 @@ fi
 body_text=$(sed -e '/<!--/,/-->/d' -e '/^#/d' -e '/^[[:space:]]*$/d' "$tmp")
 if [ -z "$body_text" ]; then
   echo "kb-capture: the note has no content — nothing filed." >&2; exit 1
+fi
+
+# 2b. Refuse a note that holds a credential or identifier. Nothing is written. -----
+scan_target="$tmp"; [ -n "$from" ] && [ "$from" != "-" ] && scan_target="$from"
+if ! scan_out=$("$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/check-secrets" --file "$scan_target" 2>&1); then
+  printf '%s\n' "$scan_out" >&2
+  {
+    echo
+    echo "kb-capture: REFUSED — nothing filed, nothing routed."
+    echo "  Record a secret by reference, not by value: the vault key or name, where it lives,"
+    echo "  and the action required. Name a role, not a person (CONVENTIONS section 6)."
+    echo "  A line that is a deliberate example can carry \`lint-allow: <reason>\`."
+    retry=$(printf 'kb-capture --from <FILE> --title %q' "$title"); [ -n "$into" ] && retry="$retry --into $(printf '%q' "$into")"
+    if [ "$scan_target" = "$from" ]; then
+      echo "  Your file $from is untouched. Edit it, then: ${retry/<FILE>/$(printf '%q' "$from")}"
+    else
+      keep=1
+      echo "  Your draft is saved, private (mode 0600), outside the tree: $tmp"
+      echo "  Redact it, then: ${retry/<FILE>/$(printf '%q' "$tmp")}   (delete the draft after)"
+    fi
+  } >&2
+  exit 1
 fi
 
 # 3. File it -------------------------------------------------------------------

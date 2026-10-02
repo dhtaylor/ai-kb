@@ -56,7 +56,7 @@ mismatched name, the wrong scope and no router line committed with exit 0 and no
 ## The daily loop
 
 **Capture as you go.** In a Claude session, `/kb-capture`; from a terminal, `kb-capture`. It writes
-a dated note under `knowledge/episodic/` in the nearest tree and routes it.
+a dated note under `knowledge/episodic/` in the nearest tree and routes it, unless the body holds a credential or personal identifier, in which case it is refused.
 
 A capture **records; it does not decide**. Keep what you saw separate from what you concluded, and
 keep the hedges in the words that show them — "probably", "we didn't test that", "the docs say".
