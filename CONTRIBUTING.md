@@ -196,7 +196,7 @@ is true, whether its source still says so, or whether it landed where a reader w
 
 ## When something looks wrong
 
-**"knowledge: engine not found — structural checks skipped"** — this machine has no engine
+**"knowledge: engine not found — structural and secret checks skipped"** — this machine has no engine
 registered. Run `kb-bootstrap --apply`. The hook deliberately skips rather than failing, so an
 unconfigured machine is not blocked from working, which does mean an unbootstrapped clone is
 unguarded.
