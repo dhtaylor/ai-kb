@@ -907,6 +907,46 @@ git -C "$TMP/sec3" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>
 case_run "entropy pass runs in --all mode" 1 "SECRET?" -- \
   sh -c "cd '$TMP/sec3' && '$ENGINE/scripts/check-secrets' --all"
 
+# The PII pass (scripts/pii-scan). Identifiers are assembled at run time so this
+# file does not trip the scan it tests; standing aliases come from pii-allowlist.txt.
+BS='\'
+pii_run() { # pii_run <dir> <line>... -- a fresh repo with one staged file holding the lines
+  local d="$1"; shift; mkdir -p "$d"; git init -q "$d"; printf '%s\n' "$@" > "$d/notes.md"
+  git -C "$d" add -A >/dev/null 2>&1
+}
+pii_run "$TMP/pii1" "mail jane.doe@corp""mail.io please"
+case_run "email address is caught, labelled PII?" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii1' && '$ENGINE/scripts/check-secrets'"
+case_run "PII-only hit does not tell the reader to rotate" 0 "" -- \
+  sh -c "cd '$TMP/pii1' && ! '$ENGINE/scripts/check-secrets' | grep -q 'needs rotation'"
+pii_run "$TMP/pii2" "login HQEX${BS}jdoe today"
+case_run "DOMAIN-user account is caught" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii2' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/pii3" "see /ho""me/jdoe123/x"
+case_run "/home/<name>/ path is caught" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii3' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/pii4" "see /Us""ers/jdoe123/x"
+case_run "/Users/<name>/ path is caught" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii4' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/pii5" "see C:${BS}Us""ers${BS}jd""oe${BS}x"
+case_run "C:\\Users\\<name>\\ path is caught" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii5' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/pii6" "Co-Authored-By: Claude <noreply@anthropic.com>" "ask team@example.com"
+case_run "allowlisted alias and example.com pass" 0 "clean" -- \
+  sh -c "cd '$TMP/pii6' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/pii7" "mail jane.doe@corp""mail.io  lint-allow: documented example"
+case_run "lint-allow clears the PII pass" 0 "clean" -- \
+  sh -c "cd '$TMP/pii7' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/pii8" "episodic${BS}ndomain x08${BS}x0b Vu${BS}u010di 2019${BS}u20132023 sh${BS}necho" \
+  "SQL${BS}nSELECT C:${BS}Win""dows${BS}Sys""tem32 /home/<user>/x ~/notes /home/runner/work /Users/\$USER/x icon@2x.png"
+case_run "escapes, drive paths, placeholders and file names are not PII" 0 "clean" -- \
+  sh -c "cd '$TMP/pii8' && '$ENGINE/scripts/check-secrets'"
+case_run "PII pass runs in --worktree mode" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii1' && '$ENGINE/scripts/check-secrets' --worktree"
+git -C "$TMP/pii1" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>&1
+case_run "PII pass runs in --all mode" 1 "PII?" -- \
+  sh -c "cd '$TMP/pii1' && '$ENGINE/scripts/check-secrets' --all"
+
 # kb-init writes the hook a project tree commits through. It must scan for secrets:
 # a project repo is not a library, so it has no .githooks/pre-commit of its own.
 KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
