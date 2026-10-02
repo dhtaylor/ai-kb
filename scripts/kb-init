@@ -118,13 +118,15 @@ fi  # scaffolding: new projects only
 HMARK="# kb-init: knowledge checks"
 # The engine is found through git's global config as well as the environment:
 # git reads it in every context (IDE, GUI client, cron), which ~/.bashrc does not.
+# The secret scan runs first and on its own: chained after the structural checks,
+# any structural failure would skip it, hiding a pasted secret until the retry.
 SNIPPET="$HMARK
 kb_engine=\"\${KB_ENGINE_ROOT:-\$(git config --get kb.engineRoot 2>/dev/null)}\"
 if [ -n \"\$kb_engine\" ] && [ -x \"\$kb_engine/scripts/check-kb\" ]; then
+  \"\$kb_engine/scripts/check-secrets\" || exit 1
   \"\$kb_engine/scripts/check-kb\" knowledge \\
     && \"\$kb_engine/scripts/check-scope\" knowledge \\
-    && \"\$kb_engine/scripts/check-xlinks\" \"\$kb_engine/kb\" knowledge \\
-    && \"\$kb_engine/scripts/check-secrets\" || exit 1
+    && \"\$kb_engine/scripts/check-xlinks\" \"\$kb_engine/kb\" knowledge || exit 1
 else
   echo \"knowledge: engine not found (run kb-bootstrap --apply on this machine) — structural and secret checks skipped\"
 fi"
