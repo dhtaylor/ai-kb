@@ -947,6 +947,20 @@ git -C "$TMP/pii1" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>
 case_run "PII pass runs in --all mode" 1 "PII?" -- \
   sh -c "cd '$TMP/pii1' && '$ENGINE/scripts/check-secrets' --all"
 
+# Regression for the distill rule (CONVENTIONS §6): a security finding records the
+# secret's reference, location and action, never its value or a colleague's identity.
+# The finding is the shape the rule prescribes; literals are assembled at run time.
+FINDING_REF="**Finding:** plaintext vendor credential committed in \`PostToVendor.cs\`. Secret ref: \`kv://<vault>/vendor-password\`. Present in history at \`4c1a9e7\`. **Action:** rotate in the vendor system."
+pii_run "$TMP/fnd1" "$FINDING_REF"
+case_run "finding recorded by reference passes" 0 "clean" -- \
+  sh -c "cd '$TMP/fnd1' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/fnd2" "$FINDING_REF Value was pass""word = $PW"
+case_run "same finding with the pasted literal is blocked" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/fnd2' && '$ENGINE/scripts/check-secrets'"
+pii_run "$TMP/fnd3" "$FINDING_REF Committed by jane.doe@corp""mail.io"
+case_run "same finding naming a colleague's email is blocked as PII" 1 "PII?" -- \
+  sh -c "cd '$TMP/fnd3' && '$ENGINE/scripts/check-secrets'"
+
 # kb-init writes the hook a project tree commits through. It must scan for secrets:
 # a project repo is not a library, so it has no .githooks/pre-commit of its own.
 KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"

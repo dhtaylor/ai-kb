@@ -289,6 +289,23 @@ for them.
   `provenance: BROKEN`, which the hygiene sweep treats as **unverified**. A 404 is an alert, not silence —
   "unreachable" and "unchanged" are never conflated.
 
+**A finding records where a secret is and what to do about it — never what it is.** A security
+finding states the secret's **reference** (vault key or secret name), its **location** (file,
+commit) and the **required action** (rotate, revoke) — never the literal value. The same holds for
+any live credential: a knowledge base that quotes a password as evidence has leaked it through the
+front door, as documentation. Correct shape:
+
+> **Finding:** plaintext vendor credential committed in `PostToVendor.cs`. Secret ref:
+> `kv://<vault>/vendor-password`. Present in history at `4c1a9e7`. **Action:** rotate in the vendor
+> system — removal from code does not remediate.
+
+No value, full traceability, actionable. A source artifact that contains a live credential is
+**redacted before it is archived** under `documents/` — the archive is a copy, and a copy leaks.
+**Personal identifiers follow the same shape:** a finding names the role or account type ("the
+service account", "a former contractor"), not the colleague — no names, personal emails or personal
+accounts. `check-secrets` (credential patterns, entropy, PII passes) is the net behind this rule, not
+a substitute for it; it deliberately leaves names to the human gate.
+
 ## 7. Currency — stamped per section, with evidence
 
 *Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). None of it runs yet.*

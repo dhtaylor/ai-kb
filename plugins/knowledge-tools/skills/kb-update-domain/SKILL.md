@@ -69,6 +69,10 @@ keywords: [<terms a reader would search for>]
 <Two or three sentences: what the artifact is, and what was folded from it and what was not.>
 ```
 
+**Redact before you archive.** If the artifact contains a live credential, the archived copy has
+it redacted — replace the value with its reference (vault key or secret name). The archive is a
+second place the value would live (§6).
+
 If the artifact would not survive elsewhere — a local file, a pasted document, a page that may move
 — archive a copy under `<library>/documents/` and point the stub at it. Evidence travels with the
 library that cites it.
@@ -95,6 +99,10 @@ For each candidate fact:
   **Your own inference counts as a gap**: a "direct consequence" you draw beneath a folded fact
   borrows that fact's stamp and reads as checked. Put it in open-questions as a question, not in
   the fact section.
+- **Credentials are the exception to copying.** A live secret in the source — password, key,
+  token — is recorded by its reference, its location (file, commit) and the required action, never
+  its value; and a finding names a role or account type, not a colleague (§6). Faithful copying
+  stops at the secret.
 - **Do not promote an example into a rule.** One observed value is an observation, not a default.
 
 If you find yourself improving the source's prose, stop — that is the corruption happening.
@@ -188,6 +196,8 @@ so a human can see a dropped qualifier or a rounded number. Call out explicitly:
 - anything you left out, and why;
 - every contradiction flagged;
 - every gap recorded rather than filled.
+- every secret recorded by reference, with confirmation that no literal value and no personal
+  identifier was copied, and that the archived source is redacted.
 
 Only after that review do you commit.
 
@@ -218,5 +228,7 @@ Stop and say so rather than proceeding, if:
 - the source material is not actually available to you. **Never fold from memory of what a
   document probably says.** A fold with no source is invention wearing a citation;
 - you cannot preserve a value or qualifier faithfully;
+- the only way to record a security finding is to include the secret's value or a person's
+  identity;
 - the material belongs in a different tier, or in a domain that does not exist yet;
 - the user asks you to resolve a contradiction as part of the fold.
