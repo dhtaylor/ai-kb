@@ -52,6 +52,12 @@ consequence is…", "so presumably…", "this should mean…" — written beneat
 borrows that fact's `Verified:` stamp and reads as checked. It is speculation. Leave it out of the
 fact section; if it is worth keeping, it goes in `<domain>-open-questions.md` as a question.
 
+**A credential is never a candidate fact's evidence.** When a note records a security finding —
+a password, key or token found somewhere it should not be — the fact is the secret's reference
+(vault key or secret name), its location (file, commit) and the required action. The literal value
+and any colleague's name or personal account stay out of the library; name the role or account
+type. CONVENTIONS §6 states the rule.
+
 If you cannot tell which category a statement falls into, it stays in the episodic note. That is
 not a failure; that is the note doing its job.
 
@@ -144,6 +150,8 @@ Present, before committing:
   to promote, and why.** The refusals are the valuable half of this report;
 - every fact promoted, against the exact line in the episodic note it came from;
 - every scope decision, with the tier test that drove it.
+- every secret you recorded by reference, with confirmation that no literal value and no personal
+  identifier was copied (§6).
 
 Then run the engine's `scripts/check-kb <library>` and report the result and its limits.
 
@@ -159,6 +167,8 @@ Stop rather than proceed, if:
 - the knowledge root is unconfigured;
 - the episodic material is not actually available to you — never distil from memory of a session;
 - no domain exists for the facts, and you would have to invent one on the fly;
+- the only way to record a security finding is to include the secret's value or a person's
+  identity — record the reference, or leave the finding in the episodic note;
 - you would have to promote a speculation, a decision, or a single observation into a general
   truth to make the distillation look productive. **An episodic note that yields two facts and
   eight refusals is a good outcome.**
