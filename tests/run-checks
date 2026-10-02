@@ -868,6 +868,56 @@ git -C "$TMP/sec" -c user.email=t@t -c user.name=t commit -qm remove >/dev/null 
 case_run "credential deleted but still in history is caught by --all" 1 "" -- \
   sh -c "cd '$TMP/sec' && '$ENGINE/scripts/check-secrets' --all"
 
+# The entropy/labelled-literal pass (scripts/secret-entropy). These credentials have
+# no recognisable shape, so no pattern in secret-patterns.txt matches them; they are
+# assembled for the same reason as above.
+sec_stage() { # sec_stage <dir> <line> -- a fresh repo with one staged file holding <line>
+  mkdir -p "$1"; git init -q "$1"; printf '%s\n' "$2" > "$1/notes.md"
+  git -C "$1" add -A >/dev/null 2>&1
+}
+PW="Abc12#def!""45(ghXYZ"
+sec_stage "$TMP/sec3" "$PW"
+case_run "prefixless high-entropy literal is caught" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec3' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec4" "pass""word = $PW"
+case_run "labelled secret with special characters is caught" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec4' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec5" "sec""ret: \"s3cr3t(Pa55w0rd)!\""
+case_run "quoted labelled literal is caught" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec5' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec6" "pass""word = $PW  lint-allow: documented example"
+case_run "lint-allow clears the entropy pass" 0 "clean" -- \
+  sh -c "cd '$TMP/sec6' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec7" "key = \"$(printf '%s%s' AKIA ABCDEFGHIJKLMNOP)\"  lint-allow: documented example"
+case_run "lint-allow clears the pattern pass" 0 "clean" -- \
+  sh -c "cd '$TMP/sec7' && '$ENGINE/scripts/check-secrets'"
+# Ordinary content that is long, mixed-case or punctuated must not trip it.
+sec_stage "$TMP/sec8" "$(printf '%s\n' \
+  'Fixed in commit 8ffb98a1b2c3d4e5f60718293a4b5c6d7e8f9a0b, verified 2026-09-22.' \
+  'The password rotation policy and the secret-governance note apply to every token.' \
+  'See https://example.com/docs/Getting-Started?ref=Abc123def456ghi789 for more.' \
+  'Related: [[agile-requirements:story-points]] and [guide](../kb/azure-devops/fields.md#Area).' \
+  'Call hashlib.sha1(payload).hexdigest()[:8] and the 20%-longer-cycle estimate.' \
+  'password: <your-password>  token: $API_TOKEN')"
+case_run "sha, prose, URL, wiki-link, code and placeholders are not flagged" 0 "clean" -- \
+  sh -c "cd '$TMP/sec8' && '$ENGINE/scripts/check-secrets'"
+case_run "entropy pass runs in --worktree mode" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec3' && '$ENGINE/scripts/check-secrets' --worktree"
+git -C "$TMP/sec3" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>&1
+case_run "entropy pass runs in --all mode" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec3' && '$ENGINE/scripts/check-secrets' --all"
+
+# kb-init writes the hook a project tree commits through. It must scan for secrets:
+# a project repo is not a library, so it has no .githooks/pre-commit of its own.
+KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
+mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
+env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
+case_run "kb-init's project hook includes the secret scan" 0 "" -- \
+  grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
+printf '%s\n' "$PW" > "$TMP/kiproj/leak.md"; git -C "$TMP/kiproj" add -A >/dev/null 2>&1
+case_run "project hook blocks a staged secret" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/kiproj' && env -i HOME='$KIHOME' PATH='$PATH' KB_ENGINE_ROOT='$ENGINE' ./.githooks/pre-commit"
+
 # ---------------------------------------------------------- check-stamps ----
 # An agent commits under the human's git identity, so identity proves nothing.
 # What is observable: a commit that announces agent co-authorship AND stamps a
