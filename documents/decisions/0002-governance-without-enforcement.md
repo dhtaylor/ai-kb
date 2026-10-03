@@ -1,6 +1,6 @@
 # ADR-0002: Governance structure without enforcement
 
-- **Status:** Accepted, amended 2026-09-22 (see *What changed on 2026-09-22*)
+- **Status:** Accepted, amended 2026-09-22 and 2026-10-02 (see *What changed on 2026-09-22* and *What changed on 2026-10-02*)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 0 (guardrails)
@@ -134,6 +134,37 @@ holding *knowledge* are not. That is backwards from where the risk sits — a wr
 an agent, while a wrong script fails loudly — and it is a property of the billing plan rather than
 of any decision made here. It is the strongest argument for either paying for the private repos or
 accepting that the libraries' real guardrail is the commit hook plus a human reading a red run.
+
+## What changed on 2026-10-02
+
+The original decision text above is left as written. As of 2026-10-02, confirmed by the owner:
+
+- **Public, with secret scanning and push protection enabled.** The engine repository and the
+  `knowledge-architecture` library repository are both public, and on both GitHub secret scanning and
+  push protection are now **enabled**. This resolves the "True push rejection" item under *Not yet in
+  place* and its revisit trigger ("Revisit if the repository becomes public or the plan changes"): the
+  repository did become public. For those two repositories a push carrying a recognised credential is
+  now rejected before it lands.
+- **`knowledge-architecture` is gated like the engine.** Its `main` is protected with `guardrails` as a
+  required status check. No reviews are required and admin bypass is kept (`enforce_admins` false), the
+  same shape as the engine's. It also has an `owner-approved` label. The engine's `main` already had
+  this protection.
+- **Every library has CI.** The five other libraries (`agile-requirements`, `ai-writing-signals`,
+  `azure-devops`, `claude-code-runtime`, `intelligence-analysis`) remain private. Each now has its own
+  `.github/workflows/guardrails.yml`, instantiated from `documents/library-guardrails.yml`. This
+  supersedes "none — libraries have no CI of their own" in the 2026-09-19 table.
+
+**What still holds.** The committer-side scan is still not the boundary: it is bypassable and was
+never the control. Push protection recognises only GitHub's own patterns, so the server-side workflow
+remains necessary for the engine's own patterns, the entropy and PII passes and the regression suite.
+The five private libraries still lack enforcement: branch protection and rulesets need a paid plan
+there, so their CI reports and nothing forces anyone to heed it, and push protection is unavailable on
+them. The 2026-09-22 asymmetry therefore narrows rather than closes: of the six libraries, one is now
+gated on the server, five are not.
+
+**What it means for the decision.** The reasoning stands: a declared-but-unenforced control is worse
+than none, so the five private libraries are still recorded as unenforced rather than described as
+protected. The review trigger's plan-change clause is not yet met for them.
 
 ## Review trigger
 
