@@ -10,8 +10,10 @@ name: guardrails
 # REJECTS a push carrying a credential; this lets the push land and then fails
 # the run. A real leak therefore still requires rotation AND a history rewrite —
 # rotation alone does not erase it from git, and every clone retains it.
-# Push protection is not available for private repositories on this plan, so
-# this is the compensating control. See documents/decisions/0002-*.md
+# Push protection is now enabled on this public repo. This workflow remains the
+# server-side half: it catches what push protection's patterns do not (the
+# engine's own patterns, the entropy and PII passes) and runs the regression
+# suite. See documents/decisions/0002-*.md
 
 on:
   push:

@@ -1,6 +1,6 @@
 # ADR-0005: Currency cadence — TTLs, budgets, and the automation gate
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-02 (see *What changed on 2026-10-02*)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 1 (inventory, map & decide)
@@ -109,3 +109,13 @@ assumption offers.
   in any meaningful form.
 - `needs-attention.md` does not exist; per the contract §3, a state leaf is created only when it
   has content.
+
+## What changed on 2026-10-02
+
+The decision text above is left as written. The open item "The `verified_by`-from-committer CI check
+is specified, not built" is **closed, superseded by `check-stamps`** (`scripts/check-stamps`;
+CONVENTIONS §7). Deriving `by:` from the committer identity proved unimplementable, because an agent
+commits under the human's own git identity, so there are not two identities to tell apart. `check-stamps`
+instead refuses a commit that carries a Claude co-authorship trailer and also adds a `by: human` stamp.
+It guards against the accident, not a determined author who drops the trailer. The other open items
+are unchanged.

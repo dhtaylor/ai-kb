@@ -24,14 +24,14 @@ facts**:
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating. |
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills and the `kb-retrieve` agent. |
 | `scripts/` | Setup commands (`kb-bootstrap`, `kb-init`, `kb-capture`) and the checks that guard the contract. |
-| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0010). Each one explains why a rule exists. |
+| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0013). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
 The facts live elsewhere, in two kinds of home:
 
 - **Domain libraries.** Each library is its own git repository, one per subject domain, cloned into
   the engine's `kb/` directory. A library holds facts that are true wherever its subject appears,
-  plus their sources and a golden set of test questions. Libraries are usually private: the engine
+  plus their sources and a golden set of test questions. Libraries may be private or public (one is public): the engine
   is public, and the knowledge doesn't have to be.
 - **Project trees.** A `knowledge/` directory inside an ordinary project repository holds facts
   that are true only of that deployment.
@@ -92,15 +92,17 @@ due for a sweep. Both report rather than repair.
 
 This is early, working software, version 0.1.0, with one author so far.
 
-- **Built and tested:** the contract, ADRs 1 to 10, the five skills, the retrieval agent, both
+- **Built and tested:** the contract, ADRs 1 to 13, the five skills, the retrieval agent, both
   halves of the retrieval eval, and the guardrails above.
 - **Evidenced, not guaranteed:** that an agent retrieves rather than recalls has been tested on five
   libraries by agents that never saw the answer key. The latest recorded runs scored 15/16, 16/16,
   14/17 and 16/19 on the four newest, each of which keeps its runs' answers and grades as evidence.
   The first library's single run survives only as a note in the plan. The protocol changed between runs as defects in the eval itself were found; the plan's
   §9.14–9.16 records which.
-- **Next:** rolling out further domains, then orchestration across domain agents, then
-  steady-state upkeep. The full plan, including what building it proved and disproved, is in
+- **Next:** rolling out further domains. No orchestrator across domain agents will be built until
+  `kb-retrieve`'s own routing is shown to fall short ([ADR-0011](documents/decisions/0011-no-orchestrator-until-routing-fails.md)),
+  and steady-state upkeep is surfaced when due rather than run unattended
+  ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)). The full plan, including what building it proved and disproved, is in
   [`documents/knowledge-agent-architecture-combination-plan.md`](documents/knowledge-agent-architecture-combination-plan.md).
 
 Known gaps are recorded, not hidden. CI checks are required on `main`, but pull-request and
