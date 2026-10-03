@@ -585,5 +585,6 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
 Nineteen of twenty-one are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
-— it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
-is what the last two rows are for.
+— it is not verified. Whether an agent retrieves rather than answering from memory is what the
+routing check and the answer-grounding eval are for: the eval is built, and routing is still
+checked by hand.
