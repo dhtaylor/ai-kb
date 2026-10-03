@@ -994,6 +994,36 @@ git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "a person checke
 case_run "human stamp without an agent trailer is allowed" 0 "clean" -- \
   sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
 
+# The stamps live in libraries, so the library CI template must run this check.
+# Run the template's own step — extracted from the YAML, with GitHub's
+# expressions filled in — rather than the script, so a step that drifts from the
+# script, or goes missing, fails here. $1 = event.before, $2 = sha.
+stamp_step() {
+  awk '/- name: Stamp honesty/{f=1; next} f && /run: \|/{r=1; next} r && /^      - name:/{exit} r' \
+    "$ENGINE/documents/library-guardrails.yml" | sed 's/^          //' \
+    | sed "s/\${{ github.event.before }}/$1/g; s/\${{ github.sha }}/$2/g"
+}
+stamp_step x x > "$TMP/stamp-step.sh"
+case_run "library CI template runs check-stamps" 0 "" -- grep -q 'check-stamps' "$TMP/stamp-step.sh"
+mkdir -p "$TMP/stamplib"; git init -q "$TMP/stamplib"
+fm claim general > "$TMP/stamplib/claim.md"
+printf '# Claim\n\n## A\n\nx\n\nSource: manual\nVerified: 2026-01-01 · by: human · method: manual\n' >> "$TMP/stamplib/claim.md"
+git -C "$TMP/stamplib" add -A
+git -C "$TMP/stamplib" -c user.email=t@t -c user.name=t commit -qm "seed
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>" >/dev/null 2>&1
+lib_head=$(git -C "$TMP/stamplib" rev-parse HEAD)
+stamp_step 0000000000000000000000000000000000000000 "$lib_head" > "$TMP/stamp-step.sh"
+case_run "library step: first push, no parent, agent commit stamping human — caught" 1 "by: human" -- \
+  sh -c "cd '$TMP/stamplib' && ENGINE='$ENGINE' sh '$TMP/stamp-step.sh'"
+sed -i 's/by: human/by: agent/' "$TMP/stamplib/claim.md"; git -C "$TMP/stamplib" add -A
+git -C "$TMP/stamplib" -c user.email=t@t -c user.name=t commit -qm "restamp honestly
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>" >/dev/null 2>&1
+stamp_step "$lib_head" "$(git -C "$TMP/stamplib" rev-parse HEAD)" > "$TMP/stamp-step.sh"
+case_run "library step: ordinary push range, agent stamp — clean" 0 "clean" -- \
+  sh -c "cd '$TMP/stamplib' && ENGINE='$ENGINE' sh '$TMP/stamp-step.sh'"
+
 # ------------------------------------------------------------- kb-owner ----
 # GitHub resolves ownership by the LAST matching pattern, not the most specific.
 # A sweep that parses CODEOWNERS by eye gets this backwards and files findings
