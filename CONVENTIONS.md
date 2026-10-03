@@ -8,7 +8,7 @@ metadata:
   type: reference
   node_type: contract
   created: 2026-07-08
-  revised: 2026-09-19
+  revised: 2026-10-02
 tags: [knowledge, conventions, progressive-disclosure, provenance, currency]
 keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, provenance, gestalt]
 ---
@@ -308,7 +308,7 @@ a substitute for it; it deliberately leaves names to the human gate.
 
 ## 7. Currency — stamped per section, with evidence
 
-*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). None of it runs yet.*
+*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). The re-check (`kb-verify`), the offline Watcher (`kb-watch`) and the due-reminder (`kb-due`) are built and run, each reporting rather than repairing; nothing runs unattended.*
 
 Provenance says where a fact came from. Currency says whether it is still true. They are different
 questions and they attach at the same granularity (§4).
@@ -577,9 +577,14 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | ownership resolution | who a finding belongs to, by CODEOWNERS' last-match-wins rule | **built** — `kb-owner` |
 | stamp honesty | a commit claiming agent co-authorship does not also add a `by: human` stamp | **built** — `check-stamps` |
+| high-blast gate | a diff that deletes a knowledge file, drops a `status: CONFLICTED` marker, or promotes a fact's scope toward `general` is flagged, for CI to hold until an owner labels it; detection only | **built** — `check-blast` |
+| tool-scope declaration | each agent, skill and command declares a tool tier and is consistent with it; proves the declaration, not that a skill cannot use an undeclared tool | **built** — `check-tool-scope` |
+| sweep and re-check due | which trees are due for a sweep, and how many facts, open queue items and episodic notes await a librarian; a reminder, exit 0 always | **built** — `kb-due` |
+| external drift | a saved snapshot of an external source still matches its recorded baseline; drift is queued, never applied; offline, fetches nothing | **built** — `kb-watch` |
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Fifteen of seventeen are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
-— it is not verified. Nothing yet proves an agent retrieves rather than answering from memory, which
-is what the last two rows are for.
+Nineteen of twenty-one are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
+— it is not verified. Whether an agent retrieves rather than answering from memory is what the
+routing check and the answer-grounding eval are for: the eval is built, and routing is still
+checked by hand.
