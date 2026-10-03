@@ -31,7 +31,7 @@ The facts live elsewhere, in two kinds of home:
 
 - **Domain libraries.** Each library is its own git repository, one per subject domain, cloned into
   the engine's `kb/` directory. A library holds facts that are true wherever its subject appears,
-  plus their sources and a golden set of test questions. Libraries may be private or public (one is public): the engine
+  plus their sources and a golden set of test questions. Libraries may be private or public: the engine
   is public, and the knowledge doesn't have to be.
 - **Project trees.** A `knowledge/` directory inside an ordinary project repository holds facts
   that are true only of that deployment.
