@@ -10,8 +10,8 @@ name: guardrails
 # WHY IT FETCHES THE ENGINE: the checks live there, and a library deliberately
 # does not vendor them — one copy of a check, in one place, is the whole point.
 # The engine is public, so this needs NO credential: no secret to add, none to
-# rotate, and nothing to leak. The knowledge stays private in this repository;
-# only the behaviour that checks it is public.
+# rotate, and nothing to leak. The knowledge may stay private in this repository;
+# only the behaviour that checks it has to be public.
 #
 # WHAT IT IS NOT: detection, not prevention — the push lands and then the run
 # fails. A real leak still needs rotation AND a history rewrite (both facts are
