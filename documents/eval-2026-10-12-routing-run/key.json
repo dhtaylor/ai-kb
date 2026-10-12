@@ -1,0 +1,86 @@
+[
+ {
+  "case": "positive",
+  "question": "In Example Mapping, what does it mean if a rule generates many different examples?",
+  "expected_file": "acceptance-criteria-and-elicitation.md",
+  "lib": "agile-requirements",
+  "id": "Q01"
+ },
+ {
+  "case": "positive",
+  "question": "Why is the \"so that\" clause the part of a user story that matters most?",
+  "expected_file": "story-format-and-invest.md",
+  "lib": "agile-requirements",
+  "id": "Q02"
+ },
+ {
+  "case": "positive",
+  "question": "If no single AI-writing signal is proof on its own, what actually distinguishes AI-generated prose from human prose?",
+  "expected_file": "signal-weighing-and-tiers.md",
+  "lib": "ai-writing-signals",
+  "id": "Q03"
+ },
+ {
+  "case": "positive",
+  "question": "Why doesn't finding one em dash or one use of \"delve\" prove a document was written by AI?",
+  "expected_file": "signal-weighing-and-tiers.md",
+  "lib": "ai-writing-signals",
+  "id": "Q04"
+ },
+ {
+  "case": "positive",
+  "question": "What is the common work-item category that \"User Story,\" \"Product Backlog Item,\" \"Issue,\" and \"Requirement\" all belong to?",
+  "expected_file": "user-story-work-item.md",
+  "lib": "azure-devops",
+  "id": "Q05"
+ },
+ {
+  "case": "positive",
+  "question": "Does the Value Area field apply to the Basic process template's Issue work item type?",
+  "expected_file": "user-story-work-item.md",
+  "lib": "azure-devops",
+  "id": "Q06"
+ },
+ {
+  "case": "positive",
+  "question": "Per Claude Code's documentation, what does extraKnownMarketplaces do?",
+  "expected_file": "behaviour-loading.md",
+  "lib": "claude-code-runtime",
+  "id": "Q07"
+ },
+ {
+  "case": "positive",
+  "question": "Does a variable added to the env block of ~/.claude/settings.json require a restart to take effect?",
+  "expected_file": "config-resolution.md",
+  "lib": "claude-code-runtime",
+  "id": "Q08"
+ },
+ {
+  "case": "positive",
+  "question": "What is a common disguised form of a \"buried BLUF\" in a postmortem or incident report?",
+  "expected_file": "analytic-writing-craft.md",
+  "lib": "intelligence-analysis",
+  "id": "Q09"
+ },
+ {
+  "case": "positive",
+  "question": "If five reports all trace back to one original source, do they count as independent corroboration?",
+  "expected_file": "analytic-writing-craft.md",
+  "lib": "intelligence-analysis",
+  "id": "Q10"
+ },
+ {
+  "case": "positive",
+  "question": "Does rotating a leaked secret remove it from git history?",
+  "expected_file": "secret-governance.md",
+  "lib": "knowledge-architecture",
+  "id": "Q11"
+ },
+ {
+  "case": "positive",
+  "question": "When the Verifier re-runs a fact's assertion and it fails, does it edit or flag the fact?",
+  "expected_file": "agent-lifecycle-roles.md",
+  "lib": "knowledge-architecture",
+  "id": "Q12"
+ }
+]

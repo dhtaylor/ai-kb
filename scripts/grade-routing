@@ -16,13 +16,16 @@ Per golden case, from Read/Glob/Grep calls only, it reports
       path under an eval* folder, a Glob/Grep path or glob naming either, or either one
       appearing in what a Glob or Grep RETURNED, in any output mode: a bare file list shows
       the oracle was in scope). Contamination fails the case: it hands the agent its key.
+      A Glob or Grep with a paired tool_result is judged by that result alone, never by its
+      arguments (a compliant agent's exclusion glob names the golden set and touches nothing).
       Grep is graded by its tool_result, paired to the call by tool_use_id, because its
       arguments say where it looked and not what it showed the agent. A non-INDEX file of
       another library in a content-mode result is a content read from that library; in a
       files_with_matches or count result it is a listing, reported and not failed. A Grep
       with no paired result is graded conservatively by its scope (path, glob): a golden set
-      in scope is contamination and, in content mode, every library in scope was read. The
-      per-case line says so.
+      in scope is contamination and, in content mode, every library in scope was read. A glob
+      starting with ! excludes: it is never contamination and is applied when computing the
+      scope. The per-case line says so.
 
 A positive or cross-root case passes when (a) holds, content was read only from the
 libraries the case needs, and (c) is clean. The case's own library is needed; a cross-root
@@ -142,6 +145,26 @@ def result_paths(text: str, mode: str):
     return out
 
 
+def glob_regex(g: str):
+    """A ripgrep-style glob as a regex over a '/'-separated relative path: ** crosses
+    directories, * and ? do not, and {a,b} alternates."""
+    out, i, depth = [], 0, 0
+    while i < len(g):
+        c = g[i]
+        if g.startswith("**/", i):
+            out.append("(?:.*/)?"); i += 3; continue
+        if g.startswith("**", i):
+            out.append(".*"); i += 2; continue
+        if c == "*": out.append("[^/]*")
+        elif c == "?": out.append("[^/]")
+        elif c == "{": out.append("(?:"); depth += 1
+        elif c == "}" and depth: out.append(")"); depth -= 1
+        elif c == "," and depth: out.append("|")
+        else: out.append(re.escape(c))
+        i += 1
+    return re.compile("".join(out) + ")" * depth)
+
+
 def scope_files(lib: pathlib.Path, inp: dict):
     """Files a Grep with no result could have shown: everything under its path (the library
     if none given), narrowed by its glob."""
@@ -150,7 +173,10 @@ def scope_files(lib: pathlib.Path, inp: dict):
         s = pathlib.Path(inp["path"])
     files = [s] if s.is_file() else sorted(f for f in s.rglob("*") if f.is_file()) if s.is_dir() else []
     g = inp.get("glob")
-    if g:
+    if g and g.startswith("!"):
+        rx = glob_regex(g[1:])
+        files = [f for f in files if not rx.fullmatch((f.relative_to(s) if s.is_dir() else pathlib.Path(f.name)).as_posix())]
+    elif g:
         files = [f for f in files if fnmatch.fnmatch(f.name, g)
                  or fnmatch.fnmatch(str(f.relative_to(s)) if s.is_dir() else f.name, g)]
     return files
@@ -173,9 +199,14 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
             if lib_of(f):
                 content.add(lib_of(f))
         elif name in ("Glob", "Grep"):
-            for fld in ("pattern", "path", "glob") if name == "Glob" else ("path", "glob"):
-                if CONTAMINATED.search(str(inp.get(fld, ""))):
-                    touched.append(f"{name} {fld}={inp[fld]}")
+            if res is None:   # no result: the arguments are all there is. A returned result
+                # is exactly what the agent saw, so it alone is judged (below).
+                for fld in ("pattern", "path", "glob") if name == "Glob" else ("path", "glob"):
+                    v = str(inp.get(fld, ""))
+                    if fld == "glob" and v.startswith("!"):
+                        continue   # an exclusion glob names what is skipped, not what is touched
+                    if CONTAMINATED.search(v):
+                        touched.append(f"{name} {fld}={inp[fld]}")
             if name == "Glob":
                 if res is not None:
                     touched += [f"Glob returned {p}" for p in res.splitlines() if CONTAMINATED.search(p)]
