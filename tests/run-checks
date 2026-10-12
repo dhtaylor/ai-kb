@@ -1563,8 +1563,10 @@ mk_tr "$RT/golden.jsonl" "Read:$A/widgets.md" "Read:$A/fx-golden.md"
 grade "reading the golden set: contamination fails" 1 "contamination" "Q1|golden.jsonl"
 mk_tr "$RT/evalfolder.jsonl" "Read:$A/widgets.md" "Read:$RT/documents/eval-2026-01-01-sample/key.json"
 grade "reading an eval folder: contamination fails" 1 "contamination" "Q1|evalfolder.jsonl"
-mk_tr "$RT/globgolden.jsonl" "Read:$A/widgets.md" "Glob:$A/*-golden.md"
-grade "globbing for the golden set: contamination fails" 1 "contamination" "Q1|globgolden.jsonl"
+mk_tr "$RT/globgolden.jsonl" "Read:$A/widgets.md" "Glob:$A/*-golden.md@@$A/fx-golden.md"
+grade "globbing for the golden set, result lists it: contamination fails" 1 "contamination" "Q1|globgolden.jsonl"
+mk_tr "$RT/globgolden2.jsonl" "Read:$A/widgets.md" "Glob:$A/*-golden.md@@NONE"
+grade "globbing for the golden set, no result: contamination fails" 1 "contamination" "Q1|globgolden2.jsonl"
 mk_tr "$RT/dots.jsonl" "Read:$A/../alpha/./widgets.md"
 grade "absolute path with .. and . segments still resolves" 0 "1/1 graded" "Q1|dots.jsonl"
 mk_tr "$RT/kbrel.jsonl" "Read:kb/alpha/widgets.md"
@@ -1606,6 +1608,38 @@ mk_tr "$RT/gn2.jsonl" "Grep:$RT/kb|content@@NONE" "Read:$A/widgets.md"
 grade "unanswered content Grep over kb/ counts every library as read" 1 "unneeded beta" "Q1|gn2.jsonl"
 mk_tr "$RT/gn3.jsonl" "Grep:$RT/kb|files_with_matches@@NONE" "Read:$A/widgets.md"
 grade "unanswered files-mode Grep: golden set in scope still fails" 1 "Grep scope holds" "Q1|gn3.jsonl"
+# A Grep's exclusion glob (leading !) names what it skips, not what it touched. kb-retrieve is
+# told to pass one, so a compliant agent must not fail for it; with a result, only the result counts.
+mk_grep() { # mk_grep <out.jsonl> <path> <mode> <glob> <head_limit|-> <result|NONE> <then-Read file>
+  python3 - "$@" <<'PY'
+import json, sys
+out, path, mode, glob, cap, res = sys.argv[1:7]
+inp = {"pattern": "x", "path": path, "glob": glob, "output_mode": mode}
+if cap != "-": inp["head_limit"] = int(cap)
+recs = [{"type": "user", "message": {"role": "user", "content": "a question"}},
+        {"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "g0", "name": "Grep", "input": inp}]}}]
+if res != "NONE":
+    recs.append({"type": "user", "message": {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": "g0", "content": res}]}})
+recs.append({"type": "assistant", "message": {"role": "assistant", "content": [
+    {"type": "tool_use", "id": "r0", "name": "Read", "input": {"file_path": sys.argv[7]}}]}})
+open(out, "w").write("\n".join(json.dumps(r) for r in recs) + "\n")
+PY
+}
+XG='!{**/*-golden.md,**/documents/eval-*/**}'
+mk_grep "$RT/xg1.jsonl" "$A" content "$XG" - "$A/widgets.md:5:A widget holds up to 12 things." "$A/widgets.md"
+grade "exclusion glob with a result of expected-library files: pass" 0 "contamination=none" "Q1|xg1.jsonl"
+mk_grep "$RT/xg2.jsonl" "$A" content "$XG" - NONE "$A/widgets.md"
+grade "exclusion glob with no result is not contamination" 0 "contamination=none" "Q1|xg2.jsonl"
+mk_grep "$RT/xg3.jsonl" "$A" files_with_matches "$XG" - NONE "$A/widgets.md"
+grade "exclusion glob, files mode, no result: the golden set is excluded from scope" 0 "1/1 graded" "Q1|xg3.jsonl"
+mk_grep "$RT/xg4.jsonl" "$A" content "$XG" - "$A/fx-golden.md:9:  expected_excerpt: x" "$A/widgets.md"
+grade "exclusion glob does not excuse a result that returns the golden set" 1 "Grep returned" "Q1|xg4.jsonl"
+mk_grep "$RT/xg5.jsonl" "$RT/kb" content "$XG" - NONE "$A/widgets.md"
+grade "exclusion glob, unanswered Grep over kb/: contamination none, other libraries still read" 1 "contamination=none" "Q1|xg5.jsonl"
+mk_grep "$RT/cap.jsonl" "$RT/kb" content "$XG" 40 "kb/alpha/widgets.md:5:A widget holds up to 12 things.${NL}kb/alpha/INDEX.md:7:- widgets${NL}${NL}[Showing results with pagination = limit: 40, offset: 0]" "$A/widgets.md"
+grade "capped content Grep with a pagination note: content-in is the returned library only" 0 "content-in=alpha  contamination=none" "Q1|cap.jsonl"
 printf 'not json\n' > "$RT/bad.jsonl"
 grade "transcript that is not JSONL is a format error" 2 "not JSON" "Q1|bad.jsonl"
 case_run "grade-routing: no arguments is a usage error" 2 "usage" -- "$ENGINE/scripts/grade-routing"
