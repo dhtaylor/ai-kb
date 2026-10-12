@@ -85,7 +85,7 @@ for a human, per rule 2.
 Usage: kb-verify <library-or-tree> [--yes] [--apply] [--all] [--budget N]
   --yes      run the commands (without it, they are printed and nothing runs, and
              nothing is queued either — the --yes gate covers both)
-  --apply    rewrite the date of sections whose assertion passed
+  --apply    restamp sections whose assertion passed (today, by: agent, method: query)
   --all      every section with an assertion, not only the stale ones
   --budget N override the domain's verifier_budget
 A FAILED assertion (only ever reachable with --yes) is queued to the owning library's
@@ -334,7 +334,7 @@ def main(argv) -> int:
     if passed and "--apply" in flags:
         for s in passed:
             lines = s["file"].read_text().split("\n")
-            lines[s["line"]] = f"Verified: {TODAY} · by: agent · method: {s['method']}"
+            lines[s["line"]] = f"Verified: {TODAY} · by: agent · method: query"
             s["file"].write_text("\n".join(lines))
         print(f"\n  restamped {len(passed)} section(s) to {TODAY} (by: agent — kb-verify is an agent, "
               f"whatever ran the assertion)")

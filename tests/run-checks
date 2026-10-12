@@ -452,6 +452,14 @@ sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "
 case_run "a failing assertion's stamp is never rewritten" 0 "Verified: 2026-01-01" -- \
   grep -F "Verified:" "$TMP/vfail2/widgets.md"
 
+# Issue #16: a restamp is a query-method verification, whatever method it carried before.
+build_clean "$TMP/vmethod"
+printf 'Recheck: true\n' >> "$TMP/vmethod/widgets.md"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review/' "$TMP/vmethod/widgets.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vmethod" --all --yes --apply >/dev/null 2>&1
+case_run "--apply restamp records method: query" 0 "by: agent · method: query" -- \
+  grep -F "Verified: $(date +%F)" "$TMP/vmethod/widgets.md"
+
 build_clean "$TMP/vnone"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vnone/widgets.md"
 case_run "stale section with no assertion is named, not skipped" 0 "no assertion" -- \
@@ -689,9 +697,17 @@ EOF
 printf -- '- [stale-recheck](stale-recheck.md) — a stale fact with a Recheck\n' >> "$NFX/kb/recheck-due/INDEX.md"
 case_run "nudge: a stale fact with Recheck is reported due" 0 "1 fact due for recheck" -- \
   "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
-case_run "nudge: names the exact kb-verify command" 0 "kb-verify recheck-due --yes" -- \
+case_run "nudge: names the exact kb-verify command, by path" 0 "kb-verify $NFX/kb/recheck-due --yes" -- \
   "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
 case_run "nudge: the Recheck assertion itself is never run" 1 "" -- test -e "$NUDGE_SENTINEL"
+# Issue #16: the printed command must actually run when pasted, from any cwd.
+NUDGE_CMD=$("$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge \
+  | sed -n 's/.*(\(kb-verify [^)]*\)).*/\1/p' | head -1)
+mkdir -p "$TMP/nudge-elsewhere"
+case_run "nudge: the printed kb-verify command runs from another cwd" 0 "" -- \
+  bash -c 'cd "$1" && PATH="$2:$PATH" && out=$($3 2>&1); rc=$?; echo "$out"; ! printf %s "$out" | grep -q "has no INDEX.md" && [ $rc = 0 ]' \
+  _ "$TMP/nudge-elsewhere" "$ENGINE/scripts" "$NUDGE_CMD"
+rm -f "$NUDGE_SENTINEL"  # the pasted command ran the Recheck for real; reset for later cases
 
 # 3. An open queue item, built by actually running kb-verify --yes on a failing fact, so
 #    the queue format being counted is the real one kb-verify writes — not a hand-rolled

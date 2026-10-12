@@ -31,7 +31,7 @@ reports, per tree, everything a librarian should act on:
                              as a module, exactly the way kb-verify itself imports scripts/kb-watch
                              (SourceFileLoader, sys.dont_write_bytecode = True) — one judgment of
                              "is this section due", not two copies of it that can drift apart.
-                             Only a count and the command (`kb-verify <library> --yes`) are
+                             Only a count and the command (`kb-verify <path> --yes`) are
                              printed; no assertion is ever run or even read here.
   3. open queue items      — `status: open` records in the library's needs-attention.md, read
                              with kb-watch's own `parse_records` (also imported, not re-specified)
@@ -53,7 +53,7 @@ Usage: kb-due <engine-root> [tree ...] [--quiet|--nudge]
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
-import datetime, importlib.machinery, importlib.util, pathlib, re, sys
+import datetime, importlib.machinery, importlib.util, pathlib, re, shlex, sys
 
 DEFAULT_INTERVAL = 30
 TODAY = datetime.date.today()
@@ -169,7 +169,7 @@ def nudge_for(s: dict, kb_verify, kb_watch):
         warnings.append(f"{lbl}: could not compute facts due for recheck ({e}) — skipped")
         due = None
     if due:
-        parts.append(f"{plural(len(due), 'fact')} due for recheck (kb-verify {lbl} --yes)")
+        parts.append(f"{plural(len(due), 'fact')} due for recheck (kb-verify {shlex.quote(str(tree.resolve()))} --yes)")
 
     try:
         qn, cats = queue_due(tree, kb_watch)
@@ -222,7 +222,7 @@ def main(argv) -> int:
             print(f"kb-due: {w}", file=sys.stderr)
         if lines:
             print("\n".join(lines))
-            print("Commands: kb-audit <library> for a sweep; kb-verify <library> --yes for "
+            print("Commands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
                   "the rechecks above; kb-distill for the episodic notes above.")
         return 0
 
