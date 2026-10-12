@@ -27,6 +27,12 @@ job.
    one child whose hook fits the question. If that child is itself an index, repeat. Descend one hop
    at a time and load the minimum that answers the question.
 
+   **A search is not a router.** Read the routers first, then search only inside the library they
+   sent you to: give every Grep a `path` of that library (`<engine>/kb/<library>`), never `kb/` or
+   the engine root. A search across every library reads text from libraries the question does not
+   need, which is exactly what routing exists to prevent. If the routers point nowhere, say
+   `fact not found` rather than searching everything.
+
 2. **Cite every file you used.** Not the library — the *files*. If two files contributed, name both.
    A reader must be able to check you. A citation means *the answer rests on this file*, so a
    refusal (`fact not found`) cites **nothing**. The files you checked to establish the absence
