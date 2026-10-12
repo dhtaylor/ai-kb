@@ -1504,7 +1504,8 @@ case_run "check-secrets --file passes a clean file" 0 "clean" -- "$ENGINE/script
 # The agent tier of the routing check, graded from a subagent transcript's tool calls. The
 # transcripts are SYNTHETIC: assistant records whose message.content holds tool_use blocks,
 # the shape Claude Code writes, built here and never copied from a real session.
-mk_tr() { # mk_tr <out.jsonl> <Tool:arg>...   Read:<file_path>  Glob:<pattern>  Grep:<path>
+mk_tr() { # mk_tr <out.jsonl> <Tool:arg[@@result]>...   Read:<file_path>  Glob:<pattern>  Grep:<path>[|<mode>]
+  # @@NONE leaves the call unanswered; with no @@ the result is "ok"
   local out="$1"; shift
   python3 - "$out" "$@" <<'PY'
 import json, sys
@@ -1513,12 +1514,16 @@ key = {"Read": "file_path", "Glob": "pattern", "Grep": "path"}
 recs = [{"type": "user", "message": {"role": "user", "content": "a question"}}]
 for i, c in enumerate(calls):
     tool, arg = c.split(":", 1)
+    arg, _, res = arg.partition("@@")
     inp = {key[tool]: arg}
-    if tool == "Grep": inp["pattern"] = "x"
+    if tool == "Grep":
+        inp["pattern"] = "x"
+        if "|" in arg: inp["path"], inp["output_mode"] = arg.split("|", 1)
     recs.append({"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "text", "text": "looking"}, {"type": "tool_use", "id": f"t{i}", "name": tool, "input": inp}]}})
-    recs.append({"type": "user", "message": {"role": "user", "content": [
-        {"type": "tool_result", "tool_use_id": f"t{i}", "content": "ok"}]}})
+    if res != "NONE":
+        recs.append({"type": "user", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": f"t{i}", "content": res or "ok"}]}})
 open(out, "w").write("\n".join(json.dumps(r) for r in recs) + "\n")
 PY
 }
@@ -1576,6 +1581,31 @@ grade "several cases: one failing fails the run" 1 "1/2 graded" "Q1|pass.jsonl" 
 grade "mapping line without a transcript is a format error" 2 "expected Q<n>|<transcript>" "Q1"
 grade "case outside the golden set is a format error" 2 "not a case" "Q9|pass.jsonl"
 grade "missing transcript is a format error" 2 "not found" "Q1|absent.jsonl"
+# Grep is graded by what it RETURNED (tool_result paired by id), not by its arguments.
+NL=$'\n'
+fm golden-ratio general > "$A/golden-ratio.md"; printf '# Golden ratio\n\nPhi.\n' >> "$A/golden-ratio.md"
+mk_tr "$RT/gr.jsonl" "Read:$A/widgets.md" "Read:$A/golden-ratio.md"
+grade "a file merely named golden-ratio.md is not the golden set" 0 "1/1 graded" "Q1|gr.jsonl"
+mk_tr "$RT/gp.jsonl" "Read:$A/INDEX.md" "Grep:$A|content@@$A/widgets.md:5:A widget holds up to 12 things." "Read:$A/widgets.md"
+grade "Grep content hit in the expected file only: pass" 0 "1/1 graded" "Q1|gp.jsonl"
+mk_tr "$RT/gb.jsonl" "Grep:$A|content@@$A/fx-golden.md:9:  expected_excerpt: \"up to 12 things\"" "Read:$A/widgets.md"
+grade "Grep content that returns the golden set: contamination fails" 1 "Grep returned" "Q1|gb.jsonl"
+mk_tr "$RT/gbf.jsonl" "Grep:$A|files_with_matches@@$A/fx-golden.md" "Read:$A/widgets.md"
+grade "Grep file list naming the golden set: contamination fails" 1 "Grep returned" "Q1|gbf.jsonl"
+mk_tr "$RT/gbc.jsonl" "Grep:$A|content@@$A/widgets.md-4-text${NL}--${NL}$A/fx-golden.md-9-x" "Read:$A/widgets.md"
+grade "Grep context line (path-line-text) naming the golden set fails" 1 "Grep returned" "Q1|gbc.jsonl"
+mk_tr "$RT/gc.jsonl" "Grep:$RT/kb|content@@$A/widgets.md:5:a${NL}$B/widgets.md:5:a" "Read:$A/widgets.md"
+grade "Grep content returning another library's file: unneeded content fails" 1 "unneeded beta" "Q1|gc.jsonl"
+mk_tr "$RT/gcl.jsonl" "Grep:$RT/kb|files_with_matches@@$A/widgets.md${NL}$B/widgets.md" "Read:$A/widgets.md"
+grade "Grep file list naming another library: reported, not failed" 0 "listed by Grep, not read: beta" "Q1|gcl.jsonl"
+mk_tr "$RT/gcc.jsonl" "Grep:$RT/kb|count@@$A/widgets.md:1${NL}$B/widgets.md:1" "Read:$A/widgets.md"
+grade "Grep counts naming another library: reported, not failed" 0 "1/1 graded" "Q1|gcc.jsonl"
+mk_tr "$RT/gn.jsonl" "Grep:$A|content@@NONE" "Read:$A/widgets.md"
+grade "unanswered Grep whose scope holds the golden set fails, and says so" 1 "scope assumed read" "Q1|gn.jsonl"
+mk_tr "$RT/gn2.jsonl" "Grep:$RT/kb|content@@NONE" "Read:$A/widgets.md"
+grade "unanswered content Grep over kb/ counts every library as read" 1 "unneeded beta" "Q1|gn2.jsonl"
+mk_tr "$RT/gn3.jsonl" "Grep:$RT/kb|files_with_matches@@NONE" "Read:$A/widgets.md"
+grade "unanswered files-mode Grep: golden set in scope still fails" 1 "Grep scope holds" "Q1|gn3.jsonl"
 printf 'not json\n' > "$RT/bad.jsonl"
 grade "transcript that is not JSONL is a format error" 2 "not JSON" "Q1|bad.jsonl"
 case_run "grade-routing: no arguments is a usage error" 2 "usage" -- "$ENGINE/scripts/grade-routing"
