@@ -1,6 +1,6 @@
 # ADR-0011: No orchestrator is built until retrieval's own routing is shown to fall short
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-12 (see the note under *Decision outcome*)
 - **Date:** 2026-09-28
 - **Deciders:** Dandy Taylor
 
@@ -44,8 +44,14 @@ evidence is in `documents/eval-2026-09-28-routing-sample/`.
 - **Content read from a library the question did not need: none.** Beyond the routers, each agent
   opened only the one library the answer came from, or two on the cross-root question. That is the
   pass-through and the two-worker cap the plan asks of an orchestrator.
-- **The only overhead was reading the routers.** Each agent read all six `INDEX.md` files once. An
-  orchestrator would have to read the same files to route.
+- **The only overhead was reading the routers.** Two of the three agents read all six `INDEX.md`
+  files up front; the third read only the three it needed. An orchestrator would have to read all
+  six to route.
+
+  **Amended 2026-10-12.** This bullet said each agent read all six `INDEX.md` files once. The
+  sample's own record says otherwise: "Two batches read all six routers up front, and one read only
+  the three it needed" (`documents/eval-2026-09-28-routing-sample/README.md`). The cost argument
+  stands: an orchestrator still reads all six to route, so it removes no reads.
 
 `kb-retrieve` already does what the orchestrator was specified to do, so no orchestrator is built.
 
@@ -66,7 +72,7 @@ Reopen this decision when any of these holds:
 - **Good:** there is one fewer agent to keep in step with the contract, and no merge step where
   citations could be dropped. The plan's cost bound is met by the retrieval contract itself.
 - **Bad:** the evidence is a sample of 12 questions, not all ~90. Each agent answered four
-  questions, so its router reads were shared across them; a question asked alone pays for all six
+  questions, so its router reads were shared across them; a question asked alone can pay for all six
   routers. That stays cheap at six libraries, and is the first thing to watch as the number grows.
 - **Neutral:** Phase 4's exit criteria never depended on the orchestrator. They are the Verifier
   fixture test, the Watcher replay test, and the high-blast-radius policy. The plan's Phase 4 entry
