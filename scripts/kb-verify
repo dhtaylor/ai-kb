@@ -257,7 +257,8 @@ def sections(path: pathlib.Path):
 
 
 def main(argv) -> int:
-    args = [a for a in argv if not a.startswith("--")]
+    args = [a for i, a in enumerate(argv)
+            if not a.startswith("--") and (i == 0 or argv[i - 1] != "--budget")]
     flags = {a for a in argv if a.startswith("--")}
     if len(args) != 1 or flags - {"--yes", "--apply", "--all", "--budget"}:
         print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2

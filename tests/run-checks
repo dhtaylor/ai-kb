@@ -460,6 +460,12 @@ sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review
 case_run "--apply restamp records method: query" 0 "by: agent · method: query" -- \
   grep -F "Verified: $(date +%F)" "$TMP/vmethod/widgets.md"
 
+# Issue #19: the value after --budget is the budget, not a second tree.
+build_clean "$TMP/vbudget"
+printf 'Recheck: true\n' >> "$TMP/vbudget/widgets.md"
+case_run "--budget N overrides the domain's verifier_budget" 0 "budget 7)" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vbudget" --all --budget 7
+
 build_clean "$TMP/vnone"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vnone/widgets.md"
 case_run "stale section with no assertion is named, not skipped" 0 "no assertion" -- \
