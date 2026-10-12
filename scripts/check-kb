@@ -47,11 +47,19 @@ REQUIRED = ("name", "description", "domain", "scope")
 ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
 
 
-def orphans(root: pathlib.Path, files: list) -> list:
-    """Files not reachable from root/INDEX.md by following links out of routers."""
+def kb_files(root: pathlib.Path) -> list:
+    """The markdown files that are part of the knowledge base (everything but NON_KB_DIRS)."""
+    return sorted(f for f in root.rglob("*.md")
+                  if not NON_KB_DIRS & set(f.relative_to(root).parts))
+
+
+def reachable(root: pathlib.Path, files: list) -> set:
+    """Resolved paths of the files reachable from root/INDEX.md by following links out of
+    routers. Empty when the root has no INDEX.md. check-golden asks the same question of
+    every expected_file, so the answer lives here once."""
     entry = root / "INDEX.md"
     if not entry.exists():
-        return [f"{root}: no INDEX.md at the root — nothing in it is reachable"]
+        return set()
     known = {f.resolve() for f in files}
     reached, queue = {entry.resolve()}, [entry.resolve()]
     while queue:
@@ -64,6 +72,15 @@ def orphans(root: pathlib.Path, files: list) -> list:
                 reached.add(t)
                 if t.name == "INDEX.md":
                     queue.append(t)
+    return reached
+
+
+def orphans(root: pathlib.Path, files: list) -> list:
+    """Files not reachable from root/INDEX.md by following links out of routers."""
+    entry = root / "INDEX.md"
+    if not entry.exists():
+        return [f"{root}: no INDEX.md at the root — nothing in it is reachable"]
+    reached = reachable(root, files)
     return [f"{f}: orphan — no router reaches it from {entry}, so retrieval never will"
             for f in files
             if f.resolve() not in reached
@@ -96,8 +113,7 @@ def frontmatter(block: str):
 
 
 def main(root: pathlib.Path) -> int:
-    files = sorted(f for f in root.rglob("*.md")
-                   if not NON_KB_DIRS & set(f.relative_to(root).parts))
+    files = kb_files(root)
     if not files:
         print(f"no markdown files under {root}")
         return 1

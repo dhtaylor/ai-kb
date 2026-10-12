@@ -169,6 +169,30 @@ p.write_text(t[:t.index("- case: negative\n  question: Who owns")] + "```\n")
 PY
 case_run "golden set with fewer than two negatives" 1 "negative case" -- "$ENGINE/scripts/check-golden" "$TMP/goldneg"
 
+# Reachability: an expected_file must be reachable from the root INDEX.md by router links,
+# or retrieval (which descends routers and never searches) can never route to it. check-kb's
+# orphan check exempts documents/ and the golden set, so a golden record could name a file
+# there and pass every other check.
+build_reach() { # build_reach <dir> <path of an extra file, library-relative> [routed-from-index]
+  build_clean "$1"
+  mkdir -p "$(dirname "$1/$2")"
+  fm "$(basename "$2" .md)" general > "$1/$2"
+  printf '# Gadgets\n\nA gadget weighs 7 grams.\n' >> "$1/$2"
+  [ -n "${3:-}" ] && printf -- '- [gadgets](%s) — what gadgets weigh\n' "$2" >> "$1/INDEX.md"
+  sed -i "0,/expected_file: widgets.md/s||expected_file: $2|; 0,/up to 12 things/s||A gadget weighs 7 grams|" "$1/fx-golden.md"
+}
+build_reach "$TMP/goldreach" gadgets.md routed
+case_run "golden expected_file reachable through the router passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldreach"
+build_reach "$TMP/goldorph" gadgets.md
+case_run "golden expected_file that is an orphan fails" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/goldorph"
+build_reach "$TMP/golddocs" documents/gadgets.md
+case_run "golden expected_file under documents/ (orphan-exempt) fails" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/golddocs"
+build_clean "$TMP/goldself"
+sed -i '0,/expected_file: widgets.md/s||expected_file: fx-golden.md|; 0,/up to 12 things/s|up to 12 things|case: positive|' "$TMP/goldself/fx-golden.md"
+case_run "golden expected_file that is the golden set itself fails" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/goldself"
+build_clean "$TMP/goldnoindex"; rm "$TMP/goldnoindex/INDEX.md"
+case_run "golden library with no root INDEX.md fails reachability" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/goldnoindex"
+
 # An UNRESOLVED case tests the refusal of a disputed fact. Its excerpt is the fixed
 # phrase ("disputed — not served"), which is in no fact file, so it cannot be grepped
 # for there. Instead the file it names must genuinely hold a CONFLICTED section: the
@@ -176,6 +200,7 @@ case_run "golden set with fewer than two negatives" 1 "negative case" -- "$ENGIN
 build_unresolved() { # build_unresolved <dir> <excerpt> <conflicted-file-marker>
   build_clean "$1"
   printf -- '# Gizmos\n\n## Capacity\n\nstatus: %s\n\nClaim A: 12. Claim B: 20.\n' "$3" > "$1/gizmos.md"
+  printf -- '- [gizmos](gizmos.md) — what gizmos hold\n' >> "$1/INDEX.md"   # a golden file must be routed
   python3 - "$1/fx-golden.md" "$2" <<'PY'
 import sys, pathlib
 p = pathlib.Path(sys.argv[1]); t = p.read_text()
@@ -1474,6 +1499,116 @@ printf 'nothing to see here\n' > "$TMP/f-clean.txt"
 case_run "check-secrets --file catches a secret" 1 "SECRET?" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-secret.txt"
 case_run "check-secrets --file catches PII" 1 "PII?" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-pii.txt"
 case_run "check-secrets --file passes a clean file" 0 "clean" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-clean.txt"
+
+# ------------------------------------------------------------ grade-routing ----
+# The agent tier of the routing check, graded from a subagent transcript's tool calls. The
+# transcripts are SYNTHETIC: assistant records whose message.content holds tool_use blocks,
+# the shape Claude Code writes, built here and never copied from a real session.
+mk_tr() { # mk_tr <out.jsonl> <Tool:arg[@@result]>...   Read:<file_path>  Glob:<pattern>  Grep:<path>[|<mode>]
+  # @@NONE leaves the call unanswered; with no @@ the result is "ok"
+  local out="$1"; shift
+  python3 - "$out" "$@" <<'PY'
+import json, sys
+out, calls = sys.argv[1], sys.argv[2:]
+key = {"Read": "file_path", "Glob": "pattern", "Grep": "path"}
+recs = [{"type": "user", "message": {"role": "user", "content": "a question"}}]
+for i, c in enumerate(calls):
+    tool, arg = c.split(":", 1)
+    arg, _, res = arg.partition("@@")
+    inp = {key[tool]: arg}
+    if tool == "Grep":
+        inp["pattern"] = "x"
+        if "|" in arg: inp["path"], inp["output_mode"] = arg.split("|", 1)
+    recs.append({"type": "assistant", "message": {"role": "assistant", "content": [
+        {"type": "text", "text": "looking"}, {"type": "tool_use", "id": f"t{i}", "name": tool, "input": inp}]}})
+    if res != "NONE":
+        recs.append({"type": "user", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": f"t{i}", "content": res or "ok"}]}})
+open(out, "w").write("\n".join(json.dumps(r) for r in recs) + "\n")
+PY
+}
+RT="$TMP/rt"; mkdir -p "$RT"
+build_clean "$RT/kb/alpha"; build_clean "$RT/kb/beta"
+A="$(cd "$RT/kb/alpha" && pwd -P)"; B="$(cd "$RT/kb/beta" && pwd -P)"
+# a second routed fact in alpha, so "the wrong file in the right library" can be told apart
+fm other general > "$A/other.md"; printf '# Other\n\nAn other holds 3 things.\n' >> "$A/other.md"
+printf -- '- [other](other.md) — what an other holds\n' >> "$A/INDEX.md"
+# alpha's golden set also gets a cross-root record (Q4) that links to beta
+python3 - "$A/fx-golden.md" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+rec = ("- case: cross-root\n  question: Where is the widget limit explained?\n  expected_file: widgets.md\n"
+       "  expected_excerpt: \"[[beta:widgets]]\"\n\n")
+p.write_text(t[:t.rindex("```")] + rec.rstrip("\n") + "\n```\n")
+PY
+sed -i 's/up to 12 things$/up to 12 things. See [[beta:widgets]]./' "$A/widgets.md"
+grade() { # grade <name> <want-exit> <want-text> <Q-mapping lines...>
+  local name="$1" ex="$2" tx="$3"; shift 3
+  printf '%s\n' "$@" > "$RT/map"
+  case_run "grade-routing: $name" "$ex" "$tx" -- "$ENGINE/scripts/grade-routing" "$A" "$RT/map"
+}
+mk_tr "$RT/pass.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
+grade "reads the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|pass.jsonl"
+mk_tr "$RT/wrong.jsonl" "Read:$A/INDEX.md" "Read:$A/other.md"
+grade "reads a different file in the right library: fail" 1 "never Read" "Q1|wrong.jsonl"
+mk_tr "$RT/nothing.jsonl" "Glob:$A/*.md"
+grade "reads nothing: fail" 1 "never Read" "Q1|nothing.jsonl"
+mk_tr "$RT/unneeded.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
+grade "content read from an unneeded library: fail" 1 "unneeded beta" "Q1|unneeded.jsonl"
+mk_tr "$RT/routeronly.jsonl" "Read:$A/INDEX.md" "Read:$B/INDEX.md" "Read:$A/widgets.md"
+grade "reading another library's router only is not content: pass" 0 "1/1 graded" "Q1|routeronly.jsonl"
+mk_tr "$RT/suffix.jsonl" "Read:$B/widgets.md"
+grade "same-named file in another library is not the expected file" 1 "never Read" "Q1|suffix.jsonl"
+mk_tr "$RT/golden.jsonl" "Read:$A/widgets.md" "Read:$A/fx-golden.md"
+grade "reading the golden set: contamination fails" 1 "contamination" "Q1|golden.jsonl"
+mk_tr "$RT/evalfolder.jsonl" "Read:$A/widgets.md" "Read:$RT/documents/eval-2026-01-01-sample/key.json"
+grade "reading an eval folder: contamination fails" 1 "contamination" "Q1|evalfolder.jsonl"
+mk_tr "$RT/globgolden.jsonl" "Read:$A/widgets.md" "Glob:$A/*-golden.md"
+grade "globbing for the golden set: contamination fails" 1 "contamination" "Q1|globgolden.jsonl"
+mk_tr "$RT/dots.jsonl" "Read:$A/../alpha/./widgets.md"
+grade "absolute path with .. and . segments still resolves" 0 "1/1 graded" "Q1|dots.jsonl"
+mk_tr "$RT/kbrel.jsonl" "Read:kb/alpha/widgets.md"
+grade "kb-rooted relative path still resolves" 0 "1/1 graded" "Q1|kbrel.jsonl"
+mk_tr "$RT/librel.jsonl" "Read:alpha/widgets.md"
+grade "library-prefixed relative path still resolves" 0 "1/1 graded" "Q1|librel.jsonl"
+mk_tr "$RT/refusal.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
+grade "negative case: reads are reported, not required" 0 "1/1 graded" "Q2|refusal.jsonl"
+grade "negative case: contamination still fails" 1 "contamination" "Q2|golden.jsonl"
+mk_tr "$RT/xboth.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
+grade "cross-root case: both libraries read: pass" 0 "1/1 graded" "Q4|xboth.jsonl"
+grade "cross-root case: linked library never read: fail" 1 "needed beta" "Q4|pass.jsonl"
+grade "several cases: one failing fails the run" 1 "1/2 graded" "Q1|pass.jsonl" "Q4|pass.jsonl"
+grade "mapping line without a transcript is a format error" 2 "expected Q<n>|<transcript>" "Q1"
+grade "case outside the golden set is a format error" 2 "not a case" "Q9|pass.jsonl"
+grade "missing transcript is a format error" 2 "not found" "Q1|absent.jsonl"
+# Grep is graded by what it RETURNED (tool_result paired by id), not by its arguments.
+NL=$'\n'
+fm golden-ratio general > "$A/golden-ratio.md"; printf '# Golden ratio\n\nPhi.\n' >> "$A/golden-ratio.md"
+mk_tr "$RT/gr.jsonl" "Read:$A/widgets.md" "Read:$A/golden-ratio.md"
+grade "a file merely named golden-ratio.md is not the golden set" 0 "1/1 graded" "Q1|gr.jsonl"
+mk_tr "$RT/gp.jsonl" "Read:$A/INDEX.md" "Grep:$A|content@@$A/widgets.md:5:A widget holds up to 12 things." "Read:$A/widgets.md"
+grade "Grep content hit in the expected file only: pass" 0 "1/1 graded" "Q1|gp.jsonl"
+mk_tr "$RT/gb.jsonl" "Grep:$A|content@@$A/fx-golden.md:9:  expected_excerpt: \"up to 12 things\"" "Read:$A/widgets.md"
+grade "Grep content that returns the golden set: contamination fails" 1 "Grep returned" "Q1|gb.jsonl"
+mk_tr "$RT/gbf.jsonl" "Grep:$A|files_with_matches@@$A/fx-golden.md" "Read:$A/widgets.md"
+grade "Grep file list naming the golden set: contamination fails" 1 "Grep returned" "Q1|gbf.jsonl"
+mk_tr "$RT/gbc.jsonl" "Grep:$A|content@@$A/widgets.md-4-text${NL}--${NL}$A/fx-golden.md-9-x" "Read:$A/widgets.md"
+grade "Grep context line (path-line-text) naming the golden set fails" 1 "Grep returned" "Q1|gbc.jsonl"
+mk_tr "$RT/gc.jsonl" "Grep:$RT/kb|content@@$A/widgets.md:5:a${NL}$B/widgets.md:5:a" "Read:$A/widgets.md"
+grade "Grep content returning another library's file: unneeded content fails" 1 "unneeded beta" "Q1|gc.jsonl"
+mk_tr "$RT/gcl.jsonl" "Grep:$RT/kb|files_with_matches@@$A/widgets.md${NL}$B/widgets.md" "Read:$A/widgets.md"
+grade "Grep file list naming another library: reported, not failed" 0 "listed by Grep, not read: beta" "Q1|gcl.jsonl"
+mk_tr "$RT/gcc.jsonl" "Grep:$RT/kb|count@@$A/widgets.md:1${NL}$B/widgets.md:1" "Read:$A/widgets.md"
+grade "Grep counts naming another library: reported, not failed" 0 "1/1 graded" "Q1|gcc.jsonl"
+mk_tr "$RT/gn.jsonl" "Grep:$A|content@@NONE" "Read:$A/widgets.md"
+grade "unanswered Grep whose scope holds the golden set fails, and says so" 1 "scope assumed read" "Q1|gn.jsonl"
+mk_tr "$RT/gn2.jsonl" "Grep:$RT/kb|content@@NONE" "Read:$A/widgets.md"
+grade "unanswered content Grep over kb/ counts every library as read" 1 "unneeded beta" "Q1|gn2.jsonl"
+mk_tr "$RT/gn3.jsonl" "Grep:$RT/kb|files_with_matches@@NONE" "Read:$A/widgets.md"
+grade "unanswered files-mode Grep: golden set in scope still fails" 1 "Grep scope holds" "Q1|gn3.jsonl"
+printf 'not json\n' > "$RT/bad.jsonl"
+grade "transcript that is not JSONL is a format error" 2 "not JSON" "Q1|bad.jsonl"
+case_run "grade-routing: no arguments is a usage error" 2 "usage" -- "$ENGINE/scripts/grade-routing"
 
 # --worktree sees what retrieval sees: untracked files too, but not ignored ones.
 mkdir -p "$TMP/wt"; git init -q "$TMP/wt"

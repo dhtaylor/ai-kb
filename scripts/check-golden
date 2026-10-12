@@ -3,8 +3,12 @@
 
 Verifies that a library's golden set is a working oracle: every record is
 well-formed, every expected_file exists, and every expected_excerpt is actually
-present in the file it names. No LLM, no agent, no network — it runs on every
-commit and is cheap enough to.
+present in the file it names, and every expected_file is REACHABLE from the library's
+root INDEX.md by router links (check-kb's own reachability, imported, not copied). Retrieval
+descends routers and never searches, so a file no router reaches cannot be routed to — and
+check-kb's orphan check exempts documents/ and the golden set, which would otherwise be
+places a record could hide. No LLM, no agent, no network — it runs on every commit and is
+cheap enough to.
 
 What it CANNOT do, and this is the point of the split: it cannot tell whether an
 agent answers from the file or from its own memory. An inlined fact routes
@@ -15,10 +19,22 @@ fire alarm.
 Usage: check-golden <library-root>
 Exit 0 clean, 1 on any defect.
 """
-import pathlib, re, sys
+import importlib.machinery, importlib.util, pathlib, re, sys
 
 VALID_CASES = {"positive", "negative", "unresolved", "cross-root"}
 DISPUTED = "disputed — not served"   # the refusal of a CONFLICTED fact (CONVENTIONS §10)
+
+
+def load_check_kb():
+    """Import the extensionless sibling script check-kb as a module (the SourceFileLoader
+    pattern kb-due uses for kb-verify), so reachability has one implementation."""
+    path = pathlib.Path(__file__).resolve().parent / "check-kb"
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("check_kb", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
 
 
 def parse(text):
@@ -57,6 +73,8 @@ def main(root: pathlib.Path) -> int:
     text = gf.read_text()
     records = parse(text)
     defects, counts = [], {c: 0 for c in VALID_CASES}
+    ckb = load_check_kb()
+    reached = ckb.reachable(root, ckb.kb_files(root))
 
     if not records:
         defects.append(f"{gf.name}: no records parsed — the oracle is empty")
@@ -90,6 +108,9 @@ def main(root: pathlib.Path) -> int:
         if not target.is_file():
             defects.append(f"{where} [{case}]: expected_file '{ef}' does not exist")
             continue
+        if target.resolve() not in reached:
+            defects.append(f"{where} [{case}]: expected_file '{ef}' is not reachable from "
+                           f"{root.name}/INDEX.md by router links — retrieval cannot route to it")
         if not exc:
             defects.append(f"{where} [{case}]: no expected_excerpt")
             continue

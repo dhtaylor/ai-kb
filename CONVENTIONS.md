@@ -511,8 +511,11 @@ file rename or split — an `kb-organize-domain` exit criterion — or the oracl
 
 Two tiers test it, and they are not interchangeable:
 
-- **Deterministic routing check** (every commit, no LLM): INDEX entries and `[[slug]]`s resolve to the
-  expected file.
+- **Routing check**, in two tiers. The deterministic tier (`check-golden`, every commit, no LLM): the
+  expected file exists, holds the excerpt, and is reachable from the root `INDEX.md` through the
+  routers. The agent tier (`grade-routing`, sampled and started by a person): the agent's tool calls
+  show it Read the expected file, read content from no library the case does not need, and never
+  touch the golden set. It is graded from the transcript, not from what the agent says it did.
 - **Answer-grounding eval** (scheduled, sampled): the agent runs; its answer must contain the
   `expected_excerpt`, **verified by grep against the expected file** — not by an LLM judge. This is what
   catches answering from memory.
@@ -572,7 +575,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution from any tree — the installed libraries and each project tree passed to it — into the installed libraries; dead links fail, absent libraries warn | **built** |
-| routing check | golden-set questions actually route to `expected_file` | **half-built** — `check-golden` proves the record is well formed and its excerpt present; that an agent *routes* there is still checked by running one by hand |
+| routing check | golden-set questions actually route to `expected_file`. Deterministic tier: the file exists, holds the excerpt and is reachable from the root `INDEX.md` through the routers. Agent tier: an agent's tool calls Read the expected file, read content from no library the case does not need, and never touch the golden set or an eval folder. The agent tier is sampled and started by a person, never per commit ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)) | **built** — `check-golden` (every commit) and `grade-routing` (graded from a subagent's tool calls, not its self-report) |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` or an `alt_excerpt` AND the expected file is among those it cited (a cited path is resolved to a file, not string-matched); quote characters and trailing punctuation are normalised, wording is not; grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | ownership resolution | who a finding belongs to, by CODEOWNERS' last-match-wins rule | **built** — `kb-owner` |
@@ -584,7 +587,6 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
 
-Nineteen of twenty-one are built, and one is half-built. A library passing the built checks is **structurally sound within itself**
+Twenty of twenty-one are built; the one left is to build. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
-routing check and the answer-grounding eval are for: the eval is built, and routing is still
-checked by hand.
+routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.

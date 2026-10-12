@@ -1,0 +1,260 @@
+#!/usr/bin/env python3
+"""grade-routing — the agent half of the routing check, graded from tool calls.
+
+check-golden proves a golden record's expected_file exists, holds the excerpt and is
+reachable through the routers. This proves an AGENT routed there: it reads the tool calls in
+a Claude Code subagent transcript, never what the agent said about them. A self-report is
+what the 2026-09-28 sample had to rely on; a transcript is the record. Grep and set
+membership, not judgement.
+
+Per golden case, from Read/Glob/Grep calls only, it reports
+  (a) whether the expected_file was Read (a path is RESOLVED to a file, as grade-eval does;
+      never suffix-matched, so a same-named file in another library does not pass);
+  (b) which libraries had content read beyond their INDEX.md (any Read of kb/<lib>/... whose
+      file is not INDEX.md);
+  (c) whether the golden set or an eval folder was touched (a Read of *-golden.md or of a
+      path under an eval* folder, a Glob/Grep path or glob naming either, or either one
+      appearing in what a Glob or Grep RETURNED, in any output mode: a bare file list shows
+      the oracle was in scope). Contamination fails the case: it hands the agent its key.
+      Grep is graded by its tool_result, paired to the call by tool_use_id, because its
+      arguments say where it looked and not what it showed the agent. A non-INDEX file of
+      another library in a content-mode result is a content read from that library; in a
+      files_with_matches or count result it is a listing, reported and not failed. A Grep
+      with no paired result is graded conservatively by its scope (path, glob): a golden set
+      in scope is contamination and, in content mode, every library in scope was read. The
+      per-case line says so.
+
+A positive or cross-root case passes when (a) holds, content was read only from the
+libraries the case needs, and (c) is clean. The case's own library is needed; a cross-root
+case also needs each library its expected_excerpt links to as [[library:slug]]. Negative and
+unresolved cases have no read requirement: the reads are reported, and only contamination
+fails them.
+
+Mapping file: one record per line,  Q<n>|<transcript>
+Q<n> is the 1-based position of the case in the library's golden set (the same Q<n> as
+grade-eval). <transcript> is the subagent's JSONL transcript, one transcript per case, a path
+relative to the mapping file or absolute. Only mapped cases are graded: a run is sampled.
+Lines starting with # are comments.
+
+Transcript format: one JSON record per line; assistant records carry message.content, a list
+whose {"type":"tool_use","id":...,"name":...,"input":{...}} blocks are the calls, answered by
+a later user record whose content holds {"type":"tool_result","tool_use_id":...,"content":...}
+(content a string or a list of {"type":"text","text":...}). Read carries
+input.file_path; Glob and Grep carry pattern and path (Grep also glob). A relative Read path
+is tried against the engine root, kb/ and the library, as grade-eval does.
+
+Nothing here runs an agent. A routing run is sampled and started by a person, never per
+commit (ADR-0013); check-golden is the per-commit tier.
+
+Usage: grade-routing <library-root> <mapping-file>
+Exit 0 if every graded case passes, 1 otherwise, 2 on a usage or format error.
+"""
+import fnmatch, importlib.machinery, importlib.util, json, pathlib, re, sys
+
+AGENT_TIER_CASES = {"positive", "cross-root"}
+# The answer key and the evidence behind it: a golden set, or anything under an eval folder.
+# (golden sets are named <lib>-golden.md, the convention load_golden relies on)
+CONTAMINATED = re.compile(r"-golden\.md(?!\w)|(^|/)evals?([-_./]|$)", re.I)
+XLINK = re.compile(r"\[\[([\w-]+):[^\]]+\]\]")
+
+
+def die(msg):
+    print(f"grade-routing: {msg}", file=sys.stderr); sys.exit(2)
+
+
+def load_grade_eval():
+    """Import the extensionless sibling grade-eval as a module (the SourceFileLoader pattern
+    kb-due uses), so the golden parser and the path resolution have one implementation."""
+    path = pathlib.Path(__file__).resolve().parent / "grade-eval"
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("grade_eval", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def tool_calls(transcript: pathlib.Path):
+    """Every (name, input, result) tool_use in an assistant record, in order. result is the
+    text of the tool_result paired by tool_use_id, or None if the transcript has none."""
+    calls, results = [], {}
+    for n, line in enumerate(transcript.read_text().splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            die(f"{transcript}: line {n} is not JSON — expected a subagent transcript (JSONL)")
+        content = rec.get("message", {}).get("content") if isinstance(rec, dict) else None
+        if not isinstance(content, list):
+            continue
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            if rec.get("type") == "assistant" and b.get("type") == "tool_use":
+                calls.append((b.get("id"), b.get("name"), b.get("input") or {}))
+            elif rec.get("type") == "user" and b.get("type") == "tool_result":
+                c = b.get("content")
+                if isinstance(c, list):
+                    c = "\n".join(x.get("text", "") for x in c if isinstance(x, dict))
+                results[b.get("tool_use_id")] = c if isinstance(c, str) else ""
+    return [(name, inp, results.get(i)) for i, name, inp in calls]
+
+
+def locate(lib: pathlib.Path, p: str):
+    """A Read path as a resolved file. Absolute paths resolve as given; a relative one is
+    tried against the engine root, kb/ and the library, taking the first that is a file."""
+    if pathlib.Path(p).is_absolute():
+        return pathlib.Path(p).resolve()
+    for a in (lib.parent.parent, lib.parent, lib):
+        if (a / p).is_file():
+            return (a / p).resolve()
+    return None
+
+
+def needed_libraries(lib: pathlib.Path, rec: dict) -> set:
+    need = {lib.name}
+    if rec.get("case") == "cross-root":
+        for e in [rec.get("expected_excerpt", "")] + rec.get("alt_excerpt", []):
+            need |= {x for x in XLINK.findall(e) if (lib.parent / x).is_dir()}
+    return need
+
+
+LINE_PATH = (re.compile(r"^(.+?)[:-]\d+[:-]"),      # content mode: path:line:text, path-line-text
+             re.compile(r"^(.+?):\d+$"),              # count mode: path:N
+             re.compile(r"^(.+?):"))                  # content mode without line numbers
+
+
+def result_paths(text: str, mode: str):
+    """File paths appearing in a Grep result, by output mode."""
+    out = []
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line == "--" or re.match(r"^(Found \d+|No (files|matches))", line):
+            continue
+        if mode == "files_with_matches":
+            out.append(line)
+            continue
+        for rx in LINE_PATH:
+            m = rx.match(line)
+            if m:
+                out.append(m.group(1)); break
+    return out
+
+
+def scope_files(lib: pathlib.Path, inp: dict):
+    """Files a Grep with no result could have shown: everything under its path (the library
+    if none given), narrowed by its glob."""
+    s = locate(lib, inp["path"]) if inp.get("path") else lib
+    if s is None:
+        s = pathlib.Path(inp["path"])
+    files = [s] if s.is_file() else sorted(f for f in s.rglob("*") if f.is_file()) if s.is_dir() else []
+    g = inp.get("glob")
+    if g:
+        files = [f for f in files if fnmatch.fnmatch(f.name, g)
+                 or fnmatch.fnmatch(str(f.relative_to(s)) if s.is_dir() else f.name, g)]
+    return files
+
+
+def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
+    """(passed, expected_read, content_libs, contamination, why, notes) for one case."""
+    kb = lib.parent
+    reads, touched, listed, notes, content = [], [], set(), [], set()
+
+    def lib_of(f):
+        return f.relative_to(kb).parts[0] if f is not None and f.name != "INDEX.md" and kb in f.parents else None
+
+    for name, inp, res in tool_calls(transcript):
+        if name == "Read" and inp.get("file_path"):
+            reads.append(inp["file_path"])
+            f = locate(lib, inp["file_path"])
+            if CONTAMINATED.search(str(f or inp["file_path"])):
+                touched.append(f"Read {inp['file_path']}")
+            if lib_of(f):
+                content.add(lib_of(f))
+        elif name in ("Glob", "Grep"):
+            for fld in ("pattern", "path", "glob") if name == "Glob" else ("path", "glob"):
+                if CONTAMINATED.search(str(inp.get(fld, ""))):
+                    touched.append(f"{name} {fld}={inp[fld]}")
+            if name == "Glob":
+                if res is not None:
+                    touched += [f"Glob returned {p}" for p in res.splitlines() if CONTAMINATED.search(p)]
+                continue
+            mode = inp.get("output_mode") or "files_with_matches"
+            if res is not None:
+                files = [locate(lib, p) or pathlib.Path(p) for p in result_paths(res, mode)]
+                touched += [f"Grep returned {f}" for f in files if CONTAMINATED.search(str(f))]
+            else:
+                notes.append("Grep had no tool_result: scope assumed read")
+                files = scope_files(lib, inp)
+                touched += [f"Grep scope holds {f}" for f in files if CONTAMINATED.search(str(f))]
+            for f in files:
+                if lib_of(f):
+                    (content if mode == "content" else listed).add(lib_of(f))
+    listed -= content
+    if listed:
+        notes.append("listed by Grep, not read: " + ",".join(sorted(listed)))
+
+    case, ef = rec.get("case", "?"), rec.get("expected_file", "")
+    expected_read = bool(ef) and ge.resolves_to(lib, ef, set(reads))
+    why = []
+    if touched:
+        why.append("contamination: " + "; ".join(dict.fromkeys(touched)))
+    if case in AGENT_TIER_CASES:
+        need = needed_libraries(lib, rec)
+        if not expected_read:
+            why.append(f"expected file {ef!r} was never Read")
+        if content - need:
+            why.append("content read from unneeded " + ", ".join(sorted(content - need)))
+        if case == "cross-root" and need - content:
+            why.append("no content read from needed " + ", ".join(sorted(need - content)))
+    return not why, expected_read, content, touched, why, notes
+
+
+def main(lib: pathlib.Path, mapping: pathlib.Path) -> int:
+    if not lib.is_dir():
+        die(f"{lib} is not a directory")
+    if not mapping.is_file():
+        die(f"{mapping} is not a file")
+    lib = lib.resolve()
+    ge = load_grade_eval()
+    recs = ge.load_golden(lib)
+
+    graded = {}
+    for n, line in enumerate(mapping.read_text().splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        m = re.fullmatch(r"\s*Q(\d+)\|(.+?)\s*", line)
+        if not m:
+            die(f"{mapping}: line {n}: expected Q<n>|<transcript>")
+        q, t = int(m.group(1)), pathlib.Path(m.group(2))
+        if not 1 <= q <= len(recs):
+            die(f"{mapping}: line {n}: Q{q} is not a case in the golden set (1..{len(recs)})")
+        if q in graded:
+            die(f"{mapping}: line {n}: Q{q} is mapped twice — one transcript per case")
+        t = t if t.is_absolute() else mapping.parent / t
+        if not t.is_file():
+            die(f"{mapping}: line {n}: transcript {t} not found")
+        graded[q] = t
+    if not graded:
+        die(f"{mapping}: no cases mapped")
+
+    npass = 0
+    for q in sorted(graded):
+        rec = recs[q - 1]
+        ok, got, content, touched, why, notes = grade(ge, lib, rec, graded[q])
+        npass += ok
+        print(f"Q{q:<3}{rec.get('case', '?'):11}{'PASS' if ok else 'FAIL'}  "
+              f"expected-read={'yes' if got else 'no'}  "
+              f"content-in={','.join(sorted(content)) or '-'}  "
+              f"contamination={'YES' if touched else 'none'}"
+              + ("" if ok else "  <- " + "; ".join(why))
+              + ("  [" + "; ".join(notes) + "]" if notes else ""))
+    print(f"routing: {npass}/{len(graded)} graded case(s) passed")
+    return 0 if npass == len(graded) else 1
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("usage: grade-routing <library-root> <mapping-file>", file=sys.stderr); sys.exit(2)
+    sys.exit(main(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])))
