@@ -54,8 +54,9 @@ First grading: 6/12 pass. All six failures carried the first bug below; one of t
 After the fix: 11/12. Q11 still fails, on a true reading of the tool call: the agent saw
 content lines from five unneeded libraries' CI files, though it never opened a fact file there.
 The grader counts any non-INDEX file under a library as that library's content, so the case
-stays failed. Whether CI boilerplate should count as library content is a policy question for
-the grader, not changed here.
+stays failed. The owner decided it counts (2026-10-12): the agent searched every library before
+reading a router, which is what the routing check exists to catch, and this time it happened to
+hit boilerplate rather than another library's facts. The grader is not changed to exempt `.github/`.
 
 ## Not archived
 
