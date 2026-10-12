@@ -80,7 +80,7 @@ one again in CI, where a hook can't be skipped:
 - structure, routing and links within a library (`check-kb`)
 - links between libraries (`check-xlinks`, at commit time only; see ADR-0010)
 - scope tiers (`check-scope`)
-- golden-set integrity (`check-golden`)
+- golden-set integrity and reachability (`check-golden`)
 - credential-shaped strings, across full history (`check-secrets`)
 - facts pasted into agent prompts instead of retrieved (`check-embedded-facts`)
 - verification stamps that claim more than the commit supports (`check-stamps`)

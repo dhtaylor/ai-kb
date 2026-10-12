@@ -160,10 +160,12 @@ meaning:
 |---|---|
 | `check-kb` | missing frontmatter, `name` that disagrees with the filename, dead links, slug collisions, **orphans** — any file no router reaches |
 | `check-scope` | a scope value that disagrees with its library, a project tree holding general facts, a relative link climbing out of a library |
-| `check-golden` | a golden record whose file is missing or whose excerpt (or `alt_excerpt`) is not in that file, too few negative cases, an `unresolved` case without the exact refusal phrase or pointing at a file with no `CONFLICTED` section |
+| `check-golden` | a golden record whose file is missing, no router reaches, or whose excerpt (or `alt_excerpt`) is not in that file, too few negative cases, an `unresolved` case without the exact refusal phrase or pointing at a file with no `CONFLICTED` section |
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
 | `check-stamps` (CI only — the engine's and every library's; it reads commit messages, which a pre-commit hook never sees) | a commit that announces agent co-authorship and also stamps a fact `by: human` — which would buy ten times the re-check interval |
+
+`grade-routing` is **not** in the hooks either: it grades a subagent transcript a person ran, to check an agent routed to the expected file ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)).
 
 `kb-verify` is **not** in the hooks: it executes commands, which is not something a commit should do
 on your behalf.
