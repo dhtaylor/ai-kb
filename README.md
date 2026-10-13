@@ -86,7 +86,8 @@ one again in CI, where a hook can't be skipped:
 - verification stamps that claim more than the commit supports (`check-stamps`)
 
 `kb-verify` re-runs the assertions that defend stale facts, and `kb-due` reports which trees are
-due for a sweep. Both report rather than repair.
+due for a sweep. `kb-sources` checks that the external URLs source stubs cite still resolve; it
+fetches only when told `--yes`. All three report rather than repair.
 
 ## Status
 

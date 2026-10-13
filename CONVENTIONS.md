@@ -285,9 +285,12 @@ for them.
      everywhere else. The qualified form degrades honestly — without the other repository you still
      know exactly what was cited and where it lives, you simply cannot open it from here.
 - **Provenance rots.** `check-links` covers internal `[[slug]]`s, not external `Source:` URLs. External
-  URLs get cheap **HTTP HEAD liveness checks**; a dead URL marks dependent sections
-  `provenance: BROKEN`, which the hygiene sweep treats as **unverified**. A 404 is an alert, not silence —
-  "unreachable" and "unchanged" are never conflated.
+  URLs get cheap **HTTP HEAD liveness checks** (`kb-sources`), run only when the person running it
+  approves the network access; a dead URL is **queued** to the library's `needs-attention.md` with
+  its dependants, never edited and never marked `provenance: BROKEN` by the tool. A 404 or 410 is an
+  alert, not silence — and "unreachable" (DNS, timeout, 5xx, 403) is neither "dead" nor "unchanged".
+  A person triaging a dead source may write `provenance: BROKEN` on the dependants; the hygiene sweep
+  treats it as **unverified**.
 
 **A finding records where a secret is and what to do about it — never what it is.** A security
 finding states the secret's **reference** (vault key or secret name), its **location** (file,
@@ -545,8 +548,8 @@ keywords: [<retrieval terms an agent might grep for>]
 ---
 ```
 
-Section-level `status: CONFLICTED` (§8) and `provenance: BROKEN` (§6) are written **inline at the
-section**, not in frontmatter — they describe a claim, not a document.
+Section-level `status: CONFLICTED` (§8) and `provenance: BROKEN` (§6, written by a person after
+triaging a dead source) are written **inline at the section**, not in frontmatter — they describe a claim, not a document.
 
 `tags`/`keywords` exist so retrieval can route by grepping frontmatter — keep them from a shared
 vocabulary within a domain, not ad-hoc per file.
@@ -585,8 +588,8 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | sweep and re-check due | which trees are due for a sweep, and how many facts, open queue items and episodic notes await a librarian; a reminder, exit 0 always | **built** — `kb-due` |
 | external drift | a saved snapshot of an external source still matches its recorded baseline; drift is queued, never applied; offline, fetches nothing | **built** — `kb-watch` |
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
-| external `Source:` liveness | cited URLs still resolve; a dead one marks dependants `provenance: BROKEN` | **to build** |
+| external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, GET if refused); a 404/410 is queued as `source-dead` and an undecidable one as `source-unreachable`, each with its dependants; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
-Twenty of twenty-one are built; the one left is to build. A library passing the built checks is **structurally sound within itself**
+All twenty-one are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
 routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.

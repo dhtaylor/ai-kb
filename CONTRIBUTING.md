@@ -124,6 +124,10 @@ reported and never applied**, because a failure may mean the fact is stale, the 
 or the world changed — three different repairs, and only a person picks between them. Stale sections
 with no assertion are listed as needing a human, which is most of them.
 
+`kb-sources <tree>` does the same for external URLs: it lists every URL a source stub cites and the
+fact sections that depend on it, and fetches nothing until you approve with `--yes`. A dead or
+unreachable URL is queued to the library's `needs-attention.md`; no fact or stub is edited or marked.
+
 **Author every assertion with its negative control.** Break the thing on purpose and confirm the
 command notices. One of the first three written here could not fail, and would have certified a fact
 forever.
@@ -167,8 +171,8 @@ meaning:
 
 `grade-routing` is **not** in the hooks either: it grades a subagent transcript a person ran, to check an agent routed to the expected file ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)).
 
-`kb-verify` is **not** in the hooks: it executes commands, which is not something a commit should do
-on your behalf.
+`kb-verify` and `kb-sources` are **not** in the hooks: one executes commands and the other opens
+network connections, neither of which is something a commit should do on your behalf.
 
 **Changing a check?** `tests/run-checks` breaks one thing on purpose per case and requires the check
 to notice. The engine's hook runs it when a commit touches `scripts/` or `tests/`, and CI runs it
