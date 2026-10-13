@@ -681,6 +681,156 @@ case_run "kb-verify: queue is routed from the library's INDEX, exactly once" 0 "
 case_run "kb-verify: a library holding a fresh queue still passes check-kb" 0 "clean" -- \
   "$ENGINE/scripts/check-kb" "$TMP/vfixture"
 
+# ------------------------------------------------------------- kb-sources ----
+# External `Source:` liveness. Hermetic: the only server ever asked anything is a throwaway
+# one on 127.0.0.1 (ephemeral port), killed on exit. It logs every request it receives, so
+# "the no---yes mode makes no request" is proven by an empty log, not by trusting the code.
+export no_proxy=127.0.0.1 NO_PROXY=127.0.0.1
+SRV="$TMP/srv"; mkdir -p "$SRV"
+cat > "$SRV/server.py" <<'PY'
+import http.server, sys
+LOG, PORTFILE = sys.argv[1], sys.argv[2]
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def _do(self, method):
+        with open(LOG, "a") as f: f.write(f"{method} {self.path}\n")
+        table = {"/ok": 200, "/gone": 404, "/removed": 410, "/boom": 500}
+        table["/forbidden"] = 403
+        st = table.get(self.path, 404)
+        if self.path == "/moved":
+            self.send_response(302); self.send_header("Location", "/ok"); self.end_headers(); return
+        if self.path == "/nohead":
+            st = 405 if method == "HEAD" else 200
+        self.send_response(st); self.send_header("Content-Length", "0"); self.end_headers()
+    def do_HEAD(self): self._do("HEAD")
+    def do_GET(self): self._do("GET")
+srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+open(PORTFILE, "w").write(str(srv.server_port))
+srv.serve_forever()
+PY
+: > "$SRV/access.log"
+python3 "$SRV/server.py" "$SRV/access.log" "$SRV/port" & SRV_PID=$!
+trap 'kill $SRV_PID 2>/dev/null; rm -rf "$TMP"' EXIT
+for _ in $(seq 50); do [ -s "$SRV/port" ] && break; sleep 0.1; done
+SP=$(cat "$SRV/port")
+DEADPORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')  # bound then released: refuses
+
+build_clean "$TMP/ksrc"
+mkdir -p "$TMP/ksrc/sources"
+fm fx-sources general > "$TMP/ksrc/sources/INDEX.md"
+printf '# Sources\n' >> "$TMP/ksrc/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc/INDEX.md"
+mkstub() { # mkstub <slug> <url-line>
+  fm "$1" general > "$TMP/ksrc/sources/$1.md"
+  printf '# Source: %s\n\n%s\n- **Origin:** fixture\n' "$1" "$2" >> "$TMP/ksrc/sources/$1.md"
+  printf -- '- [%s](%s.md) — stub\n' "$1" "$1" >> "$TMP/ksrc/sources/INDEX.md"
+}
+mkstub s-ok       "- **URL:** http://127.0.0.1:$SP/ok"
+mkstub s-moved    "- **URL (as stated by the immediate source):** http://127.0.0.1:$SP/moved"
+mkstub s-nohead   "- **Artifact location:** http://127.0.0.1:$SP/nohead — fetched with curl"
+mkstub s-gone     "- **URL:** http://127.0.0.1:$SP/gone"
+mkstub s-removed  "- **URL:** http://127.0.0.1:$SP/removed"
+mkstub s-boom     "- **URL:** http://127.0.0.1:$SP/boom"
+mkstub s-forbid   "- **URL:** http://127.0.0.1:$SP/forbidden"
+mkstub s-refused  "- **URL:** http://127.0.0.1:$DEADPORT/anything"
+cat >> "$TMP/ksrc/widgets.md" <<'EOF'
+
+## Alpha
+
+An alpha claim.
+
+Source: [[s-ok]] (and also [[s-moved]], [[s-nohead]])
+Verified: 2026-09-22 · by: agent · method: manual
+
+## Beta
+
+A beta claim, wrapped
+across two lines.
+
+Source: [[s-gone]] — "quoted text that wraps
+onto a second line, citing [[s-removed]]"
+Verified: 2026-09-22 · by: agent · method: manual
+
+## Gamma
+
+Source: [[s-gone]]
+Source: [[s-boom]]
+Source: [[s-forbid]] and [[s-refused]]
+Verified: 2026-09-22 · by: agent · method: manual
+EOF
+git -C "$TMP/ksrc" add -A >/dev/null 2>&1
+case_run "kb-sources fixture library passes check-kb before any run" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ksrc"
+( cd "$TMP/ksrc" && find . -path ./.git -prune -o -name '*.md' -print | sort | xargs sha256sum ) > "$TMP/ksrc.before"
+
+case_run "kb-sources: no --yes lists every URL and says nothing was fetched" 0 "nothing was fetched" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc"
+case_run "kb-sources: no --yes names the stub and its dependants" 0 "widgets.md § Beta" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc"
+case_run "kb-sources: no --yes lists the three stub URL forms" 0 "/nohead" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc"
+case_run "kb-sources: no --yes made no request (server log empty)" 0 "" -- \
+  test ! -s "$SRV/access.log"
+case_run "kb-sources: no --yes writes no queue" 1 "" -- test -e "$TMP/ksrc/needs-attention.md"
+case_run "kb-sources: an unknown flag is a usage error" 2 "" -- "$ENGINE/scripts/kb-sources" "$TMP/ksrc" --fetch
+mkdir -p "$TMP/ksrc-empty"
+case_run "kb-sources: a non-library is a usage error" 2 "" -- "$ENGINE/scripts/kb-sources" "$TMP/ksrc-empty"
+
+build_clean "$TMP/ksrc-alive"
+mkdir -p "$TMP/ksrc-alive/sources"
+fm fx-sources general > "$TMP/ksrc-alive/sources/INDEX.md"
+printf '# Sources\n- [s-ok](s-ok.md) — stub\n- [s-moved](s-moved.md) — stub\n- [s-nohead](s-nohead.md) — stub\n' >> "$TMP/ksrc-alive/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc-alive/INDEX.md"
+for s in s-ok s-moved s-nohead; do cp "$TMP/ksrc/sources/$s.md" "$TMP/ksrc-alive/sources/$s.md"; done
+case_run "kb-sources: alive (200, redirect, HEAD-405 then GET) exits 0" 0 "alive" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc-alive" --yes
+case_run "kb-sources: a redirect is reported as a note" 0 "redirect" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc-alive" --yes
+case_run "kb-sources: all alive queues nothing" 1 "" -- test -e "$TMP/ksrc-alive/needs-attention.md"
+
+case_run "kb-sources: dead/unreachable found exits 1" 1 "queued" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc" --yes
+KQ="$TMP/ksrc/needs-attention.md"
+case_run "kb-sources: 404 queued as source-dead" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-gone.md\"" "$1" | grep -qF "category: \"source-dead\""' _ "$KQ"
+case_run "kb-sources: 410 queued as source-dead" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-removed.md\"" "$1" | grep -qF "category: \"source-dead\""' _ "$KQ"
+case_run "kb-sources: 404 record lists its dependants" 0 "" -- \
+  grep -qF 'widgets.md § Beta; widgets.md § Gamma' "$KQ"
+case_run "kb-sources: a Source: citation wrapped onto a second line is a dependant" 0 "" -- \
+  bash -c 'grep -A8 "stub: \"sources/s-removed.md\"" "$1" | grep -qF "widgets.md § Beta"' _ "$KQ"
+case_run "kb-sources: 500 queued as source-unreachable" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-boom.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$KQ"
+case_run "kb-sources: 403 queued as source-unreachable, not dead" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-forbid.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$KQ"
+case_run "kb-sources: refused connection queued as source-unreachable" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-refused.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$KQ"
+case_run "kb-sources: record carries the URL and status" 0 "" -- \
+  grep -qF "url: \"http://127.0.0.1:$SP/gone\"" "$KQ"
+case_run "kb-sources: alive stubs get no record" 1 "" -- grep -qF 'sources/s-ok.md' "$KQ"
+case_run "kb-sources: one record per failing stub (five)" 0 "" -- \
+  bash -c '[ "$(grep -c "^- id:" "$1")" = 5 ]' _ "$KQ"
+case_run "kb-sources: every record is status open" 0 "" -- \
+  bash -c '[ "$(grep -c "status: \"open\"" "$1")" = 5 ]' _ "$KQ"
+case_run "kb-sources: each unique URL fetched once (HEAD, GET only after 405)" 0 "" -- \
+  bash -c '[ "$(grep -c "^HEAD /gone$" "$1")" = 1 ]' _ "$SRV/access.log"
+
+case_run "kb-sources: rerun still exits 1" 1 "already queued" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc" --yes
+case_run "kb-sources: rerun does not duplicate records" 0 "" -- \
+  bash -c '[ "$(grep -c "^- id:" "$1")" = 5 ]' _ "$KQ"
+( cd "$TMP/ksrc" && find . -path ./.git -prune -o -name '*.md' -print | sort | xargs sha256sum ) > "$TMP/ksrc.after"
+case_run "kb-sources: facts and stubs byte-identical after runs (only INDEX and the queue differ)" 0 "" -- \
+  bash -c 'diff <(grep -v -e "/INDEX.md$" -e "needs-attention.md$" "$1") <(grep -v -e "/INDEX.md$" -e "needs-attention.md$" "$2")' _ "$TMP/ksrc.before" "$TMP/ksrc.after"
+case_run "kb-sources: INDEX gained only the queue's router line" 0 "" -- \
+  bash -c 'git -C "$1" diff --stat -- INDEX.md | grep -q "1 insertion" && ! git -C "$1" diff -- INDEX.md | grep -q "^-[^-]"' _ "$TMP/ksrc"
+case_run "kb-sources: queue is routed from the library's INDEX, exactly once" 0 "" -- \
+  bash -c '[ "$(grep -c "](needs-attention.md)" "$1")" = 1 ]' _ "$TMP/ksrc/INDEX.md"
+case_run "kb-sources: a library holding the queue still passes check-kb" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ksrc"
+case_run "kb-sources: kb-due counts the open records without a change" 0 "5 open queue item" -- \
+  "$ENGINE/scripts/kb-due" /nonexistent "$TMP/ksrc" --nudge
+
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$TMP/due/INDEX.md"   # computed: a typed date expires
