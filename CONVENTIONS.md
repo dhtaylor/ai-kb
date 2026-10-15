@@ -350,6 +350,14 @@ Verified: 2026-09-19 · by: agent · method: query
   shell and should carry none. **An assertion that cannot fail is worse than none**: it manufactures
   freshness on a schedule.
 
+  A `doc-review` assertion that fetches a page must grep **the sentence that states this section's
+  claim** — not the page's title, its subject or an identifier (`DENY` on the DENY page passes
+  while the page exists, which a source-liveness check already covers), and not one landing-page
+  line reused across sections: a page cannot state twenty different specific facts in one
+  sentence, so one fragment cannot defend them. A stamp the assertion backs is no stronger than
+  the assertion. `kb-verify` reports, on every run, a fetched fragment of four words or fewer and
+  a (url, fragment) pair backing more than two sections or sections in more than one file.
+
   Two rules make this safe to run. **A failing assertion is reported, never applied** — a verifier
   that rewrites a fact it has just contradicted destroys the evidence that something changed; a human
   decides between a stale fact, a wrong assertion and a real contradiction (§8). And **the commands
@@ -589,6 +597,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | routing check | golden-set questions actually route to `expected_file`. Deterministic tier: the file exists, holds the excerpt and is reachable from the root `INDEX.md` through the routers. Agent tier: an agent's tool calls Read the expected file, read content from no library the case does not need, and never touch the golden set or an eval folder. The agent tier is sampled and started by a person, never per commit ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)) | **built** — `check-golden` (every commit) and `grade-routing` (graded from a subagent's tool calls, not its self-report) |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` or an `alt_excerpt` AND the expected file is among those it cited (a cited path is resolved to a file, not string-matched); quote characters and trailing punctuation are normalised, wording is not; grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
+| assertions that cannot fail | a fetched fragment of ≤4 words, or one (url, fragment) backing >2 sections or several files; reported every run, never a failure (§7) | **built** — `kb-verify` |
 | ownership resolution | who a finding belongs to, by CODEOWNERS' last-match-wins rule | **built** — `kb-owner` |
 | stamp honesty | a commit claiming agent co-authorship does not also add a `by: human` stamp | **built** — `check-stamps` |
 | high-blast gate | a diff that deletes a knowledge file, drops a `status: CONFLICTED` marker, or promotes a fact's scope toward `general` is flagged, for CI to hold until an owner labels it; detection only | **built** — `check-blast` |

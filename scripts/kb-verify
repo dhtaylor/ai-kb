@@ -36,6 +36,11 @@ location, frontmatter template, escaping and dedupe-by-id, imported from
 drift apart. See the queue section below for the stable-ID scheme and what makes a
 failure merely FAILED versus unreachable.
 
+ASSERTIONS THAT CANNOT FAIL (§7, issues #34 and #41) are reported on every run, statically,
+whether or not they are due: a page grepped for a few words (its title or subject), or one
+(url, fragment) pair backing more than two sections or sections in several files. Each passes
+while the page exists and tests nothing about its own claim. A warning, not a failure.
+
 Selection is by staleness, per §7: a section is due when its stamp is older than the
 domain's freshness_horizon, or older than a TENTH of it for an agent stamp. The
 domain's verifier_budget caps how many run per sweep, oldest first.
@@ -95,13 +100,16 @@ output, not a mutation of any fact (documents/state-change-gates.md), so it foll
 exists because there is nothing for it to opt out of that --yes does not already gate.
 Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
-import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, subprocess, sys
+import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys
 
 NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
           ".claude-plugin", ".claude", ".git"}
 STAMP = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})\s*·\s*by:\s*(\S+)\s*·\s*method:\s*(\S+)\s*$")
 RECHECK = re.compile(r"^Recheck:\s*(.+?)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+URL = re.compile(r"https?://[^\s'\"|;)<>]+")
+SHORT_FRAGMENT = 4      # words; 26 of 31 fragments in the #34 sample were 1-4 words long
+REUSE_LIMIT = 2         # sections one (url, fragment) pair may back, all in one file (#41)
 TODAY = datetime.date.today()
 
 
@@ -275,6 +283,56 @@ def sections(path: pathlib.Path):
     return out
 
 
+def grep_fragment(cmd: str):
+    """The fixed string the command's last grep looks for, or None when there is no grep or
+    its arguments cannot be read. Options are skipped; -e names the pattern explicitly."""
+    m = list(re.finditer(r"\bgrep\b", cmd))
+    if not m:
+        return None
+    lex = shlex.shlex(cmd[m[-1].end():], posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    try:
+        toks = list(lex)
+    except ValueError:
+        return None
+    for i, tok in enumerate(toks):
+        if tok in ("|", "||", "&&", ";", "&", ">", "<"):
+            return None
+        if tok == "-e":
+            return toks[i + 1] if i + 1 < len(toks) else None
+        if not tok.startswith("-"):
+            return tok
+    return None
+
+
+def weak_rechecks(root: pathlib.Path, sections: list) -> list:
+    """Doc-review assertions that cannot fail (§7, issues #34 and #41): a page fetched and
+    grepped for a fragment of a few words (its title, its subject, an identifier), or one
+    (url, fragment) pair backing many sections or sections in several files. Either passes
+    for as long as the page exists, which says nothing about the claim. Static — nothing is
+    fetched or run — and a warning, never a failure: a heuristic must not block a sweep.
+    Only commands that name a URL and grep it are judged; a local query is left alone."""
+    out, pairs = [], {}
+    for s in sections:
+        url, frag = URL.search(s["cmd"] or ""), grep_fragment(s["cmd"] or "")
+        if not (url and frag):
+            continue
+        where = f"{s['file'].relative_to(root)} § {s['heading']}"
+        words = len(frag.split())
+        if words <= SHORT_FRAGMENT:
+            out.append(f"WEAK {where}: greps {words} word{'s' if words != 1 else ''} ('{frag[:60]}') — "
+                       f"a title or identifier passes while the page exists")
+        pairs.setdefault((url.group(0), frag), []).append((s["file"], where))
+    for (url, frag), backs in pairs.items():
+        files = {f for f, _ in backs}
+        if len(backs) > REUSE_LIMIT or len(files) > 1:
+            out.append(f"WEAK one fragment backs {len(backs)} sections in {len(files)} "
+                       f"file{'s' if len(files) != 1 else ''} ('{frag[:60]}' at {url}): "
+                       + "; ".join(w for _, w in backs)
+                       + " — it cannot test each section's own claim")
+    return out
+
+
 def main(argv) -> int:
     args = [a for i, a in enumerate(argv)
             if not a.startswith("--") and (i == 0 or argv[i - 1] != "--budget")]
@@ -309,6 +367,12 @@ def main(argv) -> int:
     print(f"  {stamped} stamped section(s), {len(with_cmd)} with a Recheck assertion, "
           f"{len(selected)} due to run"
           + (f", {over_budget} more past the budget" if over_budget else ""))
+
+    weak = weak_rechecks(root, with_cmd)
+    if weak:
+        print(f"\n  Assertions that cannot fail — grep each claim's own supporting sentence (§7) ({len(weak)}):")
+        for w in weak:
+            print(f"    {w}")
 
     # The facts no command can settle. Naming them is the point: a verifier that
     # only reports what it can check reads as though everything else were verified.
