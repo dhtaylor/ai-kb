@@ -6,6 +6,7 @@ Covers, within a single root:
   * check-links       — [[slug]] and relative router links resolve
   * slug uniqueness   — within-root filename uniqueness; no [[slug]] at a path-addressed file
   * orphans           — every file reachable from the root INDEX.md by router links
+  * stamp placement   — no indented Verified:/Recheck: line outside a code fence
 
 ORPHANS are the defect nothing else catches at commit time: an unrouted file
 passes every other check and is invisible to retrieval, which descends routers
@@ -45,6 +46,10 @@ REQUIRED = ("name", "description", "domain", "scope")
 
 
 ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
+# kb-verify reads a stamp or an assertion only at column 0. Indented, it looks stamped and
+# certifies nothing, and its Recheck never runs (§7). Inside a code fence it is an example.
+INDENTED_STAMP = re.compile(r"^\s+(Verified|Recheck):")
+FENCE = re.compile(r"^\s*(```|~~~)")
 
 
 def kb_files(root: pathlib.Path) -> list:
@@ -157,6 +162,14 @@ def main(root: pathlib.Path) -> int:
                 pass  # cross-root; not resolvable from one root yet (§13)
             elif bare not in slugs:
                 defects.append(f"{f}: dead [[{link}]]")
+
+        fenced = False
+        for n, line in enumerate(text.split("\n"), 1):
+            if FENCE.match(line):
+                fenced = not fenced
+            elif not fenced and (m := INDENTED_STAMP.match(line)):
+                defects.append(f"{f}:{n}: indented {m.group(1)}: line — kb-verify reads it only "
+                               f"at the start of a line, so this one certifies nothing")
 
     for name, count in Counter(f.name for f in files).items():
         if count > 1 and name not in PATH_ADDRESSED:

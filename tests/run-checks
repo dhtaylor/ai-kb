@@ -111,6 +111,15 @@ build_clean "$TMP/deadlink"
 printf '\nSee [[nowhere]].\n' >> "$TMP/deadlink/widgets.md"
 case_run "dead [[slug]] link" 1 "dead" -- "$ENGINE/scripts/check-kb" "$TMP/deadlink"
 
+# kb-verify parses stamps only at column 0, so an indented one certifies nothing (issue #38).
+build_clean "$TMP/indentstamp"
+printf '\n## Debate\n\n- One side.\n  Source: manual\n  Verified: 2026-09-22 · by: agent · method: manual\n  Recheck: false\n' >> "$TMP/indentstamp/widgets.md"
+case_run "indented Verified: line fails check-kb" 1 "indented Verified:" -- "$ENGINE/scripts/check-kb" "$TMP/indentstamp"
+case_run "indented Recheck: line fails check-kb" 1 "indented Recheck:" -- "$ENGINE/scripts/check-kb" "$TMP/indentstamp"
+build_clean "$TMP/fencedstamp"
+printf '\n## Example\n\n- How a stamp looks:\n\n  ```\n  Verified: 2026-09-22 · by: agent · method: manual\n  ```\n' >> "$TMP/fencedstamp/widgets.md"
+case_run "an indented stamp inside a code fence is an example, not a stamp" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fencedstamp"
+
 build_clean "$TMP/collide"
 mkdir -p "$TMP/collide/widgets"
 fm inner general > "$TMP/collide/widgets/inner.md"; printf '# Inner\n\ntext\n' >> "$TMP/collide/widgets/inner.md"
@@ -696,6 +705,7 @@ class H(http.server.BaseHTTPRequestHandler):
         with open(LOG, "a") as f: f.write(f"{method} {self.path}\n")
         table = {"/ok": 200, "/gone": 404, "/removed": 410, "/boom": 500}
         table["/forbidden"] = 403
+        table["/paren(v=1)"] = 200   # a URL whose own last character is a balanced ')'
         st = table.get(self.path, 404)
         if self.path == "/moved":
             self.send_response(302); self.send_header("Location", "/ok"); self.end_headers(); return
@@ -782,11 +792,22 @@ fm fx-sources general > "$TMP/ksrc-alive/sources/INDEX.md"
 printf '# Sources\n- [s-ok](s-ok.md) — stub\n- [s-moved](s-moved.md) — stub\n- [s-nohead](s-nohead.md) — stub\n' >> "$TMP/ksrc-alive/sources/INDEX.md"
 printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc-alive/INDEX.md"
 for s in s-ok s-moved s-nohead; do cp "$TMP/ksrc/sources/$s.md" "$TMP/ksrc-alive/sources/$s.md"; done
+# A ')' that belongs to the URL is kept; a ')' wrapping it in prose is not (issue #26).
+fm s-paren general > "$TMP/ksrc-alive/sources/s-paren.md"
+printf '# Source: s-paren\n\n- **URL:** http://127.0.0.1:%s/paren(v=1)\n' "$SP" >> "$TMP/ksrc-alive/sources/s-paren.md"
+fm s-prose general > "$TMP/ksrc-alive/sources/s-prose.md"
+printf '# Source: s-prose\n\n- **URL:** http://127.0.0.1:%s/ok).\n' "$SP" >> "$TMP/ksrc-alive/sources/s-prose.md"
+printf -- '- [s-paren](s-paren.md) — stub\n- [s-prose](s-prose.md) — stub\n' >> "$TMP/ksrc-alive/sources/INDEX.md"
+: > "$SRV/access.log"
 case_run "kb-sources: alive (200, redirect, HEAD-405 then GET) exits 0" 0 "alive" -- \
   "$ENGINE/scripts/kb-sources" "$TMP/ksrc-alive" --yes
 case_run "kb-sources: a redirect is reported as a note" 0 "redirect" -- \
   "$ENGINE/scripts/kb-sources" "$TMP/ksrc-alive" --yes
 case_run "kb-sources: all alive queues nothing" 1 "" -- test -e "$TMP/ksrc-alive/needs-attention.md"
+case_run "kb-sources: a balanced ')' ending a URL is kept" 0 "" -- \
+  grep -qxF 'HEAD /paren(v=1)' "$SRV/access.log"
+case_run "kb-sources: a prose ')' after a URL is stripped" 1 "" -- \
+  grep -qE '/ok\)' "$SRV/access.log"
 
 case_run "kb-sources: dead/unreachable found exits 1" 1 "queued" -- \
   "$ENGINE/scripts/kb-sources" "$TMP/ksrc" --yes
@@ -839,6 +860,12 @@ case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due"
 build_clean "$TMP/overdue"
 sed -i 's/^last_swept: never$/last_swept: 2026-01-01/' "$TMP/overdue/INDEX.md"
 case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/overdue"
+
+# A trailing YAML comment is valid and must not hide the value (issue #28).
+build_clean "$TMP/due-comment"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)  # swept by me/; s/^sweep_interval: 30d\$/sweep_interval: 7d  # weekly/" "$TMP/due-comment/INDEX.md"
+case_run "kb-due: last_swept with an inline comment is read" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due-comment"
+case_run "kb-due: sweep_interval with an inline comment is read" 0 "every 7d" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due-comment"
 
 # ------------------------------------------------------- kb-due --nudge ----
 # Phase 5 step 3: one nudge covers sweep-due, facts due for recheck (reusing kb-verify's
