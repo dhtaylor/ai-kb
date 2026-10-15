@@ -466,6 +466,17 @@ case_run "--apply: settings.json now names the fixture engine" 0 "$BFX" -- \
   cat "$BHOME/.claude/settings.json"
 case_run "--apply: global git config now names the fixture engine" 0 "$BFX" -- \
   env -i HOME="$BHOME" PATH="$PATH" git config --global --get kb.engineRoot
+# Issue #40: a subagent never sees the SessionStart context, so kb-retrieve gets it from a
+# SubagentStart hook matched to its plugin-scoped name, and nothing else is given it.
+case_run "--apply: SubagentStart hook is matched to the plugin's kb-retrieve" 0 "" -- \
+  python3 -c 'import json,sys; g=json.load(open(sys.argv[1]))["hooks"]["SubagentStart"]; \
+ours=[x for x in g if any("kb-session-start" in h["command"] for h in x["hooks"])]; \
+assert len(ours)==1 and ours[0]["matcher"]=="^fx-plugin:kb-retrieve$", ours; \
+assert ours[0]["hooks"][0]["command"].endswith(" --subagent"), ours' "$BHOME/.claude/settings.json"
+case_run "--apply twice: still exactly one SubagentStart hook of ours" 0 "" -- \
+  sh -c 'env -i HOME="$1" PATH="$PATH" "$2" --apply >/dev/null 2>&1 && python3 -c "import json,sys; g=json.load(open(sys.argv[1]))[\"hooks\"][\"SubagentStart\"]; assert len(g)==1, g" "$1/.claude/settings.json"' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
+case_run "--check after --apply: the SubagentStart hook is not reported as drift" 0 "ok" -- \
+  sh -c 'env -i HOME="$1" PATH="$PATH" "$2" --check | grep -F "SubagentStart hook"' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
 
 # ------------------------------------------------------------- kb-verify ----
 build_clean "$TMP/vpass"
@@ -1067,6 +1078,15 @@ sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDE
 case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
   bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
   "$TMP/session-cwd" "$SHOME" "$SFX2/scripts/kb-session-start"
+# Issue #40: --subagent is the same engine context, as a SubagentStart event, without the
+# librarian's nudge (a retrieval subagent has no use for it).
+case_run "kb-session-start --subagent: emits a SubagentStart event" 0 '"hookEventName":"SubagentStart"' -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' --subagent"
+case_run "kb-session-start --subagent: names the engine and its libraries" 0 "libdue -> $SFX/kb/libdue" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' --subagent"
+case_run "kb-session-start --subagent: carries no librarian nudge" 1 "" -- \
+  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" --subagent | grep -qF "Due for a librarian"' _ \
+  "$TMP/session-cwd" "$SHOME" "$SFX/scripts/kb-session-start"
 
 # --------------------------------------------------------- check-secrets ----
 # The check with the most expensive failure, and until now the only one with no
@@ -1753,6 +1773,12 @@ grade "library-prefixed relative path still resolves" 0 "1/1 graded" "Q1|librel.
 mk_tr "$RT/refusal.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
 grade "negative case: reads are reported, not required" 0 "1/1 graded" "Q2|refusal.jsonl"
 grade "negative case: contamination still fails" 1 "contamination" "Q2|golden.jsonl"
+# Issue #40: a subagent that searched some other knowledge tree read nothing under kb/, and
+# its refusal looked like a correct one. Any case, negative included, must read the engine's kb/.
+mkdir -p "$RT/legacy/knowledge"; printf '# legacy
+' > "$RT/legacy/knowledge/INDEX.md"
+mk_tr "$RT/legacy.jsonl" "Read:$RT/legacy/knowledge/INDEX.md"
+grade "negative case answered from another knowledge tree: fail" 1 "nothing under" "Q2|legacy.jsonl"
 mk_tr "$RT/xboth.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
 grade "cross-root case: both libraries read: pass" 0 "1/1 graded" "Q4|xboth.jsonl"
 grade "cross-root case: linked library never read: fail" 1 "needed beta" "Q4|pass.jsonl"

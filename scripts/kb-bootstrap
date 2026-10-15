@@ -8,7 +8,8 @@
 #
 #   ~/.claude/settings.json   KB_ENGINE_ROOT for Claude sessions; the marketplace
 #                             and plugin; the SessionStart hook (which lives in
-#                             the engine, so it is versioned with it)
+#                             the engine, so it is versioned with it), and the
+#                             same hook on SubagentStart for kb-retrieve
 #   git config --global       kb.engineRoot, for git hooks. Git reads its global
 #                             config in EVERY context — terminal, IDE, GUI client,
 #                             cron — which no shell startup file does: ~/.bashrc
@@ -96,6 +97,18 @@ ss[:] = [g for g in ss if g.get("hooks")]
 ss.append({"hooks": [{"type": "command", "command": hook_cmd, "timeout": 10,
                       "statusMessage": "Resolving knowledge engine..."}]})
 out.append(("SessionStart hook", len(had) == 1 and had[0].get("command") == hook_cmd))
+
+# SubagentStart: a subagent never sees the SessionStart context, so kb-retrieve is given the
+# engine this way (issue #40). Plugin agents report a plugin-scoped type, matched anchored.
+sub_cmd, matcher = f"{hook_cmd} --subagent", f"^{pname}:kb-retrieve$"
+sa = d["hooks"].setdefault("SubagentStart", [])
+had_sa = [(g.get("matcher"), h) for g in sa for h in g.get("hooks", []) if ours(h)]
+for g in sa:
+    g["hooks"] = [h for h in g.get("hooks", []) if not ours(h)]
+sa[:] = [g for g in sa if g.get("hooks")]
+sa.append({"matcher": matcher, "hooks": [{"type": "command", "command": sub_cmd, "timeout": 10}]})
+out.append(("SubagentStart hook (kb-retrieve)",
+             len(had_sa) == 1 and had_sa[0][0] == matcher and had_sa[0][1].get("command") == sub_cmd))
 
 changed = d != before
 if changed and mode == "apply":

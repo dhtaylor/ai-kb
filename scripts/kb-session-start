@@ -14,15 +14,23 @@
 #
 # Absence is graceful at every level. No engine, no libraries, or neither — the
 # session still starts, and says so.
+#
+# --subagent: the same context as a SubagentStart event, for kb-retrieve. A subagent never
+# sees the SessionStart context, and without the engine path a retrieval agent searched
+# whatever other knowledge tree its workspace held (issue #40). The librarian's nudge is
+# left out: it is for the person's session, not for a retrieval.
 set -uo pipefail
+
+event=SessionStart
+[ "${1:-}" = --subagent ] && event=SubagentStart
 
 emit() {
   local ctx="$1" msg="${2:-}"
   esc() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "${s//$'\n'/\\n}"; }
   if [ -n "$msg" ]; then
-    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"},"systemMessage":"%s"}\n' "$(esc "$ctx")" "$(esc "$msg")"
+    printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":"%s"},"systemMessage":"%s"}\n' "$event" "$(esc "$ctx")" "$(esc "$msg")"
   else
-    printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}}\n' "$(esc "$ctx")"
+    printf '{"hookSpecificOutput":{"hookEventName":"%s","additionalContext":"%s"}}\n' "$event" "$(esc "$ctx")"
   fi
 }
 
@@ -53,7 +61,8 @@ proj=""
 if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -f "$root/knowledge/INDEX.md" ]; then
   proj="$root/knowledge"
 fi
-due=$("$engine/scripts/kb-due" "$engine" ${proj:+"$proj"} --nudge 2>/dev/null || true)
+due=""
+[ "$event" = SessionStart ] && due=$("$engine/scripts/kb-due" "$engine" ${proj:+"$proj"} --nudge 2>/dev/null || true)
 [ -n "$due" ] && due="
 Due for a librarian's attention — nothing printed here means nothing is due:
 ${due}"

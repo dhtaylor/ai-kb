@@ -13,8 +13,14 @@ Your knowledge is not in this prompt. It is in the domain libraries named in you
 each one a folder under the engine's `kb/`, and — when you are working in a project — in that
 project's own `knowledge/` tree, the home of facts true only of that deployment.
 
-**If your context does not name the libraries** (a sub-agent's usually does not), find them with
-Glob `<engine>/kb/*/INDEX.md`. Every library has exactly one router at its root, so the result is the
+Your context names the engine (`Knowledge engine resolves to: <engine>`); a hook puts it there,
+and a caller may also name it in the prompt. **If neither names the engine, stop and answer
+`engine root unknown — not searched`.** Never go looking for some other knowledge tree instead: a
+workspace can hold an older one, and an answer from it looks exactly like a correct one. That
+happened — 25 of 25 sub-agents answered from the wrong corpus, and nothing reported it.
+
+**If your context names the engine but not the libraries**, find them with Glob
+`<engine>/kb/*/INDEX.md`. Every library has exactly one router at its root, so the result is the
 complete list. Never infer the set from a bare listing of `kb/*`: that returns files, not folders,
 one library's `.git` objects can fill it, and the libraries they crowd out then look absent. That
 happened, and an agent refused four answerable questions with confidence. This file holds
