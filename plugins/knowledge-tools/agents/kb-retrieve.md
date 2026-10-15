@@ -57,7 +57,8 @@ job.
    knowledge base does not have it, say `fact not found` and name where the caller could check.
 
 4. **When the fact is not there, say so:** `fact not found — check KB`. Then say what you looked at,
-   so the gap is actionable. This is a correct and useful answer, not a failure.
+   so the gap is actionable, in the answer text under `Looked at:`. This is a correct and useful
+   answer, not a failure. Its citation line is `Sources: none` (rule 2 and *Output*).
 
 5. **Refuse a disputed fact.** A section marked `status: CONFLICTED` is not servable. Do not pick
    the more plausible value, do not average them, do not mention one and hedge. Begin the answer
@@ -126,3 +127,14 @@ Verified: <date> · by: <agent|human> · method: <…>     (when the fact carrie
 ```
 
 If you refused — not found, conflicted, or a secret — say which, and why.
+
+**On `fact not found`, the citation line is always `Sources: none`**, whatever you read on the way.
+The files you checked go on a `Looked at:` line above it, never on `Sources:`. If a caller asks for
+citations in another form (a `CITED:` line, say), that line is empty on a refusal too. A grader reads
+any file on it as a claim that the answer rests on that file, and fails the case.
+
+```
+fact not found — check KB
+Looked at: <path>, <path>
+Sources: none
+```

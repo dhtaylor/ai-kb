@@ -7,7 +7,8 @@ present in the file it names, and every expected_file is REACHABLE from the libr
 root INDEX.md by router links (check-kb's own reachability, imported, not copied). Retrieval
 descends routers and never searches, so a file no router reaches cannot be routed to — and
 check-kb's orphan check exempts documents/ and the golden set, which would otherwise be
-places a record could hide. No LLM, no agent, no network — it runs on every commit and is
+places a record could hide. A cross-root case may name its expected_file in a sibling library
+under the same kb/ as <library>:<path>; it is checked there, against that library's routers. No LLM, no agent, no network — it runs on every commit and is
 cheap enough to.
 
 What it CANNOT do, and this is the point of the split: it cannot tell whether an
@@ -25,12 +26,13 @@ VALID_CASES = {"positive", "negative", "unresolved", "cross-root"}
 DISPUTED = "disputed — not served"   # the refusal of a CONFLICTED fact (CONVENTIONS §10)
 
 
-def load_check_kb():
-    """Import the extensionless sibling script check-kb as a module (the SourceFileLoader
-    pattern kb-due uses for kb-verify), so reachability has one implementation."""
-    path = pathlib.Path(__file__).resolve().parent / "check-kb"
+def load_script(name):
+    """Import an extensionless sibling script as a module (the SourceFileLoader pattern kb-due
+    uses for kb-verify), so reachability (check-kb) and expected_file resolution (grade-eval)
+    each have one implementation."""
+    path = pathlib.Path(__file__).resolve().parent / name
     sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader("check_kb", str(path))
+    loader = importlib.machinery.SourceFileLoader(name.replace("-", "_"), str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
@@ -73,8 +75,9 @@ def main(root: pathlib.Path) -> int:
     text = gf.read_text()
     records = parse(text)
     defects, counts = [], {c: 0 for c in VALID_CASES}
-    ckb = load_check_kb()
-    reached = ckb.reachable(root, ckb.kb_files(root))
+    ckb, ge = load_script("check-kb"), load_script("grade-eval")
+    reached = {root.resolve(): ckb.reachable(root, ckb.kb_files(root))}
+    unchecked = []
 
     if not records:
         defects.append(f"{gf.name}: no records parsed — the oracle is empty")
@@ -104,13 +107,27 @@ def main(root: pathlib.Path) -> int:
         if not ef:
             defects.append(f"{where} [{case}]: no expected_file")
             continue
-        target = root / ef
+        owner, rel = ge.expected_target(root, ef)
+        if owner != root.resolve():         # <library>:<path>, a file in a sibling (issue #36)
+            if case != "cross-root":
+                defects.append(f"{where} [{case}]: expected_file '{ef}' names another library — "
+                               f"only a cross-root case may")
+                continue
+            if not owner.is_dir():
+                # A library checked on its own (its CI) cannot see its siblings, as check-xlinks
+                # cannot. The record is checked where they are installed together.
+                unchecked.append(f"{where} [{case}]: library '{owner.name}' is not installed "
+                                 f"alongside — '{ef}' is checked where it is")
+                continue
+            if owner not in reached:
+                reached[owner] = ckb.reachable(owner, ckb.kb_files(owner))
+        target = owner / rel
         if not target.is_file():
             defects.append(f"{where} [{case}]: expected_file '{ef}' does not exist")
             continue
-        if target.resolve() not in reached:
+        if target.resolve() not in reached[owner]:
             defects.append(f"{where} [{case}]: expected_file '{ef}' is not reachable from "
-                           f"{root.name}/INDEX.md by router links — retrieval cannot route to it")
+                           f"{owner.name}/INDEX.md by router links — retrieval cannot route to it")
         if not exc:
             defects.append(f"{where} [{case}]: no expected_excerpt")
             continue
@@ -141,6 +158,8 @@ def main(root: pathlib.Path) -> int:
 
     for d in defects:
         print(f"FAIL {d}")
+    for u in unchecked:
+        print(f"NOT CHECKED {u}")
     total = len(records)
     summary = ", ".join(f"{c}={counts[c]}" for c in sorted(VALID_CASES) if counts[c])
     print(f"\n{total} record(s) checked ({summary}) — "

@@ -262,8 +262,9 @@ Include from the start:
   `expected_file` is that file, and its `expected_excerpt` is exactly `disputed — not served`.
   Otherwise, say in the file that none applies and why: a conflict invented to fill the slot tests a
   fiction;
-- a **`cross-root` case, only if the domain links across libraries** (`[[library:slug]]`). Otherwise,
-  say so in the file, with the reason.
+- a **`cross-root` case, only if the domain links across libraries** (`[[library:slug]]`). Its
+  `expected_file` is the answering file in the other library, written `<library>:<path>` (§10).
+  Otherwise, say so in the file, with the reason.
 
 If the domain has no content yet, the golden set is **deferred and no file is created** — not a
 placeholder. An empty golden-set file is an empty state leaf by another name, and an oracle with no

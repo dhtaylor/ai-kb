@@ -1897,6 +1897,53 @@ grade "several cases: one failing fails the run" 1 "1/2 graded" "Q1|pass.jsonl" 
 grade "mapping line without a transcript is a format error" 2 "expected Q<n>|<transcript>" "Q1"
 grade "case outside the golden set is a format error" 2 "not a case" "Q9|pass.jsonl"
 grade "missing transcript is a format error" 2 "not found" "Q1|absent.jsonl"
+# Issue #36: a cross-root case may name its expected_file in the other library, as
+# <library>:<path>. The oracle then says WHICH file holds the answer, and every tier checks it.
+XR="$TMP/xr"; build_clean "$XR/kb/alpha"; build_clean "$XR/kb/beta"
+sed -i 's/up to 12 things\.$/up to 12 things. See [[beta:widgets]]./' "$XR/kb/alpha/widgets.md"
+printf 'A beta widget is serviced yearly.\n' >> "$XR/kb/beta/widgets.md"
+fm stray general > "$XR/kb/beta/stray.md"; printf '# Stray\n\nA stray is never routed.\n' >> "$XR/kb/beta/stray.md"
+xr_golden() { # xr_golden <dir> <case> <expected_file> <excerpt>: alpha's golden set plus one record (Q4)
+  rm -rf "$1"; cp -r "$XR/kb/alpha" "$1"
+  python3 - "$1/fx-golden.md" "$2" "$3" "$4" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+rec = (f"- case: {sys.argv[2]}\n  question: How often is a beta widget serviced?\n"
+       f"  expected_file: {sys.argv[3]}\n  expected_excerpt: \"{sys.argv[4]}\"\n\n")
+p.write_text(t[:t.rindex("```")] + rec.rstrip("\n") + "\n```\n")
+PY
+}
+xr_golden "$XR/kb/xok" cross-root "beta:widgets.md" "serviced yearly"
+case_run "check-golden: cross-root expected_file in a sibling library passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$XR/kb/xok"
+xr_golden "$XR/kb/xexc" cross-root "beta:widgets.md" "serviced monthly"
+case_run "check-golden: cross-root excerpt is checked in the sibling's file" 1 "excerpt not found in beta:widgets.md" -- "$ENGINE/scripts/check-golden" "$XR/kb/xexc"
+xr_golden "$XR/kb/xmiss" cross-root "beta:absent.md" "serviced yearly"
+case_run "check-golden: cross-root file missing from the sibling fails" 1 "does not exist" -- "$ENGINE/scripts/check-golden" "$XR/kb/xmiss"
+xr_golden "$XR/kb/xorph" cross-root "beta:stray.md" "never routed"
+case_run "check-golden: cross-root file the sibling never routes to fails" 1 "not reachable from beta/INDEX.md" -- "$ENGINE/scripts/check-golden" "$XR/kb/xorph"
+xr_golden "$XR/kb/xpos" positive "beta:widgets.md" "serviced yearly"
+case_run "check-golden: only a cross-root case may name another library's file" 1 "only a cross-root case" -- "$ENGINE/scripts/check-golden" "$XR/kb/xpos"
+# A library checked on its own (its CI) cannot see its siblings, as check-xlinks cannot:
+# the record is reported as not checked here, and checked where the siblings are installed.
+xr_golden "$XR/kb/xlone" cross-root "gamma:widgets.md" "serviced yearly"
+mkdir -p "$XR/lone"; mv "$XR/kb/xlone" "$XR/lone/xlone"
+case_run "check-golden: a sibling not installed alongside is reported, not failed" 0 "not installed alongside" -- "$ENGINE/scripts/check-golden" "$XR/lone/xlone"
+xr_ge() { # xr_ge <name> <want-exit> <want-text> <Q4 answer line>
+  printf 'Q1|widgets.md|A widget holds up to 12 things.\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n%s\n' "$4" > "$XR/answers"
+  case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$XR/kb/xok" "$XR/answers"
+}
+xr_ge "grade-eval: cross-root answer citing the sibling's file passes" 0 "4/4 passed" "Q4|xok/widgets.md, kb/beta/widgets.md|A beta widget is serviced yearly."
+xr_ge "grade-eval: cross-root answer citing only its own library fails" 1 "expected 'beta:widgets.md'" "Q4|xok/widgets.md|A beta widget is serviced yearly."
+xr_ge "grade-eval: own-library file of the same name is not the sibling's" 1 "expected 'beta:widgets.md'" "Q4|widgets.md|A beta widget is serviced yearly."
+# Issue #31: a refusal rests on no file, so citing the files it checked fails the case.
+printf 'Q1|widgets.md|A widget holds up to 12 things.\nQ2|xok/INDEX.md, xok/widgets.md|fact not found — check KB\nQ3||fact not found — check KB\nQ4|kb/beta/widgets.md|A beta widget is serviced yearly.\n' > "$XR/answers"
+case_run "grade-eval: a refusal that cites the files it checked fails (#31)" 1 "expected '(none)'" -- "$ENGINE/scripts/grade-eval" "$XR/kb/xok" "$XR/answers"
+XA="$(cd "$XR/kb/xok" && pwd -P)"; XB="$(cd "$XR/kb/beta" && pwd -P)"
+printf 'Q4|xr-both.jsonl\n' > "$XR/map"
+mk_tr "$XR/xr-both.jsonl" "Read:$XA/INDEX.md" "Read:$XA/widgets.md" "Read:$XB/INDEX.md" "Read:$XB/widgets.md"
+case_run "grade-routing: cross-root case reading the sibling's file passes" 0 "1/1 graded" -- "$ENGINE/scripts/grade-routing" "$XA" "$XR/map"
+mk_tr "$XR/xr-both.jsonl" "Read:$XA/INDEX.md" "Read:$XA/widgets.md"
+case_run "grade-routing: cross-root case never reading the sibling's file fails" 1 "never Read" -- "$ENGINE/scripts/grade-routing" "$XA" "$XR/map"
 # Grep is graded by what it RETURNED (tool_result paired by id), not by its arguments.
 NL=$'\n'
 fm golden-ratio general > "$A/golden-ratio.md"; printf '# Golden ratio\n\nPhi.\n' >> "$A/golden-ratio.md"
