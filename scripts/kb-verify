@@ -126,6 +126,25 @@ def load_kb_watch():
     return mod
 
 
+def move_floor(path: pathlib.Path):
+    """Rewrite a declared frontmatter verified: to the floor the file's stamps now support. A
+    restamp can raise the oldest stamp, and check-kb fails a floor that disagrees with its
+    stamps (§7) — so the derivation is check-kb's own, imported, not a second copy of it."""
+    loader = importlib.machinery.SourceFileLoader(
+        "check_kb", str(pathlib.Path(__file__).resolve().parent / "check-kb"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    check_kb = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True
+    loader.exec_module(check_kb)
+    text = path.read_text()
+    parts = text.split("---\n", 2)
+    if not text.startswith("---\n") or len(parts) < 3:
+        return
+    floor = check_kb.derived_floor(parts[2])
+    fm = re.sub(r"^verified:[ \t]*\S+", f"verified: {floor}", parts[1], count=1, flags=re.M)
+    path.write_text("---\n" + fm + "---\n" + parts[2])
+
+
 def stable_id(category: str, file: str, section: str, assertion: str) -> str:
     payload = f"{category}|{file}|{section}|{assertion}".encode()
     return hashlib.sha1(payload).hexdigest()[:8]
@@ -337,6 +356,8 @@ def main(argv) -> int:
             lines = s["file"].read_text().split("\n")
             lines[s["line"]] = f"Verified: {TODAY} · by: agent · method: query"
             s["file"].write_text("\n".join(lines))
+        for f in {s["file"] for s in passed}:
+            move_floor(f)
         print(f"\n  restamped {len(passed)} section(s) to {TODAY} (by: agent — kb-verify is an agent, "
               f"whatever ran the assertion)")
     elif passed:

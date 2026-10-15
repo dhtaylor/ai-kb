@@ -166,7 +166,9 @@ Resolving a contradiction is never your call. It is never automated.
   stamp it as anything stronger. **No evidence, no stamp**: record what you actually checked.
 - Update the file's frontmatter `verified:` floor — the oldest stamp among the file's sections
   **that are not `CONFLICTED`**. A disputed section is not served, so its stamp certifies nothing a
-  reader can get; if every stamped section is disputed, the floor is `unknown` (§7).
+  reader can get; if every stamped section is disputed, the floor is `unknown` (§7). If any
+  non-`CONFLICTED` section cites a `Source:` and is still unstamped, the floor is `unknown` too —
+  never today's date over sections nobody checked. `check-kb` fails a floor that disagrees.
 
 ## Step 7 — Routers and golden set
 
