@@ -484,7 +484,7 @@ set: never opened, and excluded from every search. Each record carries:
 ```yaml
 - case: positive | negative | unresolved | cross-root
   question: <what is asked>
-  expected_file: <the file that must answer it>
+  expected_file: <the file that must answer it; a cross-root case may write <library>:<path>>
   expected_excerpt: <text that must appear, grep-verifiable against expected_file>
   alt_excerpt: <optional, repeatable: another sentence in expected_file stating the same fact>
 ```
@@ -500,6 +500,17 @@ An **`unresolved` case** names the file holding the `CONFLICTED` section as `exp
 phrase, so `check-golden` checks something else: that the named file really holds a `CONFLICTED`
 section, so the case tests a dispute that exists. `grade-eval` requires the phrase in the answer and
 the file among its citations.
+
+A **`cross-root` case names the file in the other library that answers it**, written
+`<library>:<path>`, for example `agile-requirements:elicitation-techniques.md`, and its excerpt is
+the sentence in that file. The library is a sibling under the same `kb/`. `check-golden` checks the
+excerpt in that file and that the other library's routers reach it. `grade-routing` and `grade-eval`
+then require the agent to read and cite it. The agent also has to read content in the case's own
+library, where the hop starts. Only a `cross-root` case may name another library's file. A library
+checked on its own, as in its CI, cannot see its siblings, so `check-golden` reports such a record as
+not checked there. It is checked where the libraries are installed together. The older form, a file
+in the own library with the `[[library:slug]]` link text as `expected_excerpt`, still passes, but it
+only checks where the hop starts, not the file that answers.
 
 An **`unresolved` case is required only where the domain actually holds a `CONFLICTED` section**, and a
 **cross-root case only where the domain actually links across libraries** — a domain with no contradiction and no

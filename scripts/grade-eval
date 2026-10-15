@@ -40,6 +40,15 @@ def load_golden(lib: pathlib.Path):
     return recs
 
 
+def expected_target(lib: pathlib.Path, expected: str):
+    """(library root, path within it) of the file a golden record's expected_file names. A
+    cross-root case may name a file in a sibling library under the same kb/ as
+    <library>:<path> (issue #36); anything else is a path in the case's own library."""
+    lib = lib.resolve()
+    m = re.fullmatch(r"([\w-]+):(.+)", expected)
+    return (lib.parent / m.group(1), m.group(2)) if m else (lib, expected)
+
+
 def resolves_to(lib: pathlib.Path, expected: str, cited) -> bool:
     """True if any cited path names the expected file.
 
@@ -48,7 +57,8 @@ def resolves_to(lib: pathlib.Path, expected: str, cited) -> bool:
     library, its kb/ directory and the engine, and compared as a file — never matched
     as a suffix, which would let a same-named file in another library pass."""
     lib = lib.resolve()          # "." has no parent to anchor on until it is resolved
-    want = lib / expected
+    owner, rel = expected_target(lib, expected)
+    want = (owner / rel).resolve()
     anchors = (lib, lib.parent, lib.parent.parent)
     return any((a / c).resolve() == want for c in cited for a in anchors)
 
@@ -95,7 +105,8 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
         file_ok   = (resolves_to(lib, ef, cited_set)) if ef else (not cited_set)
         in_file   = True
         if ef:
-            target = lib / ef
+            owner, rel = expected_target(lib, ef)
+            target = owner / rel
             # An unresolved case's excerpt is the refusal phrase, in no fact file; its file
             # must instead still hold the dispute. Every other excerpt must be in its file.
             probes  = ["status: conflicted"] if case == "unresolved" else [norm(e) for e in excerpts]

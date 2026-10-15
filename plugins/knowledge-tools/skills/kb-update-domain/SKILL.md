@@ -187,8 +187,8 @@ Resolving a contradiction is never your call. It is never automated.
   fold produced a contradiction — an `unresolved` case proving the agent refuses it rather than
   serving a value. Its `expected_file` is the conflicted file, and its `expected_excerpt` is exactly
   `disputed — not served` (§10). A `cross-root` case applies **only if the domain actually links
-  across libraries**;
-  where it does not, say so in the file rather than inventing a link to satisfy a count.
+  across libraries**, and its `expected_file` is the answering file in the other library, written
+  `<library>:<path>` (§10); where it does not, say so in the file rather than inventing a link to satisfy a count.
 
 ## Step 8 — The gate: show your work before committing
 
