@@ -27,6 +27,10 @@ Per golden case, from Read/Glob/Grep calls only, it reports
       starting with ! excludes: it is never contamination and is applied when computing the
       scope. The per-case line says so.
 
+Every case, negative included, fails if nothing under the engine's kb/ was Read at all: a
+refusal from an agent that searched some other knowledge tree looks exactly like a correct
+one (issue #40).
+
 A positive or cross-root case passes when (a) holds, content was read only from the
 libraries the case needs, and (c) is clean. The case's own library is needed; a cross-root
 case also needs each library its expected_excerpt links to as [[library:slug]]. Negative and
@@ -186,6 +190,7 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
     """(passed, expected_read, content_libs, contamination, why, notes) for one case."""
     kb = lib.parent
     reads, touched, listed, notes, content = [], [], set(), [], set()
+    in_kb = False
 
     def lib_of(f):
         return f.relative_to(kb).parts[0] if f is not None and f.name != "INDEX.md" and kb in f.parents else None
@@ -198,6 +203,7 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
                 touched.append(f"Read {inp['file_path']}")
             if lib_of(f):
                 content.add(lib_of(f))
+            in_kb |= f is not None and kb in f.parents
         elif name in ("Glob", "Grep"):
             if res is None:   # no result: the arguments are all there is. A returned result
                 # is exactly what the agent saw, so it alone is judged (below).
@@ -231,6 +237,8 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
     why = []
     if touched:
         why.append("contamination: " + "; ".join(dict.fromkeys(touched)))
+    if not in_kb:   # it answered from some other corpus, or none: every case is void (issue #40)
+        why.append(f"nothing under {kb} was Read")
     if case in AGENT_TIER_CASES:
         need = needed_libraries(lib, rec)
         if not expected_read:

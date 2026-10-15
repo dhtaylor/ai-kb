@@ -316,7 +316,8 @@ a substitute for it; it deliberately leaves names to the human gate.
 Provenance says where a fact came from. Currency says whether it is still true. They are different
 questions and they attach at the same granularity (§4).
 
-Each section that carries a `Source:` may carry a stamp directly beneath it:
+Each section that carries a `Source:` may carry a stamp directly beneath it, at the start of the line —
+an indented stamp or `Recheck:` (under a list item, say) is never read, so `check-kb` rejects it:
 
 ```
 Verified: 2026-09-19 · by: agent · method: query
@@ -572,6 +573,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | `check-links` | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
 | slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
 | orphans | every file reachable from the root `INDEX.md` by router links; golden set and `documents/` exempt (§3) | **built** — `check-kb` |
+| stamp placement | no indented `Verified:` / `Recheck:` line outside a code fence (§7) | **built** — `check-kb` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
 | secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |

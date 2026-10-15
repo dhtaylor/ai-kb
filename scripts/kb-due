@@ -60,7 +60,7 @@ TODAY = datetime.date.today()
 
 
 def field(text, name):
-    m = re.search(rf"^{name}:\s*(\S+)\s*$", text, re.M)
+    m = re.search(rf"^{name}:\s*(\S+)\s*(?:\s#.*)?$", text, re.M)   # a trailing YAML comment is allowed
     return m.group(1) if m else None
 
 

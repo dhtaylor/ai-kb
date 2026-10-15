@@ -99,7 +99,12 @@ def stub_urls(lib):
         for line in f.read_text(errors="replace").split("\n"):
             m = URL_LINE.match(line)
             if m:
-                out[f.stem] = (str(f.relative_to(lib)), m.group(1).rstrip(".,;:)"))
+                # A ')' is prose wrapping the URL only when it has no '(' to close inside
+                # it: ms188676(v=sql.105) and Foo_(bar) end in their own ')'.
+                url = m.group(1).rstrip(".,;:")
+                while url.endswith(")") and url.count(")") > url.count("("):
+                    url = url[:-1].rstrip(".,;:")
+                out[f.stem] = (str(f.relative_to(lib)), url)
                 break
     return out
 
