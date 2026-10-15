@@ -129,7 +129,15 @@ Each item carries:
     in the file); for a whole-file finding, one of these keys — `negative-count`,
     `unresolved-missing`, `cross-root-unstated`, `no-golden-set`, `unsupported-floor` — or `-`
     for any other whole-file finding (the category already tells two such findings in one file
-    apart).
+    apart);
+  - **for a finding about one `Source:` line** — `unstamped fact`, `stale fact`, and
+    `high-blast-radius` raised for one of those — the locus is `<heading>|<source>`, where
+    `<source>` is the bare slug of the first `[[slug]]` on that `Source:` line (no brackets), or
+    the line's text after `Source: ` when it has none — `Key Facts|vendor-docs` hashes as
+    `printf '%s' 'unstamped fact|widgets.md|Key Facts|vendor-docs' | sha1sum | cut -c1-8`. Always, even when the section has a single `Source:` line: §6 stacks one
+    stamp per source, so two unstamped sources in one section are two findings, and an ID keyed
+    on the heading alone would merge them, or change the day a second source is added. Records
+    written before this rule keep their IDs; never re-hash an existing record.
 
   Compute it (`printf '%s' 'orphan|webhooks.md|-' | sha1sum | cut -c1-8`); never invent it;
 - a **status**: `open`, `acknowledged`, `resolved`. An acknowledged item is not re-raised unless its

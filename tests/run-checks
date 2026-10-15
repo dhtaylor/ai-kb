@@ -1037,6 +1037,31 @@ done
 case_run "nudge: distilled notes (either heading spelling) are not counted" 0 "2 episodic notes awaiting distillation" -- \
   "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/episodic-due" --nudge
 
+# 4b. Unstamped sourced sections (issue #29): §7 ranks unknown ahead of stale, so the nudge
+#     names them between sweeps. A CONFLICTED section, an episodic note and a source stub are
+#     not counted: the first is not served, the others are records, not facts.
+build_clean "$NFX/kb/unstamped-due"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/unstamped-due/INDEX.md"
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n\n## Colour\n\nRed.\n\nSource: manual\n\n## Size\n\nstatus: CONFLICTED · since: 2026-01-01\n\nSource: manual\n' >> "$NFX/kb/unstamped-due/widgets.md"
+mkdir -p "$NFX/kb/unstamped-due/episodic"
+printf -- '---\nname: 2026-01-01-note\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\n---\n# note\n\n## Distilled\n\nSource: manual\n' > "$NFX/kb/unstamped-due/episodic/2026-01-01-note.md"
+# A state leaf (§2) records questions and disputes, not facts: its Source: lines say where a
+# question came from, and no stamp could ever clear it, so it is not counted either.
+fm fx-open-questions general > "$NFX/kb/unstamped-due/fx-open-questions.md"
+printf '# Open questions\n\n## Is it blue?\n\nNo source says.\n\nSource: manual\n' >> "$NFX/kb/unstamped-due/fx-open-questions.md"
+printf -- '- [fx-open-questions](fx-open-questions.md) — open questions\n' >> "$NFX/kb/unstamped-due/INDEX.md"
+case_run "nudge: unstamped sourced sections are counted, CONFLICTED, episodic and state leaves excluded" 0 \
+  "2 unstamped sections (never verified)" -- "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/unstamped-due" --nudge
+case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- \
+  bash -c '"$1" /nonexistent "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
+# Without check-kb beside it, kb-due loses only this category: one warning, the rest intact.
+mkdir -p "$TMP/due-nockb"
+for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
+case_run "nudge: without check-kb the other categories still print" 0 "fact due for recheck" -- \
+  "$TMP/due-nockb/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
+  "$TMP/due-nockb/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+
 # 5. A malformed (unreadable) queue file: one-line warning, never a crash, exit 0 — and
 #    every other tree and category still gets reported. Root only: chmod 000 has no
 #    effect for root, so the negative control would be vacuous there.
@@ -1081,7 +1106,7 @@ fi
 # can never touch ~/.claude, and a cwd outside any git repo so the project-tree branch
 # stays inert.
 SFX="$TMP/session-fx"; mkdir -p "$SFX/scripts" "$SFX/kb"
-for f in kb-session-start kb-due kb-verify kb-watch; do
+for f in kb-session-start kb-due kb-verify kb-watch check-kb; do
   cp "$ENGINE/scripts/$f" "$SFX/scripts/$f"; chmod +x "$SFX/scripts/$f"
 done
 printf '# fixture contract\n' > "$SFX/CONVENTIONS.md"
@@ -1112,7 +1137,7 @@ case_run "kb-session-start: names the due library and its recheck count" 0 \
 
 # A second fixture engine with nothing due at all: the block must be absent entirely.
 SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
-for f in kb-session-start kb-due kb-verify kb-watch; do
+for f in kb-session-start kb-due kb-verify kb-watch check-kb; do
   cp "$ENGINE/scripts/$f" "$SFX2/scripts/$f"; chmod +x "$SFX2/scripts/$f"
 done
 printf '# fixture contract\n' > "$SFX2/CONVENTIONS.md"
