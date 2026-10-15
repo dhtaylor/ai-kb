@@ -2,7 +2,8 @@
 """pii-scan — pass three of check-secrets: personal identifiers in committed text.
 
 Reads one file, prints `LINE:text` for each line holding one (at most 3), exits 0
-either way — check-secrets decides what a hit means. Three rules, kept narrow
+either way — check-secrets decides what a hit means. Given a directory, it scans every
+file under it (skipping .git) and prefixes each line with the file: `PATH:LINE:text`. Three rules, kept narrow
 because a hit blocks the commit:
 
   email    an address: local part, at sign, dotted domain (a file extension as the final label, as in an image name with a 2x suffix, does not count).
@@ -62,21 +63,31 @@ def personal(ident):
     return True
 
 
-def main():
-    data = open(sys.argv[1], "rb").read()
+def scan(path, allow, prefix=""):
+    data = open(path, "rb").read()
     if b"\0" in data:
         return
-    allow = allowlist()
     shown = 0
     for n, line in enumerate(data.decode("utf-8", "replace").split("\n"), 1):
         if "lint-allow" in line:
             continue
         if any(personal(i) and not any(fnmatch.fnmatchcase(i.lower(), a) for a in allow)
                for i in identifiers(line)):
-            print(f"{n}:{line.strip()[:120]}")
+            print(f"{prefix}{n}:{line.strip()[:120]}")
             shown += 1
             if shown == 3:
                 break
+
+
+def main():
+    target, allow = sys.argv[1], allowlist()
+    if not os.path.isdir(target):
+        return scan(target, allow)
+    for d, dirs, files in os.walk(target):
+        dirs[:] = sorted(x for x in dirs if x != ".git")
+        for f in sorted(files):
+            p = os.path.join(d, f)
+            scan(p, allow, os.path.relpath(p, target) + ":")
 
 
 main()

@@ -40,6 +40,24 @@ PLACEHOLDER = re.compile(r"[<>]")
 # router text, a skill's instructions. Naming a library "library" is not allowed
 # anyway, so this cannot mask a real reference.
 EXAMPLES = {"library:slug"}
+LINK = re.compile(r"\[\[([^\]]+)\]\]")
+FENCE = re.compile(r"^\s*(```|~~~)")
+SPAN = re.compile(r"(`+).*?\1")
+
+
+def links(text):
+    """(link, in_span) for every [[...]] outside a code fence. A fence is an example, as
+    check-kb treats a fenced stamp, and is skipped (issue #35). An inline code span is
+    often the syntax being explained, but authors also cite in one, so a span link is
+    still resolved: it only cannot warn that its library is absent."""
+    fenced = False
+    for line in text.splitlines():
+        if FENCE.match(line):
+            fenced = not fenced
+        elif not fenced:
+            for s in SPAN.finditer(line):
+                yield from ((l, True) for l in LINK.findall(s.group()))
+            yield from ((l, False) for l in LINK.findall(SPAN.sub("", line)))
 
 
 def slugs_of(lib: pathlib.Path):
@@ -53,12 +71,14 @@ def links_in(tree: pathlib.Path, label: str, index, dead, warn):
     for f in sorted(tree.rglob("*.md")):
         if NON_KB & set(f.relative_to(tree).parts):
             continue
-        for link in re.findall(r"\[\[([^\]]+)\]\]", f.read_text(errors="replace")):
+        for link, in_span in links(f.read_text(errors="replace")):
             if ":" not in link or PLACEHOLDER.search(link) or link in EXAMPLES:
                 continue                 # bare link, template placeholder, or the form in prose
             target_lib, _, slug = link.partition(":")
             where = f"{label}/{f.relative_to(tree)}"
             if target_lib not in index:
+                if in_span:              # explaining the form, or citing an absent library
+                    continue
                 warn.append(f"{where}: [[{link}]] -> library '{target_lib}' is not installed "
                             f"(soft dependency, not a broken link)")
             elif slug not in index[target_lib]:
