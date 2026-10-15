@@ -40,8 +40,12 @@ reports, per tree, everything a librarian should act on:
                              beginning "## Distill" (kb-distill Step 5 now names "## Distilled";
                              older notes say "## Distillation record", which the same prefix
                              matches). A note without one is counted.
+  5. unstamped sections    — sections that cite a Source:, carry no Verified: stamp and are not
+                             CONFLICTED, read with check-kb's own section reader (the one its
+                             verified: floor uses). §7 ranks unknown ahead of stale, and until
+                             now only a sweep surfaced them (issue #29).
 
-  A tree with nothing due in any of the four contributes no line at all. A failure computing one
+  A tree with nothing due in any of the five contributes no line at all. A failure computing one
   category for one tree (a malformed needs-attention.md, an INDEX.md with no freshness_horizon) is
   printed as a one-line warning to stderr and that category is skipped for that tree only — every
   other tree and every other category still gets computed. This hook must never crash a session.
@@ -49,7 +53,7 @@ reports, per tree, everything a librarian should act on:
 Usage: kb-due <engine-root> [tree ...] [--quiet|--nudge]
   Scans <engine-root>/kb/* plus any further trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
-  --nudge   print the full librarian nudge (sweep + recheck + queue + episodic), and
+  --nudge   print the full librarian nudge (sweep + recheck + queue + episodic + unstamped), and
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
@@ -148,11 +152,29 @@ def episodic_count(root: pathlib.Path):
                 if f.name != "INDEX.md" and not DISTILLED.search(f.read_text(errors="replace"))])
 
 
+def unstamped_count(root: pathlib.Path, check_kb):
+    """Served sections citing a Source: with no stamp, counted by check-kb's own section reader
+    (issue #29). Only a kb-audit sweep surfaced these before, though §7 ranks unknown ahead of
+    stale. Facts only: the golden set, the queue, the state leaves (open questions and the
+    contradiction register, §2), episodic notes and source stubs are records, and no stamp
+    could ever clear them."""
+    n = 0
+    for f in check_kb.kb_files(root):
+        rel = f.relative_to(root).parts
+        if f.name.endswith(("-golden.md", "-open-questions.md", "-contradictions.md")) \
+                or f.name == "needs-attention.md" \
+                or "episodic" in rel[:-1] or "sources" in rel[:-1]:
+            continue
+        text = f.read_text(errors="replace")
+        n += check_kb.unstamped(text.split("---\n", 2)[2] if text.startswith("---\n") else text)
+    return n
+
+
 def plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
-def nudge_for(s: dict, kb_verify, kb_watch):
+def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
     """(line-or-None, [warning, ...]) for one tree's row from status(). A warning never
     stops the other categories, this tree's own line, or any other tree — see module
     docstring: a malformed or uncomputable category is reported once and skipped."""
@@ -188,6 +210,16 @@ def nudge_for(s: dict, kb_verify, kb_watch):
     if en:
         parts.append(f"{plural(en, 'episodic note')} awaiting distillation")
 
+    try:
+        if check_kb is None:
+            raise RuntimeError("check-kb could not be loaded")
+        un = unstamped_count(tree, check_kb)
+    except Exception as e:
+        warnings.append(f"{lbl}: could not count unstamped sections ({e}) — skipped")
+        un = 0
+    if un:
+        parts.append(f"{plural(un, 'unstamped section')} (never verified)")
+
     line = f"{lbl}: " + "; ".join(parts) if parts else None
     return line, warnings
 
@@ -212,9 +244,13 @@ def main(argv) -> int:
     if nudge:
         kb_verify = load_module("kb_verify", "kb-verify")
         kb_watch = load_module("kb_watch", "kb-watch")
+        try:   # one category's dependency must never silence the others
+            check_kb = load_module("check_kb", "check-kb")
+        except Exception:
+            check_kb = None
         lines, warnings = [], []
         for s in rows:
-            line, warn = nudge_for(s, kb_verify, kb_watch)
+            line, warn = nudge_for(s, kb_verify, kb_watch, check_kb)
             if line:
                 lines.append(line)
             warnings += warn
@@ -223,7 +259,8 @@ def main(argv) -> int:
         if lines:
             print("\n".join(lines))
             print("Commands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
-                  "the rechecks above; kb-distill for the episodic notes above.")
+                  "the rechecks above; kb-distill for the episodic notes above; kb-audit "
+                  "<library> queues unstamped sections for verification.")
         return 0
 
     if quiet:

@@ -59,11 +59,10 @@ STAMP_DATE = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})")
 CONFLICTED = re.compile(r"^\s*status:\s*CONFLICTED\b")
 
 
-def derived_floor(body: str) -> str:
-    """The frontmatter verified: floor a file's body supports (§7): the oldest stamp among its
-    sections that are not CONFLICTED, or 'unknown' when one of those sections cites a Source:
-    and carries no stamp, or when nothing is stamped. Absent is not fresh. kb-verify imports
-    this to move the floor when it restamps, so there is one derivation, not two."""
+def served_sections(body: str) -> list:
+    """The sections of a file's body that are served — not CONFLICTED (§8) — each as
+    {sourced, dates}. derived_floor and kb-due's unstamped count read sections through this,
+    so "unstamped" means one thing everywhere."""
     sections, cur, fenced = [], {"sourced": False, "dates": [], "conflicted": False}, False
     for line in body.split("\n"):
         if FENCE.match(line):
@@ -80,8 +79,21 @@ def derived_floor(body: str) -> str:
         elif CONFLICTED.match(line):
             cur["conflicted"] = True
     sections.append(cur)
-    served = [s for s in sections if not s["conflicted"]]
-    if any(s["sourced"] and not s["dates"] for s in served):
+    return [s for s in sections if not s["conflicted"]]
+
+
+def unstamped(body: str) -> int:
+    """Served sections that cite a Source: and carry no stamp: unknown, not fresh (§7)."""
+    return sum(1 for s in served_sections(body) if s["sourced"] and not s["dates"])
+
+
+def derived_floor(body: str) -> str:
+    """The frontmatter verified: floor a file's body supports (§7): the oldest stamp among its
+    sections that are not CONFLICTED, or 'unknown' when one of those sections cites a Source:
+    and carries no stamp, or when nothing is stamped. Absent is not fresh. kb-verify imports
+    this to move the floor when it restamps, so there is one derivation, not two."""
+    served = served_sections(body)
+    if unstamped(body):
         return "unknown"
     return min((d for s in served for d in s["dates"]), default="unknown")
 
