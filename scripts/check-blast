@@ -82,7 +82,7 @@ NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
           ".claude-plugin", ".claude", ".git"}
 OWNER_LABEL = "owner-approved"
 CONFLICTED_RE = re.compile(r"^\s*status:\s*CONFLICTED\b", re.M)
-SCOPE_RE = re.compile(r"^scope:\s*(\S+)\s*$", re.M)
+SCOPE_RE = re.compile(r"^scope:\s*(\S+)\s*(?:\s#.*)?$", re.M)   # a trailing YAML comment is allowed
 # ADR-0004 / plan §2: repo: is a different HOME; product:/org: share the general
 # root and are ranked together, narrower than an unqualified general claim.
 RANK = {"repo": 0, "product": 1, "org": 1, "general": 2}
