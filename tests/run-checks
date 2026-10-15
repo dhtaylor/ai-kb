@@ -142,6 +142,11 @@ case_run "no script depends on a third-party module" 1 "" -- \
 build_clean "$TMP/scopeok"
 case_run "clean library passes check-scope" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/scopeok"
 
+# A trailing YAML comment is valid and must not hide the scope (issue #43).
+build_clean "$TMP/scopecomment"
+sed -i 's/^scope: general$/scope: general  # the tie-breaker says general/' "$TMP/scopecomment/widgets.md"
+case_run "scope: with an inline comment is read" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/scopecomment"
+
 build_clean "$TMP/scopemix"
 sed -i 's/^scope: general$/scope: product:acme/' "$TMP/scopemix/widgets.md"
 case_run "file scope disagreeing with its library" 1 "disagrees with its library" -- "$ENGINE/scripts/check-scope" "$TMP/scopemix"
@@ -1548,6 +1553,13 @@ sed -i 's/^scope: product:acme$/scope: general/' "$BL4/widgets.md"
 git -C "$BL4" add -A; git -C "$BL4" -c user.email=t@t -c user.name=t commit -qm "promote scope" >/dev/null 2>&1
 case_run "check-blast: scope promoted toward general" 1 "widgets.md: scope promoted product:acme -> general" -- \
   sh -c "cd '$BL4' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+# Issue #43: a comment on the new scope line must not hide the promotion from the gate.
+BL4C="$TMP/blast/promote-comment"; blast_base "$BL4C" "product:acme"
+sed -i 's/^scope: product:acme$/scope: general  # promoted/' "$BL4C/widgets.md"
+git -C "$BL4C" add -A; git -C "$BL4C" -c user.email=t@t -c user.name=t commit -qm "promote scope" >/dev/null 2>&1
+case_run "check-blast: promotion with an inline comment is still caught" 1 "widgets.md: scope promoted product:acme -> general" -- \
+  sh -c "cd '$BL4C' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 # A lateral reclassification (same rank) is not a promotion and must not fire.
 BL4B="$TMP/blast/lateral"; blast_base "$BL4B" "product:acme"

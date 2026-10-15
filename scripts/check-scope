@@ -48,7 +48,7 @@ def classify(root: pathlib.Path) -> str:
 
 
 def scope_of(text):
-    m = re.search(r"^scope:\s*(\S+)\s*$", text, re.M)
+    m = re.search(r"^scope:\s*(\S+)\s*(?:\s#.*)?$", text, re.M)   # a trailing YAML comment is allowed
     return m.group(1) if m else None
 
 
