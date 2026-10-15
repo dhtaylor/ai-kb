@@ -537,6 +537,42 @@ sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review
 case_run "--apply restamp records method: query" 0 "by: agent · method: query" -- \
   grep -F "Verified: $(date +%F)" "$TMP/vmethod/widgets.md"
 
+# Rechecks that cannot fail (issues #34, #41): a doc-review assertion that greps a page for its
+# own title, or one sentence reused across many sections, passes while the page exists. Found
+# statically, on every run, with nothing fetched or executed; reported, never a failure.
+build_clean "$TMP/vweak"
+S='Verified: 2026-09-22 · by: agent · method: doc-review'
+U='https://docs.example.test/widgets'
+LONG='A widget holds up to twelve things at once'
+{
+  printf '\n## Title grep\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qiF 'Widgets'\n" "$U"
+  printf '\n## Reuse one\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qiF '%s'\n" "$U" "$LONG"
+  printf '\n## Reuse two\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qiF '%s'\n" "$U" "$LONG"
+  printf '\n## Own sentence\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qiF 'the limit applies per widget, not per account'\n" "$U"
+  printf '\n## Local query\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: f=../x; [ -f \"\$f\" ] && ! grep -qE 'import' \"\$f\"\n"
+} >> "$TMP/vweak/widgets.md"
+fm gadgets general > "$TMP/vweak/gadgets.md"
+{ printf '# Gadgets\n\n## Reuse three\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qiF '%s'\n" "$U" "$LONG"; } >> "$TMP/vweak/gadgets.md"
+printf -- '- [gadgets](gadgets.md) — gadgets\n' >> "$TMP/vweak/INDEX.md"
+case_run "weak recheck: a short fragment is flagged" 0 "WEAK widgets.md § Title grep: greps 1 word" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: one (url, fragment) backing three sections in two files is flagged" 0 "WEAK one fragment backs 3 sections in 2 files" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: a claim's own sentence is not flagged" 1 "" -- \
+  bash -c '"$1" "$2" | grep -qE "WEAK .*Own sentence"' _ "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: a local query that greps a file is not flagged" 1 "" -- \
+  bash -c '"$1" "$2" | grep -qE "WEAK .*Local query"' _ "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: reported without --yes, and nothing runs" 0 "NOT run" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vweak" --all
+case_run "weak recheck: a warning, never a failure" 0 "" -- "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: the fixture library is otherwise clean" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/vweak"
+
 # A restamp moves the floor, so --apply rewrites a declared verified: to match (issue #27);
 # otherwise kb-verify's own output would fail check-kb in the library's pre-commit.
 build_clean "$TMP/vfloor"

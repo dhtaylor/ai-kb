@@ -164,6 +164,11 @@ Resolving a contradiction is never your call. It is never automated.
 
   A fold is `method: doc-review` — you read a document, you did not query a live system. Do not
   stamp it as anything stronger. **No evidence, no stamp**: record what you actually checked.
+  If you add a `Recheck:` that fetches the source, grep **the sentence that states this section's
+  claim**, quoted from the page — never its title, subject or an identifier, and never one
+  landing-page line reused for several sections. Those pass while the page exists and test
+  nothing; `kb-verify` reports them (§7). If no sentence on the page states the claim, the page
+  does not support a stamp for it either.
 - Update the file's frontmatter `verified:` floor — the oldest stamp among the file's sections
   **that are not `CONFLICTED`**. A disputed section is not served, so its stamp certifies nothing a
   reader can get; if every stamped section is disputed, the floor is `unknown` (§7). If any
