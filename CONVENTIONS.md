@@ -380,6 +380,11 @@ Verified: 2026-09-19 · by: agent · method: query
 - **File frontmatter carries `verified:` as the floor** — the oldest stamp among the file's sections
   that are not `CONFLICTED` (a disputed section is not served, so its stamp certifies nothing a reader
   can get), derived and lint-checked. Sweeps grep one field; the sections hold the truth.
+- **A floor over a gap is `unknown` too.** If any section that is not `CONFLICTED` cites a `Source:`
+  and carries no stamp, the floor is `unknown`, however recent the other stamps: the oldest stamp
+  among the stamped sections says nothing about the one nobody checked. `check-kb` derives the floor
+  this way and fails a declared one that disagrees, or a stamp dated in the future; `kb-verify
+  --apply` moves the floor when it restamps.
 
 ## 8. Contradictions — make them unretrievable, not merely annotated
 
@@ -574,6 +579,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
 | orphans | every file reachable from the root `INDEX.md` by router links; golden set and `documents/` exempt (§3) | **built** — `check-kb` |
 | stamp placement | no indented `Verified:` / `Recheck:` line outside a code fence (§7) | **built** — `check-kb` |
+| `verified:` floor | a declared floor equals the one derived from the section stamps; no stamp dated in the future (§7) | **built** — `check-kb` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
 | secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |

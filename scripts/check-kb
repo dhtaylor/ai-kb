@@ -7,6 +7,8 @@ Covers, within a single root:
   * slug uniqueness   — within-root filename uniqueness; no [[slug]] at a path-addressed file
   * orphans           — every file reachable from the root INDEX.md by router links
   * stamp placement   — no indented Verified:/Recheck: line outside a code fence
+  * verified: floor   — a declared floor equals the one derived from the section stamps (§7);
+                        no stamp is dated in the future
 
 ORPHANS are the defect nothing else catches at commit time: an unrouted file
 passes every other check and is invisible to retrieval, which descends routers
@@ -26,7 +28,7 @@ no knowledge content, so there is no sensible default and a silent one would
 report a clean run over zero files.
 Exit 0 clean, 1 on any defect.
 """
-import pathlib, re, sys
+import datetime, pathlib, re, sys
 from collections import Counter
 
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
@@ -43,6 +45,7 @@ EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}
 EXAMPLE_SLUGS = {"slug", "general:slug", "general:some-fact", "cross-link",
                  "source", "YYYY-MM-DD-domain-notes"}
 REQUIRED = ("name", "description", "domain", "scope")
+TODAY = datetime.date.today().isoformat()
 
 
 ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
@@ -50,6 +53,37 @@ ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
 # certifies nothing, and its Recheck never runs (§7). Inside a code fence it is an example.
 INDENTED_STAMP = re.compile(r"^\s+(Verified|Recheck):")
 FENCE = re.compile(r"^\s*(```|~~~)")
+HEADING = re.compile(r"^#{1,6}\s")
+SOURCE = re.compile(r"^Source:")
+STAMP_DATE = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})")
+CONFLICTED = re.compile(r"^\s*status:\s*CONFLICTED\b")
+
+
+def derived_floor(body: str) -> str:
+    """The frontmatter verified: floor a file's body supports (§7): the oldest stamp among its
+    sections that are not CONFLICTED, or 'unknown' when one of those sections cites a Source:
+    and carries no stamp, or when nothing is stamped. Absent is not fresh. kb-verify imports
+    this to move the floor when it restamps, so there is one derivation, not two."""
+    sections, cur, fenced = [], {"sourced": False, "dates": [], "conflicted": False}, False
+    for line in body.split("\n"):
+        if FENCE.match(line):
+            fenced = not fenced
+        elif fenced:
+            continue
+        elif HEADING.match(line):
+            sections.append(cur)
+            cur = {"sourced": False, "dates": [], "conflicted": False}
+        elif SOURCE.match(line):
+            cur["sourced"] = True
+        elif m := STAMP_DATE.match(line):
+            cur["dates"].append(m.group(1))
+        elif CONFLICTED.match(line):
+            cur["conflicted"] = True
+    sections.append(cur)
+    served = [s for s in sections if not s["conflicted"]]
+    if any(s["sourced"] and not s["dates"] for s in served):
+        return "unknown"
+    return min((d for s in served for d in s["dates"]), default="unknown")
 
 
 def kb_files(root: pathlib.Path) -> list:
@@ -170,6 +204,16 @@ def main(root: pathlib.Path) -> int:
             elif not fenced and (m := INDENTED_STAMP.match(line)):
                 defects.append(f"{f}:{n}: indented {m.group(1)}: line — kb-verify reads it only "
                                f"at the start of a line, so this one certifies nothing")
+            elif not fenced and (m := STAMP_DATE.match(line)) and m.group(1) > TODAY:
+                defects.append(f"{f}:{n}: stamp dated in the future ({m.group(1)})")
+
+        if "verified" in fm:
+            declared = fm["verified"].split(" #")[0].strip()      # a trailing YAML comment
+            floor = derived_floor(block[2])
+            if declared != floor:
+                defects.append(f"{f}: frontmatter verified: {declared}, but the derived floor is "
+                               f"{floor} (§7: oldest non-CONFLICTED stamp; unknown if a sourced "
+                               f"section is unstamped)")
 
     for name, count in Counter(f.name for f in files).items():
         if count > 1 and name not in PATH_ADDRESSED:

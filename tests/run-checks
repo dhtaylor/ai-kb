@@ -120,6 +120,33 @@ build_clean "$TMP/fencedstamp"
 printf '\n## Example\n\n- How a stamp looks:\n\n  ```\n  Verified: 2026-09-22 · by: agent · method: manual\n  ```\n' >> "$TMP/fencedstamp/widgets.md"
 case_run "an indented stamp inside a code fence is an example, not a stamp" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fencedstamp"
 
+# The frontmatter verified: floor is derived from the section stamps and lint-checked (§7,
+# issue #27): the oldest stamp among sections that are not CONFLICTED, and unknown when a
+# sourced section is unstamped or nothing is stamped. A stamp may not be dated in the future.
+floor_lib() { # floor_lib <dir> <verified-value> -- widgets.md declares that floor
+  build_clean "$1"
+  sed -i "s/^scope: general\$/scope: general\nverified: $2/" "$1/widgets.md"
+}
+floor_lib "$TMP/floorok" 2026-09-22
+case_run "floor: matching the one stamp passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorok"
+floor_lib "$TMP/floorold" 1999-01-01
+case_run "floor: a date no stamp supports fails" 1 "derived floor is 2026-09-22" -- "$ENGINE/scripts/check-kb" "$TMP/floorold"
+floor_lib "$TMP/floorpartial" 2026-09-22
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$TMP/floorpartial/widgets.md"
+case_run "floor: a date over an unstamped sourced section fails" 1 "derived floor is unknown" -- "$ENGINE/scripts/check-kb" "$TMP/floorpartial"
+floor_lib "$TMP/floorpartialok" unknown
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$TMP/floorpartialok/widgets.md"
+case_run "floor: unknown over an unstamped sourced section passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorpartialok"
+floor_lib "$TMP/floorconf" 2026-09-22
+printf '\n## Colour\n\nstatus: CONFLICTED · since: 2026-01-01\n\nClaim A: red. Claim B: blue.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n\n## Size\n\nSource: manual\n' >> "$TMP/floorconf/widgets.md"
+sed -i 's/^## Size$/## Size\n\nstatus: CONFLICTED · since: 2026-01-01/' "$TMP/floorconf/widgets.md"
+case_run "floor: CONFLICTED sections' stamps and gaps are ignored" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorconf"
+floor_lib "$TMP/floorcomment" "2026-09-22  # oldest of one"
+case_run "floor: an inline YAML comment on verified: is allowed" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorcomment"
+build_clean "$TMP/floorfuture"
+sed -i 's/^Verified: 2026-09-22/Verified: 2999-01-01/' "$TMP/floorfuture/widgets.md"
+case_run "a stamp dated in the future fails" 1 "dated in the future" -- "$ENGINE/scripts/check-kb" "$TMP/floorfuture"
+
 build_clean "$TMP/collide"
 mkdir -p "$TMP/collide/widgets"
 fm inner general > "$TMP/collide/widgets/inner.md"; printf '# Inner\n\ntext\n' >> "$TMP/collide/widgets/inner.md"
@@ -509,6 +536,17 @@ sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review
 "$ENGINE/scripts/kb-verify" "$TMP/vmethod" --all --yes --apply >/dev/null 2>&1
 case_run "--apply restamp records method: query" 0 "by: agent · method: query" -- \
   grep -F "Verified: $(date +%F)" "$TMP/vmethod/widgets.md"
+
+# A restamp moves the floor, so --apply rewrites a declared verified: to match (issue #27);
+# otherwise kb-verify's own output would fail check-kb in the library's pre-commit.
+build_clean "$TMP/vfloor"
+sed -i 's/^scope: general$/scope: general\nverified: 2026-01-01/' "$TMP/vfloor/widgets.md"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vfloor/widgets.md"
+printf 'Recheck: true\n' >> "$TMP/vfloor/widgets.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vfloor" --all --yes --apply >/dev/null 2>&1
+case_run "--apply moves the frontmatter floor with the restamp" 0 "verified: $(date +%F)" -- \
+  grep -F "verified:" "$TMP/vfloor/widgets.md"
+case_run "--apply leaves a library check-kb still passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/vfloor"
 
 # Issue #19: the value after --budget is the budget, not a second tree.
 build_clean "$TMP/vbudget"
