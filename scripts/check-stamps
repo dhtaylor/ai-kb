@@ -22,13 +22,17 @@
 # one. A false human stamp does not just misattribute; it suppresses the re-check
 # for ten times as long.
 #
-# Usage: check-stamps [<range>]     default: HEAD~1..HEAD
-#   In CI, pass the pushed range (before..after).
+# Usage: check-stamps [<range>]     default: HEAD~1..HEAD (HEAD alone on a first commit)
+#   In CI, pass the pushed range (before..after). A repository with no commits yet
+#   (a library before its first commit) has nothing to check and skips.
 # Exit 0 clean, 1 on any offending commit.
 set -uo pipefail
 
-range="${1:-HEAD~1..HEAD}"
 git rev-parse --git-dir >/dev/null 2>&1 || { echo "check-stamps: not a git repository" >&2; exit 2; }
+git rev-parse -q --verify HEAD >/dev/null || { echo "check-stamps: skip (no history yet)"; exit 0; }
+if [ -n "${1:-}" ]; then range="$1"
+elif git rev-parse -q --verify HEAD~1 >/dev/null; then range="HEAD~1..HEAD"
+else range="HEAD"; fi
 
 commits=$(git rev-list "$range" 2>/dev/null) || {
   echo "check-stamps: cannot resolve range '$range' — nothing checked" >&2; exit 2; }

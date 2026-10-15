@@ -327,6 +327,25 @@ printf '\nSee [[beta:not-a-slug]].\n' >> "$TMP/proj2/knowledge/widgets.md"
 case_run "project tree's cross-library link is checked" 1 "has no slug" -- \
   "$ENGINE/scripts/check-xlinks" "$TMP/kb" "$TMP/proj2/knowledge"
 
+# Issue #35: a fence is an example and is skipped; a code span naming an absent library is
+# the syntax explained, and is not warned about.
+mkdir -p "$TMP/kbcode"; build_clean "$TMP/kbcode/alpha"
+printf '\nNo cross-root case: nothing here writes `[[gamma:widgets]]`.\n\n```\n[[delta:widgets]]\n```\n' >> "$TMP/kbcode/alpha/widgets.md"
+case_run "a link inside a code span or fence is not resolved" 0 "0 unresolvable" -- "$ENGINE/scripts/check-xlinks" "$TMP/kbcode"
+printf '\nBut [[gamma:widgets]] in prose is.\n' >> "$TMP/kbcode/alpha/widgets.md"
+case_run "the same link in prose still is" 0 "1 unresolvable" -- "$ENGINE/scripts/check-xlinks" "$TMP/kbcode"
+# ...but authors also CITE in a span (design-thesis does), so a span into an installed
+# library is still resolved, and a dead slug there still fails.
+build_clean "$TMP/kbcode/beta"
+printf '
+Cited in code: (`[[beta:widgets]]`).
+' >> "$TMP/kbcode/alpha/widgets.md"
+case_run "a span link into an installed library is still resolved" 0 "1 cross-link(s) resolved" -- "$ENGINE/scripts/check-xlinks" "$TMP/kbcode"
+printf '
+Dead in code: (`[[beta:no-such-thing]]`).
+' >> "$TMP/kbcode/alpha/widgets.md"
+case_run "a dead span link into an installed library fails" 1 "has no slug" -- "$ENGINE/scripts/check-xlinks" "$TMP/kbcode"
+
 # ---------------------------------------- library pre-commit hook: xlinks ----
 # check-xlinks is regression-tested above, but nothing had run it against real
 # content at the point a link actually breaks: a library's own pre-commit hook
@@ -1295,6 +1314,18 @@ git -C "$TMP/pii1" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>
 case_run "PII pass runs in --all mode" 1 "PII?" -- \
   sh -c "cd '$TMP/pii1' && '$ENGINE/scripts/check-secrets' --all"
 
+# Issue #35: pii-scan takes a directory too, so callers need not loop. A file's output is
+# unchanged (check-secrets parses it); a directory's lines are prefixed with the file.
+mkdir -p "$TMP/piidir/sub" "$TMP/piidir/.git"
+printf 'clean line\n' > "$TMP/piidir/a.md"
+printf 'x\nmail jane.doe@corp''mail.io\n' > "$TMP/piidir/sub/b.md"
+printf 'mail jane.doe@corp''mail.io\n' > "$TMP/piidir/.git/c"
+case_run "pii-scan on a directory reports file:line" 0 "sub/b.md:2:mail" -- "$ENGINE/scripts/pii-scan" "$TMP/piidir"
+case_run "pii-scan on a directory skips .git" 0 "" -- \
+  sh -c "! '$ENGINE/scripts/pii-scan' '$TMP/piidir' | grep -q '.git/'"
+case_run "pii-scan on a file keeps LINE:text" 0 "2:mail" -- \
+  sh -c "'$ENGINE/scripts/pii-scan' '$TMP/piidir/sub/b.md' | grep -qx '2:mail jane.doe@corp''mail.io' && echo '2:mail'"
+
 # Regression for the distill rule (CONVENTIONS §6): a security finding records the
 # secret's reference, location and action, never its value or a colleague's identity.
 # The finding is the shape the rule prescribes; literals are assembled at run time.
@@ -1341,6 +1372,18 @@ sed -i 's/by: agent/by: human/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -
 git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "a person checked it" >/dev/null 2>&1
 case_run "human stamp without an agent trailer is allowed" 0 "clean" -- \
   sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
+
+# Issue #35: a brand-new library has no commits, and kb-create-domain verifies before the
+# first one. No history is nothing to check, not an error; nor is a first commit's default range.
+mkdir -p "$TMP/stampnew"; git init -q "$TMP/stampnew"
+case_run "check-stamps on a library with no commits skips" 0 "no history yet" -- \
+  sh -c "cd '$TMP/stampnew' && '$ENGINE/scripts/check-stamps'"
+printf 'x\n' > "$TMP/stampnew/a.md"; git -C "$TMP/stampnew" add -A
+git -C "$TMP/stampnew" -c user.email=t@t -c user.name=t commit -qm first >/dev/null 2>&1
+case_run "check-stamps default range on a first commit checks it" 0 "clean (1 commit(s)" -- \
+  sh -c "cd '$TMP/stampnew' && '$ENGINE/scripts/check-stamps'"
+case_run "check-stamps: an unresolvable explicit range is still an error" 2 "cannot resolve" -- \
+  sh -c "cd '$TMP/stampnew' && '$ENGINE/scripts/check-stamps' nosuch..HEAD"
 
 # The stamps live in libraries, so the library CI template must run this check.
 # Run the template's own step — extracted from the YAML, with GitHub's
