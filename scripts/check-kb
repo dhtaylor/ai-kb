@@ -59,6 +59,32 @@ HEADING = re.compile(r"^#{1,6}\s")
 SOURCE = re.compile(r"^Source:")
 STAMP_DATE = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})")
 CONFLICTED = re.compile(r"^\s*status:\s*CONFLICTED\b")
+UNCORROBORATED = re.compile(r"^\s*status:\s*UNCORROBORATED\b")
+
+
+def marked_sections(body: str, marker=UNCORROBORATED) -> list:
+    """The text of each section a status marker sits directly under (§8: a marker applies to
+    the heading it sits under, never to the headings enclosing it). check-golden reads an
+    uncorroborated case's excerpt through this, so the case tests the claim that is marked."""
+    sections, cur, fenced = [], [], False
+    for line in body.split("\n"):
+        if FENCE.match(line):
+            fenced = not fenced
+        elif not fenced and HEADING.match(line):
+            sections.append(cur); cur = []
+        cur.append(line)
+    sections.append(cur)
+    out, fenced = [], False
+    for s in sections:
+        marked = False
+        for line in s:
+            if FENCE.match(line):
+                fenced = not fenced
+            elif not fenced and marker.match(line):
+                marked = True
+        if marked:
+            out.append("\n".join(s))
+    return out
 
 
 def served_sections(body: str) -> list:

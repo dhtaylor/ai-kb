@@ -38,7 +38,8 @@ CONFLICTED-MARKER REMOVAL: counts occurrences of the inline `status: CONFLICTED`
 rename. A drop in count is a contradiction being resolved outside the review §8 requires ("do not
 silently pick a winner"). Checked over every tracked knowledge file, not only "fact files" as
 defined above, because a state leaf (a `<domain>-contradictions.md` register) can carry the same
-inline marker syntax.
+inline marker syntax. Removing an inline `status: UNCORROBORATED` marker is counted the same way: it
+serves a one-source claim as settled, which only the authority confirming it justifies.
 
 SCOPE PROMOTION: ADR-0004 draws one tier boundary explicitly — repo:<project> is a different HOME
 (the project repository) from product:<vendor> / org:<company> / general, which all share ONE home
@@ -82,6 +83,7 @@ NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
           ".claude-plugin", ".claude", ".git"}
 OWNER_LABEL = "owner-approved"
 CONFLICTED_RE = re.compile(r"^\s*status:\s*CONFLICTED\b", re.M)
+UNCORROBORATED_RE = re.compile(r"^\s*status:\s*UNCORROBORATED\b", re.M)
 SCOPE_RE = re.compile(r"^scope:\s*(\S+)\s*(?:\s#.*)?$", re.M)   # a trailing YAML comment is allowed
 # ADR-0004 / plan §2: repo: is a different HOME; product:/org: share the general
 # root and are ranked together, narrower than an unqualified general claim.
@@ -175,6 +177,11 @@ def find_blast(base: str, head: str, kind: str):
             if new_n < old_n:
                 findings.append((new_path, f"removes a CONFLICTED marker ({old_n} -> {new_n}) — "
                                             f"resolving a contradiction is never automated (CONVENTIONS §8)"))
+            old_u, new_u = len(UNCORROBORATED_RE.findall(old_text)), len(UNCORROBORATED_RE.findall(new_text))
+            if new_u < old_u:
+                findings.append((new_path, f"removes an UNCORROBORATED marker ({old_u} -> {new_u}) — "
+                                            f"a one-source claim is served as settled only once the "
+                                            f"authority confirms it (CONVENTIONS §8)"))
 
             old_m, new_m = SCOPE_RE.search(old_text), SCOPE_RE.search(new_text)
             if old_m and new_m and old_m.group(1) != new_m.group(1):

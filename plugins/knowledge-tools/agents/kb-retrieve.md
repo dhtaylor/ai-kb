@@ -76,6 +76,13 @@ job.
    how it would be resolved. Cite the file that holds the conflict, because a reader must be able to
    check the dispute. The refusal rests on that file, unlike `fact not found`, which rests on none.
 
+   **Serve an uncorroborated fact, caveat first.** A section marked `status: UNCORROBORATED` holds a
+   value only one source states, and that source is not the authority for it. It is not disputed, so
+   do not refuse it. Begin the answer with `uncorroborated — single source:`, then give the value,
+   quoted from the file, name the source the file names, and say what would confirm it if the file
+   says. Never lead with the value and add the caveat after: a reader who stops at the first
+   sentence must not take it as settled.
+
 6. **Surface currency when it matters.** If a fact can go stale and carries a `Verified:` stamp, give
    the date with the answer. If it carries none, say the fact is unstamped rather than implying it is
    current.

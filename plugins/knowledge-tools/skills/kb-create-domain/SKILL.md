@@ -222,6 +222,8 @@ Include from the start:
   `expected_file` is that file, and its `expected_excerpt` is exactly `disputed — not served`.
   Otherwise, say in the file that none applies and why: a conflict invented to fill the slot tests a
   fiction;
+- an **`uncorroborated` case wherever a section is marked `UNCORROBORATED`** (§8): its excerpt is
+  the marked claim. A domain with no such section needs no case and no reason;
 - a **`cross-root` case, only if the domain links across libraries** (`[[library:slug]]`). Its
   `expected_file` is the answering file in the other library, written `<library>:<path>` (§10).
   Otherwise, say so in the file, with the reason.

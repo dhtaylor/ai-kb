@@ -431,6 +431,28 @@ which is right:
 - register a one-line flag + pointer in `<domain>-contradictions.md`, routed from the library's
   `INDEX.md` like any state leaf (§3); the canonical note stays in the file that owns the topic.
 
+**One source, unconfirmed by the authority: `UNCORROBORATED`.** A value stated by a single source
+that is not the authority for it (a community post, say, for a figure the vendor never published) is
+not a contradiction. There is no second claim, and marking it `CONFLICTED` makes retrieval refuse it
+and forces someone to invent "the other side". Left as plain text with a caveat in its prose, it is
+served as settled, and the caveat may never reach the answer. Instead:
+
+- mark the section **inline** with `status: UNCORROBORATED · since: YYYY-MM-DD`, under the narrowest
+  heading that holds the claim (the placement rule above applies to every status marker). Name the
+  single source, and say what would confirm it: which authority, and where it would say so;
+- **retrieval serves it, caveat first.** The answer begins `uncorroborated — single source:`, then
+  gives the value, quoted, and names the source. The golden set carries an `uncorroborated` case
+  proving it, wherever the library holds such a section (§10);
+- the section is **served**, so its stamp counts toward the file's `verified:` floor, and an unstamped
+  one counts as unstamped (§7). Its currency still matters: the single source can change too;
+- **it clears when the authority speaks.** If the authority confirms the value, remove the marker
+  and cite the authority. If it states another value, that is a correction or a contradiction, not
+  an uncorroborated claim. `check-blast` flags a removed marker for review, as it does a removed
+  `CONFLICTED` one;
+- **it is not a hedge.** A claim the file itself infers or has not tested is a hedge, served under
+  `Not established in the knowledge base` (§10). `UNCORROBORATED` is a claim a source does state,
+  where the weakness is the source's authority, not the reasoning.
+
 **Blocking vs. informational.** A contradiction on a fact actively needed is *blocking* and names who
 resolves it and via what artifact. A blocking contradiction **must be cleared before its domain is
 promoted to the general tier** (§9). Flagging forever just accretes.
@@ -486,6 +508,8 @@ Every retrieval agent's body states, and every agent is held to:
 - **On `CONFLICTED`:** serve nothing (§8). The answer begins *"disputed — not served"*, states both
   claims and who makes each, and cites the file holding the conflict. That is the one refusal that
   cites, because the dispute itself is what the reader must be able to check.
+- **On `UNCORROBORATED`:** serve it, caveat first (§8). The answer begins *"uncorroborated — single
+  source:"*, gives the value and names the source.
 - **Surface the `verified:` date** on freshness-sensitive facts.
 
 **The golden set** lives at the library root, `<domain>-golden.md`, and travels with the domain it
@@ -497,7 +521,7 @@ answers to the same questions, and a retrieval agent is held to it exactly as it
 set: never opened, and excluded from every search. Each record carries:
 
 ```yaml
-- case: positive | negative | unresolved | cross-root
+- case: positive | negative | unresolved | cross-root | uncorroborated
   question: <what is asked>
   expected_file: <the file that must answer it; a cross-root case may write <library>:<path>>
   expected_excerpt: <text that must appear, grep-verifiable against expected_file>
@@ -515,6 +539,13 @@ An **`unresolved` case** names the file holding the `CONFLICTED` section as `exp
 phrase, so `check-golden` checks something else: that the named file really holds a `CONFLICTED`
 section, so the case tests a dispute that exists. `grade-eval` requires the phrase in the answer and
 the file among its citations.
+
+An **`uncorroborated` case names the file holding the `UNCORROBORATED` section**, and its
+`expected_excerpt` is the marked claim. `check-golden` checks that the excerpt sits in a section
+carrying the marker, so the case tests the claim that is marked and not a sound neighbour.
+`grade-eval` requires the excerpt in the answer, the file among its citations, and the answer to begin
+`uncorroborated — single source`. **It is required wherever the library holds such a section**, and
+not otherwise: `check-golden` fails a library holding the marker with no such case.
 
 A **`cross-root` case names the file in the other library that answers it**, written
 `<library>:<path>`, for example `agile-requirements:elicitation-techniques.md`, and its excerpt is
@@ -593,7 +624,7 @@ keywords: [<retrieval terms an agent might grep for>]
 ---
 ```
 
-Section-level `status: CONFLICTED` (§8) and `provenance: BROKEN` (§6, written by a person after
+Section-level `status: CONFLICTED` and `status: UNCORROBORATED` (§8), and `provenance: BROKEN` (§6, written by a person after
 triaging a dead source) are written **inline at the section**, not in frontmatter — they describe a claim, not a document.
 
 `tags`/`keywords` exist so retrieval can route by grepping frontmatter — keep them from a shared
@@ -631,7 +662,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | assertions that cannot fail | a fetched fragment of ≤4 words, or one (url, fragment) backing >2 sections or several files; reported every run, never a failure (§7) | **built** — `kb-verify` |
 | ownership resolution | who a finding belongs to, by CODEOWNERS' last-match-wins rule | **built** — `kb-owner` |
 | stamp honesty | a commit claiming agent co-authorship does not also add a `by: human` stamp | **built** — `check-stamps` |
-| high-blast gate | a diff that deletes a knowledge file, drops a `status: CONFLICTED` marker, or promotes a fact's scope toward `general` is flagged, for CI to hold until an owner labels it; detection only | **built** — `check-blast` |
+| high-blast gate | a diff that deletes a knowledge file, drops a `status: CONFLICTED` or `status: UNCORROBORATED` marker, or promotes a fact's scope toward `general` is flagged, for CI to hold until an owner labels it; detection only | **built** — `check-blast` |
 | tool-scope declaration | each agent, skill and command declares a tool tier and is consistent with it; proves the declaration, not that a skill cannot use an undeclared tool | **built** — `check-tool-scope` |
 | sweep and re-check due | which trees are due for a sweep, and how many facts, open queue items and episodic notes await a librarian; a reminder, exit 0 always | **built** — `kb-due` |
 | external drift | a saved snapshot of an external source still matches its recorded baseline; drift is queued, never applied; offline, fetches nothing | **built** — `kb-watch` |

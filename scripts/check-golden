@@ -9,7 +9,8 @@ descends routers and never searches, so a file no router reaches cannot be route
 check-kb's orphan check exempts documents/ and the golden set, which would otherwise be
 places a record could hide. A cross-root case may name its expected_file in another library
 registered on this machine as <library>:<path>; it is checked there, against that library's
-routers. No LLM, no agent, no network — it runs on every commit and is
+routers. An uncorroborated case's excerpt must sit in a section marked UNCORROBORATED, and a
+library holding such a section must carry one (CONVENTIONS §8, §10). No LLM, no agent, no network — it runs on every commit and is
 cheap enough to.
 
 What it CANNOT do, and this is the point of the split: it cannot tell whether an
@@ -23,8 +24,9 @@ Exit 0 clean, 1 on any defect.
 """
 import importlib.machinery, importlib.util, pathlib, re, sys
 
-VALID_CASES = {"positive", "negative", "unresolved", "cross-root"}
+VALID_CASES = {"positive", "negative", "unresolved", "cross-root", "uncorroborated"}
 DISPUTED = "disputed — not served"   # the refusal of a CONFLICTED fact (CONVENTIONS §10)
+ws = lambda s: re.sub(r"\s+", " ", s)
 
 
 def load_script(name):
@@ -150,12 +152,33 @@ def main(root: pathlib.Path) -> int:
             if re.sub(r"\s+", " ", alt) not in re.sub(r"\s+", " ", target.read_text()):
                 defects.append(f"{where} [{case}]: alt_excerpt not found in {ef} — "
                                f"the oracle tests nothing: {alt[:60]!r}")
+        if case == "uncorroborated":
+            # The case tests the caveat a marked claim is served with, so its excerpt must be
+            # the marked claim, not a sound neighbour in the same file.
+            marked = [ws(s) for s in ckb.marked_sections(target.read_text())]
+            if not marked:
+                defects.append(f"{where} [uncorroborated]: {ef} has no UNCORROBORATED section — "
+                               f"the case tests a caveat nothing carries")
+            else:
+                for e in [exc] + alts:
+                    if not any(ws(e) in s for s in marked):
+                        defects.append(f"{where} [uncorroborated]: excerpt is not in a section "
+                                       f"marked UNCORROBORATED in {ef}: {e[:60]!r}")
 
     if counts["negative"] < 2:
         defects.append(f"{gf.name}: {counts['negative']} negative case(s); the contract requires >=2 "
                        f"(a KB that never refuses is a KB that guesses)")
     if counts["unresolved"] == 0 and "unresolved" not in text.lower():
         defects.append(f"{gf.name}: no unresolved case and no stated reason for its absence")
+    if counts["uncorroborated"] == 0:
+        # Required only where the library holds one: a caveat invented to fill a slot tests a
+        # fiction, so a library with no marker needs neither a case nor a reason.
+        holding = [f.name for f in ckb.kb_files(root)
+                   if f != gf and ckb.marked_sections(f.read_text(errors="replace"))]
+        if holding:
+            defects.append(f"{gf.name}: no uncorroborated case, but {', '.join(sorted(holding))} "
+                           f"holds a section marked UNCORROBORATED — nothing proves it is served "
+                           f"caveat first")
 
     for d in defects:
         print(f"FAIL {d}")

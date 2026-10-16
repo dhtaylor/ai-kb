@@ -293,6 +293,64 @@ case_run "unresolved case naming a file with no CONFLICTED section" 1 "no CONFLI
 build_unresolved "$TMP/goldun3" "status: CONFLICTED" "CONFLICTED"
 case_run "unresolved case whose excerpt is not the refusal phrase" 1 "disputed — not served" -- "$ENGINE/scripts/check-golden" "$TMP/goldun3"
 
+# UNCORROBORATED (issue #33): one unofficial source for a value the authority never published.
+# Not a dispute, so it is served, caveat first. Mapped to CONFLICTED it was refused, with the
+# "other side" invented; left as plain text it was served with no caveat at all.
+build_uncorr() { # build_uncorr <dir> <marker> [excerpt|-]   ("-": no uncorroborated record)
+  build_clean "$1"
+  printf '\n## Calibration\n\nstatus: %s\n\nA widget is calibrated to 3 mm.\n\nSource: a community forum post\n' "$2" >> "$1/widgets.md"
+  [ "${3:-}" = "-" ] && return 0
+  python3 - "$1/fx-golden.md" "${3:-A widget is calibrated to 3 mm.}" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+rec = ("- case: uncorroborated\n  question: What is a widget calibrated to?\n"
+       "  expected_file: widgets.md\n  expected_excerpt: \"" + sys.argv[2] + "\"\n\n")
+i = t.index("- case: negative")
+p.write_text(t[:i] + rec + t[i:])
+PY
+}
+UMARK="UNCORROBORATED · since: 2026-10-01"
+build_uncorr "$TMP/gunc" "$UMARK"
+case_run "uncorroborated case: excerpt in the marked section passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/gunc"
+case_run "uncorroborated: a marked section passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/gunc"
+build_uncorr "$TMP/gunc2" "$UMARK" -
+case_run "uncorroborated: a marked section with no golden case fails" 1 "no uncorroborated case" -- "$ENGINE/scripts/check-golden" "$TMP/gunc2"
+build_uncorr "$TMP/gunc3" "settled"
+case_run "uncorroborated case naming a section with no marker fails" 1 "no UNCORROBORATED section" -- "$ENGINE/scripts/check-golden" "$TMP/gunc3"
+build_uncorr "$TMP/gunc4" "$UMARK" "A widget holds up to 12 things."
+case_run "uncorroborated case whose excerpt is outside the marked section fails" 1 "not in a section marked UNCORROBORATED" -- \
+  "$ENGINE/scripts/check-golden" "$TMP/gunc4"
+# build_uncorr inserts its record after the fixture's positive: it is Q2.
+gu() { # gu <name> <want-exit> <want-text> <Q2 record>
+  printf 'Q1|widgets.md|A widget holds up to 12 things.\n%s\nQ3||fact not found — check KB\nQ4||fact not found — check KB\n' "$4" > "$TMP/gunc/answers"
+  case_run "grade-eval: $1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/gunc" "$TMP/gunc/answers"
+}
+gu "uncorroborated: the lead phrase, then the quoted value, passes" 0 "4/4 passed" \
+  'Q2|widgets.md|uncorroborated — single source: "A widget is calibrated to 3 mm." Source: a community forum post.'
+gu "uncorroborated: a lead phrase in bold is the same lead" 0 "4/4 passed" \
+  'Q2|widgets.md|**Uncorroborated — single source:** "A widget is calibrated to 3 mm."'
+gu "uncorroborated: the value served without the caveat first fails" 1 "does not lead with 'uncorroborated — single source'" \
+  'Q2|widgets.md|"A widget is calibrated to 3 mm." (uncorroborated — single source)'
+gu "uncorroborated: the caveat without the value fails" 1 "excerpt not in answer" \
+  'Q2|widgets.md|uncorroborated — single source: it is about 3 millimetres.'
+mk_ur() { # mk_ur <out.jsonl> <file read>...  — reads only, the shape grade-routing grades
+  python3 - "$@" <<'PY'
+import json, sys
+recs = [{"type": "user", "message": {"role": "user", "content": "a question"}}]
+for i, f in enumerate(sys.argv[2:]):
+    recs.append({"type": "assistant", "message": {"role": "assistant", "content": [
+        {"type": "tool_use", "id": f"t{i}", "name": "Read", "input": {"file_path": f}}]}})
+    recs.append({"type": "user", "message": {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": f"t{i}", "content": "ok"}]}})
+open(sys.argv[1], "w").write("\n".join(json.dumps(r) for r in recs) + "\n")
+PY
+}
+GU="$(cd "$TMP/gunc" && pwd -P)"
+mk_ur "$TMP/gunc/idx.jsonl" "$GU/INDEX.md"
+printf 'Q2|idx.jsonl\n' > "$TMP/gunc/map"
+case_run "grade-routing: an uncorroborated case must Read its file" 1 "never Read" -- \
+  "$ENGINE/scripts/grade-routing" "$GU" "$TMP/gunc/map"
+
 # ----------------------------------------------------------- check-xlinks ----
 mkdir -p "$TMP/kb"; build_clean "$TMP/kb/alpha"; build_clean "$TMP/kb/beta"
 printf '\nSee [[beta:widgets]].\n' >> "$TMP/kb/alpha/widgets.md"
@@ -1821,6 +1879,15 @@ sed -i '/status: CONFLICTED/d' "$BL3/widgets.md"
 git -C "$BL3" add -A; git -C "$BL3" -c user.email=t@t -c user.name=t commit -qm "resolve conflict" >/dev/null 2>&1
 case_run "check-blast: CONFLICTED marker removed" 1 "widgets.md: removes a CONFLICTED marker (1 -> 0)" -- \
   sh -c "cd '$BL3' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
+
+# Removing an UNCORROBORATED marker serves a one-source value as settled (issue #33).
+BL3U="$TMP/blast/uncorr"; blast_base "$BL3U"
+printf '\n## Calibration\n\nstatus: UNCORROBORATED · since: 2026-01-01\n\nA widget is calibrated to 3 mm.\n' >> "$BL3U/widgets.md"
+git -C "$BL3U" add -A; git -C "$BL3U" -c user.email=t@t -c user.name=t commit -qm "add uncorroborated" >/dev/null 2>&1
+sed -i '/status: UNCORROBORATED/d' "$BL3U/widgets.md"
+git -C "$BL3U" add -A; git -C "$BL3U" -c user.email=t@t -c user.name=t commit -qm "drop marker" >/dev/null 2>&1
+case_run "check-blast: UNCORROBORATED marker removed" 1 "widgets.md: removes an UNCORROBORATED marker (1 -> 0)" -- \
+  sh -c "cd '$BL3U' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 BL4="$TMP/blast/promote"; blast_base "$BL4" "product:acme"
 sed -i 's/^scope: product:acme$/scope: general/' "$BL4/widgets.md"

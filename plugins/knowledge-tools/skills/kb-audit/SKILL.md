@@ -73,6 +73,11 @@ informational, and whether the two records agree with each other — an inline m
 register entry, or a register entry whose inline marker has vanished, is itself a finding.
 Anything past **14 days** escalates.
 
+**Uncorroborated claims.** Every `status: UNCORROBORATED` marker (§8): one source, unconfirmed by the
+authority. Report how long each has stood and what the section says would confirm it. File them at
+severity 7: they are served with their caveat, so they are a gap to close, not a defect. A marker
+with no `since:` is the same item, with the defect stated.
+
 **Scope misfiling.** `check-scope` catches a *label* that disagrees with its library; it cannot
 catch a fact whose label is consistent but whose content is not — a deployment detail in a
 `general` library, or one vendor's behavior filed as `general`. Sample rather than exhaustively audit, and say what you sampled.
@@ -81,7 +86,8 @@ catch a fact whose label is consistent but whose content is not — a deployment
 `expected_excerpt:` should actually appear in it. Grep it; do not assume. Also check the set against
 what §10 actually requires: every record carries a `case:` label, the domain has **≥2 negative
 cases**, **≥1 unresolved case wherever the domain holds a `CONFLICTED` section** (a stated reason
-does not excuse its absence when a conflict is live), and a cross-root case exists *or* the file says why it does not
+does not excuse its absence when a conflict is live), **≥1 uncorroborated case wherever it holds an
+`UNCORROBORATED` section**, and a cross-root case exists *or* the file says why it does not
 apply. A domain with content and no golden set has no oracle at all — report that as a finding in
 its own right. A rotted oracle is worse than a missing one: it reports success.
 
@@ -161,7 +167,8 @@ Each item carries:
      `unsupported-floor`): it claims a freshness nothing supports, which is worse than silence;
   5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval (or the domain's `agent_ttl`);
   6. **orphan** — real knowledge nothing can route to;
-  7. **informational contradiction, empty routed leaf, index bloat, scope misfiling**.
+  7. **informational contradiction, uncorroborated claim, empty routed leaf, index bloat, scope
+     misfiling**.
 
   A contradiction is **blocking** only when something names it as needed — a consumer, a golden
   case, a caller in the task. When nothing in front of you establishes that either way, file it at
