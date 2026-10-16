@@ -73,6 +73,40 @@ They are not interchangeable: §9 applies different promotion guards, and a vend
 `general` is a claim about the whole world inferred from one product. Never classify from the
 vocabulary a requester happened to use.
 
+**A comparative product library compares several vendors' products: `product:<category>`, plus
+`vendors:`.** Some knowledge is about choosing between alternatives, such as a message-broker
+capability matrix with notes on each broker. `general` would make each vendor fact a claim about the
+whole world, and one library per vendor leaves the comparison with no home. So a library may take
+`scope: product:<category>` and list, in its root `INDEX.md`, the vendors it compares:
+
+```yaml
+scope: product:message-brokers
+vendors: [kafka, rabbitmq, azure-service-bus, amazon-sqs]
+```
+
+It is still one library and one tier, and every file carries the library's scope. The rules:
+
+- **A category is the alternatives a reader would compare for one job.** Message brokers are; "cloud"
+  is not. A category broad enough to need no comparison is `general` under another name. A
+  comparative library exists to hold a comparison, not to save on repositories: never merge
+  single-vendor libraries into one for convenience.
+- **Every vendor-specific fact names its vendor, in its heading or its sentence.** In a
+  single-vendor library the scope says whose product a fact describes. Here only the section can, and
+  a section that forgets reads as true of every product in the category: the `general` error, made
+  inside the library. The swap test applies per section.
+- **A fact true of every product in the category is `general`.** What at-least-once delivery means
+  goes in a `general` library and is linked, never restated.
+- **Where a single-vendor library exists, link to its facts; never restate them.** A Kafka fact
+  written in both a `product:kafka` library and a comparative one is two copies that drift (§4).
+- **Stamp per vendor.** Vendors release on different schedules, so a matrix under one stamp is
+  partly stale before the stamp says so. Keep each vendor's facts in its own stamped section. A matrix
+  that summarises them is only as fresh as its oldest row, so its stamp is never newer than the
+  oldest section it draws on.
+
+`check-scope` checks what it can: `vendors:` names at least two vendors, each a slug, none twice;
+the scope is `product:`; and the category is not one of the vendors. Whether a slug really names a
+vendor, and whether a category is narrow enough, are review's job.
+
 **The three homes, and the one rule that makes them work:**
 
 - **General** — a **domain library**, installed on a machine by being registered there, wherever it
@@ -176,6 +210,8 @@ verifier_budget: <N>          # max facts re-checked per verification cycle, hig
 sweep_interval: <N>d          # how long a kb-audit sweep stays good for. 30d for a library, 14d for
                               # a project tree, whose facts churn faster. Explicit rather than derived
                               # from the horizon: a 90d horizon would imply a 9d nag.
+vendors: [<vendor>, ...]      # a comparative product library only (§1): the vendors its
+                              # product:<category> compares. At least two; check-scope checks it.
 agent_ttl: <N>d               # optional: how long an agent stamp stays fresh. Default a tenth of
                               # the horizon; check-kb fails one not shorter than the horizon (§7).
 last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `never` until the first.

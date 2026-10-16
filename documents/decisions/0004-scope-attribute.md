@@ -1,6 +1,6 @@
 # ADR-0004: `scope:` as a first-class attribute, and what `check-scope` enforces
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-16 (see *What changed on 2026-10-16*)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 1 (inventory, map & decide)
@@ -104,3 +104,18 @@ before then, because retrofitting it is the thing this decision exists to avoid.
 - Build `check-scope` and wire it into the pre-commit hook and CI beside `check-kb`.
 - Cross-root uniqueness needs the second root populated (Phase 3).
 - The CODEOWNER scope audit is dormant until there is more than one owner ([ADR-0002](0002-governance-without-enforcement.md)).
+
+## What changed on 2026-10-16
+
+`product:<vendor>` had no answer for knowledge that compares several vendors' products
+([#37](https://github.com/dhtaylor/ai-kb/issues/37)), such as a message-broker capability matrix.
+`general` would make each vendor fact a claim about the whole world, one library per vendor leaves
+the comparison with no home, and a category written as `product:message-brokers` passed
+`check-scope` while naming no vendor at all. **A comparative product library is now sanctioned:
+`scope: product:<category>`, with a `vendors:` list in its root `INDEX.md`.** It remains one
+library and one tier, so the agreement rule, the promotion guards and `check-blast` are unchanged.
+CONVENTIONS §1 adds the rules that tooling cannot check: what a category is, a vendor named in every
+vendor-specific section, links rather than restatement where a single-vendor library exists, and
+stamps per vendor. `check-scope` validates the list's shape. A per-file vendor scope inside one
+library was considered and rejected: it breaks one-library-one-tier, and the matrix, which spans
+every vendor, would still have no single scope.
