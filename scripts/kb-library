@@ -1,0 +1,131 @@
+#!/usr/bin/env python3
+"""kb-library — register, unregister and list the domain libraries on this machine (ADR-0014).
+
+A library is installed by being registered, wherever it lives. Registering NEVER writes to the
+library: it is one repository shared by people who do not own it. What `add` changes is this
+machine's registry and the clone's own local git config (core.hooksPath, pointed at the
+engine's library hook), which git never commits or clones.
+
+  add <path>      register the library at <path> under the name its root INDEX.md declares
+                  (domain:), and wire its clone to the engine's library hook. Re-adding the same
+                  path is a no-op. A name already registered at another path is refused while
+                  that path is still `ok`; if it is not (the library moved), the entry is updated.
+  remove <name>   unregister, and unwire the hook if it points at this engine. Never deletes files.
+  list            every registered library: state, name, path (see kb-libraries for the states).
+
+The registry is read only through kb-libraries; this is the only thing that writes it.
+Exit 0 on success, 1 on a refusal, 2 on a usage error.
+"""
+import importlib.machinery, importlib.util, pathlib, subprocess, sys
+
+ENGINE = pathlib.Path(__file__).resolve().parent.parent
+HOOKS = ENGINE / "library-hooks"
+
+
+def load_kb_libraries():
+    path = pathlib.Path(__file__).resolve().parent / "kb-libraries"
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("kb_libraries", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+KL = load_kb_libraries()
+
+
+def git(*args, cwd=None):
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+
+
+def reg(*args):
+    KL.REGISTRY.parent.mkdir(parents=True, exist_ok=True)
+    r = git("config", "--file", str(KL.REGISTRY), *args)
+    if r.returncode not in (0, 5):          # 5: unsetting something that is not set
+        sys.exit(f"kb-library: cannot write {KL.REGISTRY}: {r.stderr.strip()}")
+
+
+def is_repo(path: pathlib.Path) -> bool:
+    top = git("rev-parse", "--show-toplevel", cwd=path)
+    return top.returncode == 0 and pathlib.Path(top.stdout.strip()).resolve() == path
+
+
+def add(arg: str) -> int:
+    path = pathlib.Path(arg).expanduser()
+    if not path.is_dir():
+        print(f"kb-library: {arg} is not a directory"); return 1
+    path = path.resolve()
+    name = KL.declared_name(path)
+    if not (path / "INDEX.md").is_file():
+        print(f"kb-library: {path} has no root INDEX.md — not a library"); return 1
+    if not name:
+        print(f"kb-library: {path}/INDEX.md declares no domain: — a library names itself there"); return 1
+
+    current = {e["name"]: e for e in KL.entries()}
+    old = current.get(name)
+    if old and old["path"].resolve() == path:
+        print(f"kb-library: {name} is already registered at {path}")
+    elif old and old["state"] == "ok":
+        print(f"kb-library: {name} is already registered at {old['path']}, which is still a "
+              f"library — one name, one library. Remove it first: kb-library remove {name}")
+        return 1
+    else:
+        # The same folder under another name: its library renamed itself (name-mismatch).
+        for e in current.values():
+            if e["name"] != name and e["path"].exists() and e["path"].resolve() == path:
+                reg("--remove-section", f"library.{e['name']}")
+                print(f"kb-library: unregistered {e['name']} — {path} now declares {name}")
+        reg(f"library.{name}.path", str(path))
+        origin = git("remote", "get-url", "origin", cwd=path) if is_repo(path) else None
+        if origin is not None and origin.returncode == 0 and origin.stdout.strip():
+            reg(f"library.{name}.origin", origin.stdout.strip())
+        else:
+            reg("--unset", f"library.{name}.origin")
+        print(f"kb-library: registered {name} at {path}"
+              + (f" (was {old['state']} at {old['path']})" if old else ""))
+
+    if is_repo(path):
+        if git("config", "--get", "core.hooksPath", cwd=path).stdout.strip() != str(HOOKS):
+            git("config", "core.hooksPath", str(HOOKS), cwd=path)
+            print(f"kb-library: {name}'s pre-commit hook is the engine's ({HOOKS})")
+    else:
+        print(f"kb-library: {path} is not the root of a git repository — no hook wired")
+    return 0
+
+
+def remove(name: str) -> int:
+    entry = {e["name"]: e for e in KL.entries()}.get(name)
+    if not entry:
+        print(f"kb-library: {name} is not registered"); return 1
+    reg("--remove-section", f"library.{name}")
+    path = entry["path"]
+    if path.is_dir() and is_repo(path.resolve()) and \
+            git("config", "--get", "core.hooksPath", cwd=path).stdout.strip() == str(HOOKS):
+        git("config", "--unset", "core.hooksPath", cwd=path)
+    print(f"kb-library: unregistered {name} — nothing at {path} was deleted")
+    return 0
+
+
+def list_() -> int:
+    rows = KL.entries()
+    if not rows:
+        print(f"kb-library: no libraries registered ({KL.REGISTRY})")
+    for e in rows:
+        print(f"  {e['state']:<14} {e['name']:<28} {e['path']}")
+    return 0
+
+
+def main(argv) -> int:
+    if argv[:1] == ["add"] and len(argv) == 2:
+        return add(argv[1])
+    if argv[:1] == ["remove"] and len(argv) == 2:
+        return remove(argv[1])
+    if argv == ["list"]:
+        return list_()
+    print("usage: kb-library add <path> | remove <name> | list", file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -3,7 +3,8 @@
 New to capturing a fact? Read [CAPTURE.md](CAPTURE.md) first — one page, nothing else required.
 
 This repository is the **engine**: the contract, the tooling and the skills. It holds no facts.
-Facts live in **domain libraries** — one repository per domain, cloned into `kb/` — and in each
+Facts live in **domain libraries** — one repository per domain, cloned anywhere and registered on
+the machine — and in each
 project's own `knowledge/` tree. The separation is the point: behaviour here, knowledge there, and
 neither pretending to be the other.
 
@@ -16,16 +17,18 @@ is the path through it, not a summary of it.
 
 ```bash
 git clone https://github.com/dhtaylor/ai-kb.git ~/kb-engine      # the engine, anywhere you like
-mkdir -p ~/kb-engine/kb
-git clone <library-url> ~/kb-engine/kb/<library-name>            # each library you need
-~/kb-engine/scripts/kb-bootstrap --apply                         # register it on this machine
+~/kb-engine/scripts/kb-bootstrap --apply                         # register the engine on this machine
+git clone <library-url> <anywhere>/<library-name>                # each library you need
+~/kb-engine/scripts/kb-library add <anywhere>/<library-name>     # ...registered on this machine
 ```
 
-The engine is wherever the script lives; nothing else is typed. It writes
+The engine is wherever the script lives; nothing else is typed. `kb-bootstrap` writes
 `~/.claude/settings.json` (the engine path, the plugin, the session hook), `git config --global
-kb.engineRoot`, a `PATH` block in your shell rc, and `core.hooksPath` in each installed library —
-but only with `--apply`. It merges with what is already there, backs a file up before changing it,
-and is safe to run again — run it again whenever the engine moves, or when you clone another library.
+kb.engineRoot` and a `PATH` block in your shell rc, and points each registered library's local
+`core.hooksPath` at the engine's library hook — but only with `--apply`. It merges with what is
+already there, backs a file up before changing it, and is safe to run again — run it again whenever
+the engine moves. `kb-library add` registers a library in `~/.config/ai-kb/libraries` and wires its
+hook; it writes nothing into the library itself. `kb-library list` shows what is registered.
 
 **Then restart your terminal and any open Claude Code session.** A shell profile is read at shell
 start, and Claude reads its settings and plugin content once per session.
@@ -226,9 +229,12 @@ from where it belongs rather than restating it.
 
 A library is its own repository, one domain, self-contained: its facts, its sources, its archived
 evidence and its golden set travel together, so it stays useful wherever it is cloned. Use
-`kb-create-domain` to scaffold one, give it a remote, and clone it into `kb/` on each machine that
-needs it — then `kb-bootstrap --apply` again to wire its hook.
+`kb-create-domain` to scaffold one, give it a remote, and on each machine that needs it clone it
+anywhere and run `kb-library add <path>`. That registers it under the name its `INDEX.md` declares and
+wires its clone to the engine's hook. It writes nothing into the library, which may belong to someone
+else.
 
-Nothing registers a library anywhere. It is discovered by being present under `kb/`, and the session
-hook enumerates what it finds. A machine that has not cloned a library gets a warning, never a
+A library is installed by being registered on the machine (ADR-0014). `kb-library list` shows what is
+registered and whether each is servable; the session hook lists the same and names any that went
+missing. A machine that has not cloned a library gets a warning, never a
 broken link: libraries are portable, and absence is not breakage.

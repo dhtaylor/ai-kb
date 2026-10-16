@@ -11,7 +11,7 @@ Stands up a domain that does not exist yet. Structure only — you are building 
 seeding it if source material was supplied. You are not inventing facts.
 
 **Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
-the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+the skills) and the **libraries** registered on this machine, wherever each lives. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
@@ -72,8 +72,8 @@ domain, so a cheap question now beats a migration later.
 Every step from here on mutates: a new repository, a new directory tree, new files. State the plan
 and get explicit approval before Step 3 runs a single command:
 
-- the domain name and where it lives (`<engine>/kb/<domain>/`, or the project's `knowledge/` for a
-  `repo:` tier);
+- the domain name and where it lives (`<engine>/kb/<domain>/` unless the user names another
+  folder, or the project's `knowledge/` for a `repo:` tier);
 - the `scope:` and the tier test that produced it (Step 1);
 - whether it will be seeded from source material (Step 4) or left an empty shelf.
 
@@ -83,75 +83,21 @@ is a confirmation of the plan, not a second interrogation of decisions already m
 
 ## Step 3 — Scaffold the library. It is a repository, not a folder.
 
-A domain library is its **own git repository**, installed under the engine at
+A domain library is its **own git repository**. It can live anywhere; by default it goes in
 `<engine>/kb/<domain>/`. Create and initialise it:
 
 ```
-mkdir -p <engine>/kb/<domain> && cd <engine>/kb/<domain> && git init
+mkdir -p <dir>/<domain> && cd <dir>/<domain> && git init
 ```
 
 The engine **ignores** `kb/` — it creates the space, it never tracks what lives there. That is the
 separation this whole design rests on: the engine is behaviour, a library is content, and neither
 is allowed to smuggle the other into its history.
 
-Give the library a pre-commit hook at `.githooks/pre-commit`, then
-`chmod +x` it, `git add` it and `git config core.hooksPath .githooks`.
-
-**Check the mode git actually recorded** — `git ls-files -s .githooks/pre-commit` must start
-`100755` <!-- lint-allow: a git file mode, not an embedded fact -->. On a filesystem where
-`core.fileMode` is false, git ignores the on-disk bit and records
-644, and then **git skips the hook silently**: the library looks guarded and is not. If it recorded
-644, fix it with `git update-index --chmod=+x .githooks/pre-commit`. This bug has occurred twice.
-
-```bash
-#!/usr/bin/env bash
-# Domain library guardrail. The checkers live in the engine, which this library
-# does NOT depend on — it is portable and may be cloned anywhere. Absence is
-# graceful: warn, never crash, never guess.
-set -uo pipefail
-
-find_engine() {
-  [ -n "${KB_ENGINE_ROOT:-}" ] && [ -x "$KB_ENGINE_ROOT/scripts/check-kb" ] && { echo "$KB_ENGINE_ROOT"; return; }
-  local g; g=$(git config --get kb.engineRoot 2>/dev/null)   # set by kb-bootstrap; git reads it in every context
-  [ -n "$g" ] && [ -x "$g/scripts/check-kb" ] && { echo "$g"; return; }
-  [ -x ../../scripts/check-kb ] && { echo "../.."; return; }   # designed layout: <engine>/kb/<library>
-}
-
-ENGINE=$(find_engine)
-if [ -z "$ENGINE" ]; then
-  echo "domain pre-commit: engine not found — structural checks SKIPPED."
-  echo "  Run kb-bootstrap --apply on this machine, or clone this library under an engine's kb/."
-  exit 0
-fi
-
-fail=0
-echo "domain pre-commit (engine: $ENGINE):"
-"$ENGINE/scripts/check-exec-bits" .  || fail=1
-"$ENGINE/scripts/check-secrets"      || fail=1
-"$ENGINE/scripts/check-kb"     .     || fail=1
-"$ENGINE/scripts/check-scope"  .     || fail=1
-"$ENGINE/scripts/check-golden" .     || fail=1   # once the library has a golden set
-
-# Cross-library links: check-xlinks needs to see every installed library, and a
-# library cannot see its siblings on its own (§5 of the contract). It can only
-# run truthfully when this library actually sits at <engine>/kb/<itself> — a
-# clone kept elsewhere, engine found only via kb.engineRoot, has no siblings to
-# check against. Absence warns and never fails, same as the resolver's own rule
-# for a library that is not installed.
-here=$(pwd -P)
-there=$(cd "$ENGINE/kb/$(basename "$here")" 2>/dev/null && pwd -P)
-if [ "$here" = "$there" ]; then
-  "$ENGINE/scripts/check-xlinks" "$ENGINE/kb" || fail=1
-else
-  echo "domain pre-commit: cross-library links not checked — this library is not installed under $ENGINE/kb, so its siblings are not visible."
-fi
-
-[ "$fail" -ne 0 ] && { echo; echo "Commit blocked."; exit 1; }
-echo "domain pre-commit: clean"
-```
-
-A library must not depend on an engine it is designed to outlive, which is why absence skips rather
-than fails.
+**Do not give the library a hook of its own.** Its pre-commit hook is the engine's
+`library-hooks/pre-commit`, wired in Step 5 through the clone's local `core.hooksPath`, which git
+never commits. A library is shared by people who do not own it, so it must carry nothing that an
+engine change would force a commit to (ADR-0014).
 
 Then create `INDEX.md` **at the library root**. It is the domain router, the entry point, and the
 only file carrying the domain's currency configuration:
@@ -235,14 +181,19 @@ valid result — say so.
 - **Present each extracted fact to the user against its source before committing.** This is the
   step that catches a fold corrupting a value, and it is not optional.
 
-## Step 5 — Nothing to wire above it
+## Step 5 — Register it on this machine
 
-There is no router chain above a library and no registry to update. A library is discovered by
-**being present** under the engine's `kb/`, and the session-start hook enumerates what is installed.
+There is no router chain above a library. A library is installed by being **registered** on the
+machine, wherever it lives (ADR-0014):
 
-This is deliberate. A registry listing the libraries would live in the engine, which does not track
-`kb/` — so it would be either untracked state that drifts, or tracked state that lies on every
-machine with a different set of libraries installed. Presence is the registry.
+```
+<engine>/scripts/kb-library add <dir>/<domain>
+```
+
+It registers the library under the name its root `INDEX.md` declares (`domain:`), and wires the
+clone to the engine's library hook. Report its output verbatim. From the next session on, the
+session-start hook lists the library with its absolute path. Registering writes nothing into the
+library; it changes this machine's registry and the clone's own local git config.
 
 What you **do** wire is inside the library: every file you create gets a hooked line in the
 library's own `INDEX.md`.
@@ -315,7 +266,7 @@ Stop and say so rather than proceeding, if:
 
 - the knowledge root is unconfigured — never guess a path;
 - the domain already exists — that is `kb-update-domain`;
-- a library of that name is already installed under `kb/`;
+- a library of that name is already registered on this machine (`kb-library list`);
 - the tier is genuinely ambiguous and the user has not decided;
 - you would have to invent a fact to fill the domain. An empty, well-formed domain is a good
   outcome. A domain full of plausible guesses is contamination of the one place facts are

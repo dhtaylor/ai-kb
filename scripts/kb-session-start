@@ -5,7 +5,8 @@
 # it: the engine is wherever this script is, so there is nothing to configure and
 # nothing to drift. Behaviour and content are separate repositories:
 #   engine     <engine>/            the contract, the tooling, the skills
-#   libraries  <engine>/kb/*        one repository per domain, each portable
+#   libraries  anywhere             one repository per domain, each portable, installed by
+#                                   being registered on this machine (ADR-0014, kb-library)
 #
 # Agents receive RESOLVED absolute paths: the Read tool does not expand
 # environment variables, and its "file does not exist" error volunteers the
@@ -41,19 +42,44 @@ if [ ! -r "$engine/CONVENTIONS.md" ]; then
   exit 0
 fi
 
-libs=""; count=0
-if [ -d "$engine/kb" ]; then
-  for d in "$engine"/kb/*/; do
-    [ -d "$d" ] || continue
-    name=$(basename "$d")
-    if [ -r "$d/INDEX.md" ]; then libs="${libs}
-  - ${name} -> ${engine}/kb/${name}"; count=$((count+1)); fi
-  done
+# The libraries are the registered ones, wherever they live. A registered library that is not
+# servable (moved, renamed, emptied) is named, never dropped: a library that silently vanishes
+# turns every answer it held into a "fact not found" that looks correct.
+libs=""; count=0; broken=""; nbroken=0
+registry=$("$engine/scripts/kb-libraries" 2>&1) || registry="unreadable	$registry"
+while IFS=$'\t' read -r state name path; do
+  case "$state" in
+    "") ;;
+    ok) libs="${libs}
+  - ${name} -> ${path}"; count=$((count+1)) ;;
+    unreadable) broken="${broken}
+  ! the library registry could not be read: ${name}"; nbroken=$((nbroken+1)) ;;
+    *) broken="${broken}
+  ! ${name}: ${state} at ${path}"; nbroken=$((nbroken+1)) ;;
+  esac
+done <<< "$registry"
+
+# A machine set up before ADR-0014 installed libraries by putting them in <engine>/kb/. Until
+# kb-bootstrap --apply registers them once, they are not installed — and saying nothing would turn
+# every answer they hold into a silent "fact not found".
+unmigrated=""
+if [ "$(git config --file "$HOME/.config/ai-kb/libraries" --get kb.migrated 2>/dev/null)" != true ] \
+   && ls "$engine"/kb/*/INDEX.md >/dev/null 2>&1; then
+  unmigrated="
+NOT YET MIGRATED: libraries sit in ${engine}/kb/ but this machine has not registered them, so they are not served. Tell the person to run kb-bootstrap --apply. Until then, say a library is unavailable rather than \"fact not found\"."
 fi
 
-if [ "$count" -eq 0 ]; then
+if [ "$count" -eq 0 ] && [ -n "$unmigrated" ]; then
   libs="
-  (none installed — no domain libraries are present under ${engine}/kb/. Answer \"fact not found — check KB\" rather than answering from memory.)"
+  (none yet — see NOT YET MIGRATED below)"
+elif [ "$count" -eq 0 ]; then
+  libs="
+  (none — no domain libraries are registered on this machine. Answer \"fact not found — check KB\" rather than answering from memory.)"
+fi
+if [ "$nbroken" -gt 0 ]; then
+  broken="
+Registered but NOT served — anything they hold is unavailable, so say so rather than \"fact not found\":${broken}
+Fix with kb-library add <path> (moved), or kb-library remove <name>."
 fi
 
 # The libraries, plus this session's own project tree if it is in one.
@@ -62,12 +88,17 @@ if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -f "$root/knowledge/IN
   proj="$root/knowledge"
 fi
 due=""
-[ "$event" = SessionStart ] && due=$("$engine/scripts/kb-due" "$engine" ${proj:+"$proj"} --nudge 2>/dev/null || true)
+[ "$event" = SessionStart ] && due=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge 2>/dev/null || true)
 [ -n "$due" ] && due="
 Due for a librarian's attention — nothing printed here means nothing is due:
 ${due}"
 
+msg=""
+[ "$nbroken" -gt 0 ] && [ "$event" = SessionStart ] && \
+  msg="${nbroken} registered knowledge librar$([ "$nbroken" -eq 1 ] && echo y || echo ies) not available — run kb-library list."
+case "$registry" in unreadable*) [ "$event" = SessionStart ] && msg="The knowledge library registry could not be read — run kb-library list." ;; esac
+[ -n "$unmigrated" ] && [ "$event" = SessionStart ] && msg="Knowledge libraries in ${engine}/kb/ are not registered yet — run kb-bootstrap --apply."
 emit "Knowledge engine resolves to: ${engine}
 Contract: ${engine}/CONVENTIONS.md — load it before curating or retrieving. Use these absolute paths directly with the Read tool; it does not expand \$KB_ENGINE_ROOT.
-Domain libraries installed at ${engine}/kb/ (${count}):${libs}
-Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${due}"
+Domain libraries registered on this machine (${count}):${libs}${broken}${unmigrated}
+Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${due}" "$msg"

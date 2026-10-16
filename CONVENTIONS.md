@@ -75,7 +75,8 @@ vocabulary a requester happened to use.
 
 **The three homes, and the one rule that makes them work:**
 
-- **General** — a **domain library**, installed under the engine at `<engine>/kb/<domain>/`. Each
+- **General** — a **domain library**, installed on a machine by being registered there, wherever it
+  lives (`<engine>/kb/<domain>/` by default; [ADR-0014](documents/decisions/0014-library-registry.md)). Each
   library is its own repository holding exactly one domain, and is self-contained: its facts, its
   sources, its archived evidence and its golden set travel together, so it can be cloned onto a
   machine with no engine and no sibling libraries and still make sense.
@@ -136,8 +137,10 @@ single-canonical-home rule (§4) spans the KB boundary.
 
 - **A domain library is a repository, and its root is the domain.** There is no `semantic/` tier
   folder and no chain of routers above it: `INDEX.md` at the library root is the domain router and
-  the entry point, always the first file loaded. Libraries are discovered by their presence under
-  the engine's `kb/`, not by a registry that would need maintaining.
+  the entry point, always the first file loaded. A library is installed by being **registered** on
+  the machine (`kb-library add`), wherever it lives, under the name its root `INDEX.md` declares as
+  `domain:`. The registry is per machine and outside every repository, so registering writes nothing
+  into a library ([ADR-0014](documents/decisions/0014-library-registry.md)).
 - Content lives in **single-topic files** sized as described in §4.
 - When a domain's topic files exceed **~15**, group the overflow into a sub-folder with its own
   sub-index. Below that threshold, stay **flat** — every sub-folder adds a routing hop.
@@ -189,11 +192,12 @@ exists only when it has content.
 
 Within a library the recursion is the same at every level: a sub-folder's `INDEX.md` lists its own
 direct children. There is no router **above** the library root — no tier folders, no
-`semantic/INDEX.md`, no registry of libraries. A library is discovered by being installed under the
-engine's `kb/`, and the session-start hook enumerates what is present (§2). An agent that did not
-receive that list, such as a sub-agent, enumerates `<engine>/kb/*/INDEX.md`, one router per library,
-and never infers the set from a listing of `kb/*`. A library's `.git` objects can crowd that listing,
-and a crowded-out library looks absent.
+`semantic/INDEX.md`. The libraries are the ones registered on the machine (§2): the session-start
+hook, and the SubagentStart hook for kb-retrieve, list each by absolute path and name every
+registered library that cannot be served (missing, renamed, not a library). That list is the
+complete set. An agent given no list answers `library list unknown — not searched` and never
+searches a folder for libraries, because a library can live anywhere and a partial set looks
+complete.
 
 Two things inside a library are deliberately **not routed**: the golden set (§10) and archived
 evidence under `documents/` (§6). They are apparatus and provenance, not knowledge — and routing the
@@ -238,11 +242,11 @@ for them.
   reference, so `[[a:foo]]` and `[[b:foo]]` cannot be confused. A bare `[[slug]]` never leaves the
   library it is written in, so there is nothing left to collide.
 - **No manifest.** A generated slug→path manifest was specified so a consumer could resolve against a
-  *remote* root without scanning it. Every installed library is local, under the engine's `kb/`, so
-  resolution is a directory scan and a manifest would be committed state that can go stale for a
-  problem that no longer exists. Add one when a remote library exists to justify it.
+  *remote* root without scanning it. Every installed library is local and registered, so resolution
+  reads the registry and scans each library, and a manifest would be committed state that can go
+  stale for a problem that no longer exists. Add one when a remote library exists to justify it.
 - **Resolution runs one level up.** A library cannot see its siblings, so `check-kb` skips prefixed
-  links by design and `check-xlinks` resolves them across the whole `kb/` directory. That split is not
+  links by design and `check-xlinks --installed` resolves them across every registered library. That split is not
   an implementation detail: it is why a library remains checkable on its own.
 - **Graceful absence is a distinction, not a leniency.** A link into a library that is **not installed**
   is a *soft dependency*: it warns, and agents continue. A link into a library that **is** installed but
@@ -448,7 +452,7 @@ Promotion is **never automated**. Neither is resolving a contradiction, nor dele
 
 Every retrieval agent's body states, and every agent is held to:
 
-> *Your knowledge lives in the libraries installed under `<engine>/kb/`, and in the project's own
+> *Your knowledge lives in the libraries registered on this machine, and in the project's own
 > `knowledge/` tree. Load INDEX, descend to the relevant file(s), cite them, then act. Do not answer
 > from memory.*
 
@@ -604,7 +608,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
 | hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
-| `check-xlinks` | `[[library:slug]]` resolution from any tree — the installed libraries and each project tree passed to it — into the installed libraries; dead links fail, absent libraries warn. A link in a code fence is an example and is skipped; one in an inline code span is resolved but never warns of an absent library | **built** |
+| `check-xlinks` | `[[library:slug]]` resolution from any tree — the registered libraries (`--installed`) and each project tree passed to it — into the registered libraries; dead links fail, absent libraries warn. A link in a code fence is an example and is skipped; one in an inline code span is resolved but never warns of an absent library | **built** |
 | routing check | golden-set questions actually route to `expected_file`. Deterministic tier: the file exists, holds the excerpt and is reachable from the root `INDEX.md` through the routers. Agent tier: an agent's tool calls Read the expected file, read content from no library the case does not need, and never touch the golden set or an eval folder. The agent tier is sampled and started by a person, never per commit ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)) | **built** — `check-golden` (every commit) and `grade-routing` (graded from a subagent's tool calls, not its self-report) |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` or an `alt_excerpt` AND the expected file is among those it cited (a cited path is resolved to a file, not string-matched); quote characters and trailing punctuation are normalised, wording is not; grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |

@@ -86,7 +86,7 @@ doing it twice is worse than doing it late.
 Before renaming, confirm the new slug collides with nothing in the library — including folder
 names, which are slugs too. (Other libraries cannot collide: a cross-library reference always
 carries its library prefix.) After renaming, grep the library for `[[<old-slug>]]` and every other
-installed library under `kb/` for `[[<this-library>:<old-slug>]]`, and show that nothing still
+library registered on this machine (`kb-library list`) for `[[<this-library>:<old-slug>]]`, and show that nothing still
 references it. Say which libraries you searched. A `[[<this-library>:<old-slug>]]` in another
 library is a reference you must fix in that library, in the same piece of work — and say so, since
 it is a change to a second repository.

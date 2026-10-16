@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Domain library pre-commit hook, owned by the engine (ADR-0014).
+#
+# A library is one repository shared by people who do not own it, so it carries no hook
+# logic of its own: anything layout-specific in a library would need a commit to every
+# copy whenever the engine changed. `kb-library add` points a clone's local
+# core.hooksPath here instead. Git never commits or clones that setting, so wiring a
+# clone writes nothing into the library.
+#
+# The engine is the directory this hook lives in, so there is nothing to find.
+set -uo pipefail
+
+ENGINE="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/.." && pwd)"
+here=$(cd "$(git rev-parse --show-toplevel)" && pwd -P)
+
+fail=0
+echo "domain pre-commit (engine: $ENGINE):"
+"$ENGINE/scripts/check-exec-bits" .  || fail=1
+"$ENGINE/scripts/check-secrets"      || fail=1
+"$ENGINE/scripts/check-kb"     .     || fail=1
+"$ENGINE/scripts/check-scope"  .     || fail=1
+"$ENGINE/scripts/check-golden" .     || fail=1
+
+# Cross-library links resolve against the libraries registered on this machine, so they
+# are checked only when this clone IS the registered copy of its library. Another copy
+# (a scratch clone, a fork being reviewed) would be checked against a set it is not in.
+if "$ENGINE/scripts/kb-libraries" | awk -F'\t' -v p="$here" '$1 == "ok" && $3 == p {f=1} END {exit !f}'; then
+  "$ENGINE/scripts/check-xlinks" --installed || fail=1
+else
+  echo "domain pre-commit: cross-library links not checked — $here is not a registered library on this machine (kb-library add)."
+fi
+
+[ "$fail" -ne 0 ] && { echo; echo "Commit blocked."; exit 1; }
+echo "domain pre-commit: clean"

@@ -172,19 +172,44 @@ else
   fi
 fi
 
-# 4. Installed libraries: core.hooksPath is not cloned ---------------------------
-echo " libraries under $engine/kb/"
-n=0
-for lib in "$engine"/kb/*/; do
-  [ -d "$lib/.git" ] && [ -f "$lib/.githooks/pre-commit" ] || continue
-  n=$((n+1)); name=$(basename "$lib")
-  if [ "$(git -C "$lib" config --get core.hooksPath || true)" = .githooks ]; then report ok "$name"
-  else
-    [ "$mode" = apply ] && git -C "$lib" config core.hooksPath .githooks
-    report "$(verb set would-set)" "$name" "core.hooksPath .githooks"
+# 4. Libraries: installed by being registered on this machine (ADR-0014) -------------
+# Before ADR-0014 a library was installed by sitting in <engine>/kb/. Those are registered
+# ONCE, and kb.migrated records that it happened: re-registering on every run would undo a
+# deliberate kb-library remove. Then every registered clone is wired to the engine's library
+# hook through its own core.hooksPath, which git does not clone — so a fresh clone runs no
+# hook until it is wired. Wiring is local config: nothing is written into a library.
+echo " libraries (registered on this machine)"
+registry="$HOME/.config/ai-kb/libraries"
+hooks="$engine/library-hooks"
+if [ "$(git config --file "$registry" --get kb.migrated 2>/dev/null)" != true ]; then
+  for lib in "$engine"/kb/*/; do
+    [ -f "$lib/INDEX.md" ] || continue
+    lib=${lib%/}
+    if [ "$mode" = apply ]; then
+      if out=$("$engine/scripts/kb-library" add "$lib" 2>&1); then report registered "$(basename "$lib")" "from $engine/kb/ (one-time migration)"
+      else report FAILED "$(basename "$lib")" "$(printf '%s' "$out" | tail -1)"; fi
+    else
+      report would-register "$(basename "$lib")" "from $engine/kb/ (one-time migration)"
+    fi
+  done
+  if [ "$mode" = apply ]; then
+    mkdir -p "$(dirname "$registry")" && git config --file "$registry" kb.migrated true
   fi
-done
-[ "$n" -eq 0 ] && echo "  (none installed)"
+fi
+n=0
+while IFS=$'\t' read -r state name path; do
+  [ -n "$state" ] || continue
+  n=$((n+1))
+  if [ "$state" != ok ]; then report "$state" "$name" "$path — kb-library add <path>, or kb-library remove $name"; continue; fi
+  top=$(cd "$path" && git rev-parse --show-toplevel 2>/dev/null) && [ "$(cd "$top" && pwd -P)" = "$path" ] || {
+    report ok "$name" "(not a git repository — no hook to wire)"; continue; }
+  if [ "$(git -C "$path" config --get core.hooksPath || true)" = "$hooks" ]; then report ok "$name"
+  else
+    [ "$mode" = apply ] && git -C "$path" config core.hooksPath "$hooks"
+    report "$(verb set would-set)" "$name" "core.hooksPath $hooks"
+  fi
+done < <("$engine/scripts/kb-libraries")
+[ "$n" -eq 0 ] && echo "  (none registered)"
 
 # 5. Report ----------------------------------------------------------------------
 echo

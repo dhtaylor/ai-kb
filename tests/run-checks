@@ -28,6 +28,10 @@ ENGINE="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys
 VERBOSE=${1:-}
 PASS=0; FAIL=0
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+# The library registry is per machine, at ~/.config/ai-kb/libraries (ADR-0014). Every case runs
+# under a throwaway HOME, so none can read or write the real one. Cases that need a HOME of
+# their own (env -i HOME=...) still set it.
+export HOME="$TMP/home"; mkdir -p "$HOME"
 
 fm() { # frontmatter: name, scope, [extra]
   printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
@@ -40,6 +44,7 @@ build_clean() {
   mkdir -p "$d"
   fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
+  sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
   printf '# Widgets\n\n## Limits\n\nA widget holds up to 12 things.\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n' >> "$d/widgets.md"
   fm fx-golden "$scope" > "$d/fx-golden.md"
@@ -346,91 +351,76 @@ Dead in code: (`[[beta:no-such-thing]]`).
 ' >> "$TMP/kbcode/alpha/widgets.md"
 case_run "a dead span link into an installed library fails" 1 "has no slug" -- "$ENGINE/scripts/check-xlinks" "$TMP/kbcode"
 
+# ------------------------------------------------- library registry (ADR-0014) ----
+# A library is installed by being registered, wherever it lives, under the name its root
+# INDEX.md declares. Each case gets its own HOME, so each starts with an empty registry.
+REG_HOME="$TMP/reghome"
+kbl() { HOME="$REG_HOME" "$ENGINE/scripts/kb-library" "$@"; }
+kbls() { HOME="$REG_HOME" "$ENGINE/scripts/kb-libraries"; }
+REGD="$TMP/reg"; mkdir -p "$REGD/elsewhere" "$REGD/kb"
+build_clean "$REGD/elsewhere/alpha"; build_clean "$REGD/kb/beta"
+# A library's folder can be called anything: this one is a clone into gamma-main/.
+build_clean "$REGD/elsewhere/gamma-main"
+sed -i 's/^domain: gamma-main$/domain: gamma/' "$REGD/elsewhere/gamma-main/INDEX.md"
+git -C "$REGD/elsewhere/gamma-main" add -A
+ln -s "$REGD/kb/beta" "$REGD/beta-link"
+REG_ALPHA="$(cd "$REGD/elsewhere/alpha" && pwd -P)"; REG_BETA="$(cd "$REGD/kb/beta" && pwd -P)"
+HEAD_BEFORE=$(git -C "$REG_ALPHA" write-tree); STATUS_BEFORE=$(git -C "$REG_ALPHA" status --porcelain)
+
+case_run "registry: add registers a library under its declared name" 0 "registered alpha at $REG_ALPHA" -- kbl add "$REGD/elsewhere/alpha"
+case_run "registry: the folder name does not decide the name" 0 "registered gamma at" -- kbl add "$REGD/elsewhere/gamma-main"
+case_run "registry: a library reached through a symlink is registered by its real path" 0 "registered beta at $REG_BETA" -- kbl add "$REGD/beta-link"
+case_run "registry: kb-libraries reports every library ok" 0 "" -- \
+  sh -c "[ \"\$(HOME='$REG_HOME' '$ENGINE/scripts/kb-libraries' | cut -f1 | sort -u)\" = ok ] && HOME='$REG_HOME' '$ENGINE/scripts/kb-libraries' | grep -c . | grep -qx 3"
+case_run "registry: re-adding the same path is a no-op" 0 "already registered at $REG_ALPHA" -- kbl add "$REGD/elsewhere/alpha"
+case_run "registry: add wires the clone to the engine's library hook" 0 "$ENGINE/library-hooks" -- \
+  git -C "$REG_ALPHA" config --get core.hooksPath
+case_run "registry: registering writes nothing into the library" 0 "" -- \
+  sh -c '[ "$(git -C "$1" status --porcelain)" = "$2" ] && [ "$(git -C "$1" write-tree)" = "$3" ] && ! git -C "$1" rev-parse -q --verify HEAD >/dev/null' _ "$REG_ALPHA" "$STATUS_BEFORE" "$HEAD_BEFORE"
+cp -r "$REG_ALPHA" "$REGD/alpha-copy"
+case_run "registry: a second library with a registered, live name is refused" 1 "one name, one library" -- kbl add "$REGD/alpha-copy"
+mkdir -p "$REGD/notlib"
+case_run "registry: a folder with no INDEX.md is not a library" 1 "not a library" -- kbl add "$REGD/notlib"
+build_clean "$REGD/noname"; sed -i '/^domain:/d' "$REGD/noname/INDEX.md"
+case_run "registry: a library that declares no name is refused" 1 "declares no domain" -- kbl add "$REGD/noname"
+# States: every non-ok state is reported by name, never dropped.
+mv "$REGD/elsewhere/gamma-main" "$REGD/gamma-moved"
+case_run "registry: a moved library is reported missing" 0 "missing	gamma	" -- kbls
+case_run "registry: re-adding a moved library updates its path" 0 "was missing at" -- kbl add "$REGD/gamma-moved"
+case_run "registry: ...and it is ok again" 0 "ok	gamma	" -- kbls
+sed -i 's/^domain: beta$/domain: beta2/' "$REG_BETA/INDEX.md"
+case_run "registry: a library that renamed itself is a name mismatch" 0 "name-mismatch	beta	" -- kbls
+sed -i 's/^domain: beta2$/domain: beta/' "$REG_BETA/INDEX.md"
+mv "$REG_BETA/INDEX.md" "$REG_BETA/INDEX.md.off"
+case_run "registry: a registered folder with no INDEX.md is not-a-library" 0 "not-a-library	beta	" -- kbls
+mv "$REG_BETA/INDEX.md.off" "$REG_BETA/INDEX.md"
+case_run "registry: remove unregisters and deletes nothing" 0 "nothing at $REG_ALPHA was deleted" -- kbl remove alpha
+case_run "registry: ...the files are still there" 0 "" -- test -f "$REG_ALPHA/widgets.md"
+case_run "registry: ...and the hook is unwired" 1 "" -- git -C "$REG_ALPHA" config --get core.hooksPath
+case_run "registry: removing an unregistered name is refused" 1 "not registered" -- kbl remove alpha
+case_run "registry: list shows state, name and path" 0 "ok             beta" -- kbl list
+case_run "registry: the registry file is git-config format at the fixed path" 0 "$REG_BETA" -- \
+  git config --file "$REG_HOME/.config/ai-kb/libraries" --get library.beta.path
+case_run "registry: XDG_CONFIG_HOME does not move it" 0 "ok	beta	" -- \
+  env XDG_CONFIG_HOME="$TMP/xdg-elsewhere" HOME="$REG_HOME" "$ENGINE/scripts/kb-libraries"
+
 # ---------------------------------------- library pre-commit hook: xlinks ----
-# check-xlinks is regression-tested above, but nothing had run it against real
-# content at the point a link actually breaks: a library's own pre-commit hook
-# never called it. These cases exercise the CANONICAL hook template embedded in
-# kb-create-domain/SKILL.md — extracted from its fenced block, not retyped —
-# so drift between the template and this test cannot hide a regression.
-
-SKILL="$ENGINE/plugins/knowledge-tools/skills/kb-create-domain/SKILL.md"
-TEMPLATE_HOOK="$TMP/template-pre-commit"
-if ! python3 - "$SKILL" "$TEMPLATE_HOOK" <<'PY'
-import re, sys
-src_path, out_path = sys.argv[1], sys.argv[2]
-src = open(src_path).read()
-blocks = re.findall(r'```bash\n(.*?)```', src, re.S)
-if len(blocks) != 1:
-    sys.exit(f"expected exactly one ```bash fenced block in {src_path}, found {len(blocks)}")
-body = blocks[0]
-if not body.startswith("#!/usr/bin/env bash") or "find_engine" not in body:
-    sys.exit(f"the ```bash block in {src_path} no longer looks like the pre-commit hook template")
-open(out_path, "w").write(body)
-PY
-then
-  echo "run-checks: FATAL — could not extract the pre-commit hook template from $SKILL" >&2
-  exit 2
-fi
-chmod +x "$TEMPLATE_HOOK"
-
-install_hook() { # install_hook <library-dir> -- stage the template as its hook
-  mkdir -p "$1/.githooks"
-  cp "$TEMPLATE_HOOK" "$1/.githooks/pre-commit"
-  chmod +x "$1/.githooks/pre-commit"
-  git -C "$1" add -A
-  git -C "$1" update-index --chmod=+x .githooks/pre-commit
-}
-
-# A hermetic HOME: this machine's real ~/.gitconfig sets kb.engineRoot to the
-# real engine, and KB_ENGINE_ROOT is commonly set in the shell too (kb-bootstrap
-# sets both) — either would make find_engine resolve to the real engine
-# instead of the fixture below. env -i plus a HOME with no .gitconfig is the
-# same hermetic pattern kb-verify's own Recheck assertions use.
-FAKEHOME="$TMP/fakehome"; mkdir -p "$FAKEHOME"
-
-# Case A: two libraries live under one engine's kb/, exactly where the template
-# expects. B cites a fact in A; A's own commit then renames that fact away,
-# leaving A itself clean but B's citation dangling. A's hook must catch it.
-XENGINE="$TMP/xhook/engine"; mkdir -p "$XENGINE/kb"
-ln -s "$ENGINE/scripts" "$XENGINE/scripts"
-build_clean "$XENGINE/kb/alpha"
-fm gadgets general > "$XENGINE/kb/alpha/gadgets.md"
-printf '# Gadgets\n\nA gadget is a small useful thing.\n' >> "$XENGINE/kb/alpha/gadgets.md"
-printf -- '- [gadgets](gadgets.md) — what a gadget is\n' >> "$XENGINE/kb/alpha/INDEX.md"
-git -C "$XENGINE/kb/alpha" add -A
-build_clean "$XENGINE/kb/beta"
-printf '\nSee [[alpha:gadgets]].\n' >> "$XENGINE/kb/beta/widgets.md"
-git -C "$XENGINE/kb/beta" add -A
-install_hook "$XENGINE/kb/alpha"
-
-# Break the cited fact — A's commit removes gadgets.md and its route.
-rm -f "$XENGINE/kb/alpha/gadgets.md"
-sed -i '/gadgets.md) — what a gadget is/d' "$XENGINE/kb/alpha/INDEX.md"
-git -C "$XENGINE/kb/alpha" add -A
-
-case_run "library hook blocks a commit that breaks a sibling's citation" 1 "has no slug" -- \
-  sh -c "cd '$XENGINE/kb/alpha' && env -i HOME='$FAKEHOME' PATH='$PATH' ./.githooks/pre-commit"
-
-# Case B: the same library, cloned OUTSIDE any engine's kb/ (KB_ENGINE_ROOT set
-# by hand, the documented escape hatch) — siblings are not visible, so the
-# hook must skip the cross-library check and say so, without failing.
-mkdir -p "$TMP/standalone"
-build_clean "$TMP/standalone"
-install_hook "$TMP/standalone"
-case_run "library outside the engine's kb/ skips cross-library links, does not fail" 0 \
-  "cross-library links not checked" -- \
-  sh -c "cd '$TMP/standalone' && env -i HOME='$FAKEHOME' PATH='$PATH' KB_ENGINE_ROOT='$XENGINE' ./.githooks/pre-commit"
-
-# Case C: re-confirm, through the hook this time rather than the bare script,
-# that a link into a library that simply is not installed only warns.
-mkdir -p "$TMP/xhook3/engine/kb"
-ln -s "$ENGINE/scripts" "$TMP/xhook3/engine/scripts"
-build_clean "$TMP/xhook3/engine/kb/solo"
-printf '\nSee [[gamma:widgets]].\n' >> "$TMP/xhook3/engine/kb/solo/widgets.md"
-git -C "$TMP/xhook3/engine/kb/solo" add -A
-install_hook "$TMP/xhook3/engine/kb/solo"
+# The library hook is the engine's (library-hooks/pre-commit, ADR-0014): a library is shared
+# by people who do not own it, so it carries no hook of its own. A clone is wired to it by
+# kb-library add. Blocking a commit that breaks a registered sibling's citation, and skipping
+# on an unregistered copy, are tested with the registry consumers below. Here: a link into a
+# library that is simply not installed only warns, through the hook as through the script.
+# A hermetic HOME (env -i): the registry is per machine, and this one holds only "solo".
+LHOME="$TMP/lhook-home"; mkdir -p "$LHOME"
+build_clean "$TMP/lhook/solo"
+printf '\nSee [[gamma:widgets]].\n' >> "$TMP/lhook/solo/widgets.md"
+git -C "$TMP/lhook/solo" add -A
+HOME="$LHOME" "$ENGINE/scripts/kb-library" add "$TMP/lhook/solo" >/dev/null
 case_run "library hook warns, but does not fail, on a link into an absent library" 0 "unresolvable" -- \
-  sh -c "cd '$TMP/xhook3/engine/kb/solo' && env -i HOME='$FAKEHOME' PATH='$PATH' ./.githooks/pre-commit"
+  sh -c "cd '$TMP/lhook/solo' && env -i HOME='$LHOME' PATH='$PATH' git -c user.email=t@t -c user.name=t commit -qm first"
+case_run "the commit went through the engine's hook" 0 "" -- git -C "$TMP/lhook/solo" rev-parse -q --verify HEAD
+case_run "kb-create-domain no longer writes a hook into a library" 1 "" -- \
+  grep -q 'core.hooksPath .githooks' "$ENGINE/plugins/knowledge-tools/skills/kb-create-domain/SKILL.md"
 
 # -------------------------------------------------------- check-exec-bits ----
 mkdir -p "$TMP/bits/.githooks"; git init -q "$TMP/bits"
@@ -528,6 +518,36 @@ case_run "--apply twice: still exactly one SubagentStart hook of ours" 0 "" -- \
   sh -c 'env -i HOME="$1" PATH="$PATH" "$2" --apply >/dev/null 2>&1 && python3 -c "import json,sys; g=json.load(open(sys.argv[1]))[\"hooks\"][\"SubagentStart\"]; assert len(g)==1, g" "$1/.claude/settings.json"' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
 case_run "--check after --apply: the SubagentStart hook is not reported as drift" 0 "ok" -- \
   sh -c 'env -i HOME="$1" PATH="$PATH" "$2" --check | grep -F "SubagentStart hook"' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
+
+# ADR-0014: a library is installed by being registered. --apply registers what sits in the
+# engine's kb/ ONCE (before ADR-0014 that was how a library was installed), and wires every
+# registered clone to the engine's library hook through its local core.hooksPath.
+for f in kb-library kb-libraries; do cp "$ENGINE/scripts/$f" "$BFX/scripts/$f"; done
+mkdir -p "$BFX/library-hooks"; printf '#!/usr/bin/env bash\ntrue\n' > "$BFX/library-hooks/pre-commit"
+build_clean "$BFX/kb/mig"; BREG="$BHOME/.config/ai-kb/libraries"
+# The --apply runs above found kb/ empty and recorded the migration as done, as a fresh machine
+# would. This machine was bootstrapped before ADR-0014: no registry yet, a library in kb/.
+rm -f "$BREG"
+bstrap() { env -i HOME="$BHOME" PATH="$PATH" "$BFX/scripts/kb-bootstrap" "$@"; }
+case_run "bootstrap: a library in kb/ is reported for registration" 1 "would-register" -- bstrap --check
+case_run "bootstrap: --check registers nothing" 1 "" -- git config --file "$BREG" --get library.mig.path
+bstrap --apply >/dev/null 2>&1
+case_run "bootstrap: --apply registers it" 0 "$BFX/kb/mig" -- git config --file "$BREG" --get library.mig.path
+case_run "bootstrap: --apply wires it to the engine's library hook" 0 "$BFX/library-hooks" -- \
+  git -C "$BFX/kb/mig" config --get core.hooksPath
+case_run "bootstrap: --check afterwards reports nothing to do" 0 "Everything is configured." -- bstrap --check
+git -C "$BFX/kb/mig" config core.hooksPath .githooks
+case_run "bootstrap: a clone wired elsewhere is drift" 1 "would-set" -- bstrap --check
+bstrap --apply >/dev/null 2>&1
+case_run "bootstrap: --apply re-wires it" 0 "$BFX/library-hooks" -- git -C "$BFX/kb/mig" config --get core.hooksPath
+HOME="$BHOME" "$BFX/scripts/kb-library" remove mig >/dev/null
+bstrap --apply >/dev/null 2>&1
+case_run "bootstrap: the migration runs once — a removed library stays removed" 1 "" -- \
+  git config --file "$BREG" --get library.mig.path
+HOME="$BHOME" "$BFX/scripts/kb-library" add "$BFX/kb/mig" >/dev/null
+mv "$BFX/kb/mig" "$BFX/kb/mig-moved"
+case_run "bootstrap: a registered library gone missing is drift, named" 1 "missing  mig" -- bstrap --check
+mv "$BFX/kb/mig-moved" "$BFX/kb/mig"
 
 # ------------------------------------------------------------- kb-verify ----
 build_clean "$TMP/vpass"
@@ -765,7 +785,7 @@ case_run "queue: the passing stale-true fact gets no entry" 1 "" -- grep -qF 'fi
 case_run "queue: frontmatter still exactly bounded" 0 "" -- sh -c "[ \$(grep -c '^---\$' '$VQ') = 2 ]"
 case_run "queue: fences still balanced" 0 "" -- sh -c "[ \$(( \$(grep -c '^\`\`\`' '$VQ') % 2 )) = 0 ]"
 case_run "queue: frontmatter domain/scope copied from the library's own INDEX.md" 0 "" -- \
-  grep -qF 'domain: fx' "$VQ"
+  grep -qF 'domain: vfixture' "$VQ"
 
 # Re-run the same fixture: the still-failing assertion reproduces the same stable id and
 # must dedupe, not pile up a second entry for the same unfixed claim.
@@ -959,22 +979,22 @@ case_run "kb-sources: queue is routed from the library's INDEX, exactly once" 0 
 case_run "kb-sources: a library holding the queue still passes check-kb" 0 "clean" -- \
   "$ENGINE/scripts/check-kb" "$TMP/ksrc"
 case_run "kb-sources: kb-due counts the open records without a change" 0 "5 open queue item" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$TMP/ksrc" --nudge
+  "$ENGINE/scripts/kb-due" "$TMP/ksrc" --nudge
 
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$TMP/due/INDEX.md"   # computed: a typed date expires
-case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due"
+case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" "$TMP/due"
 
 build_clean "$TMP/overdue"
 sed -i 's/^last_swept: never$/last_swept: 2026-01-01/' "$TMP/overdue/INDEX.md"
-case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/overdue"
+case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" "$TMP/overdue"
 
 # A trailing YAML comment is valid and must not hide the value (issue #28).
 build_clean "$TMP/due-comment"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)  # swept by me/; s/^sweep_interval: 30d\$/sweep_interval: 7d  # weekly/" "$TMP/due-comment/INDEX.md"
-case_run "kb-due: last_swept with an inline comment is read" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due-comment"
-case_run "kb-due: sweep_interval with an inline comment is read" 0 "every 7d" -- "$ENGINE/scripts/kb-due" /nonexistent "$TMP/due-comment"
+case_run "kb-due: last_swept with an inline comment is read" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" "$TMP/due-comment"
+case_run "kb-due: sweep_interval with an inline comment is read" 0 "every 7d" -- "$ENGINE/scripts/kb-due" "$TMP/due-comment"
 
 # ------------------------------------------------------- kb-due --nudge ----
 # Phase 5 step 3: one nudge covers sweep-due, facts due for recheck (reusing kb-verify's
@@ -982,7 +1002,7 @@ case_run "kb-due: sweep_interval with an inline comment is read" 0 "every 7d" --
 # parse_records), and episodic notes awaiting distillation. Silence is still the point: nothing due in
 # any category prints nothing, exit 0.
 
-# A fixture engine, so --nudge is exercised through engine/kb/* the way kb-session-start
+# A registered library, so --nudge is exercised through the registry the way kb-session-start
 # actually calls it, not just through a single tree argument.
 NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
 
@@ -990,8 +1010,9 @@ NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
 #    queue, no episodic/. --nudge must print nothing at all.
 build_clean "$NFX/kb/nothing-due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/nothing-due/INDEX.md"
+HOME="$TMP/nfxhome" "$ENGINE/scripts/kb-library" add "$NFX/kb/nothing-due" >/dev/null   # installed = registered
 case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
-  bash -c '[ -z "$("$1" "$2" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$NFX"
+  bash -c '[ -z "$(HOME="$2" "$1" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome"
 
 # 2. A stale fact carrying a Recheck: due for recheck, and the Recheck must NOT run —
 #    proven with a sentinel file, the same technique kb-verify's own fixture uses.
@@ -1013,12 +1034,12 @@ Recheck: touch "$NUDGE_SENTINEL"
 EOF
 printf -- '- [stale-recheck](stale-recheck.md) — a stale fact with a Recheck\n' >> "$NFX/kb/recheck-due/INDEX.md"
 case_run "nudge: a stale fact with Recheck is reported due" 0 "1 fact due for recheck" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 case_run "nudge: names the exact kb-verify command, by path" 0 "kb-verify $NFX/kb/recheck-due --yes" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 case_run "nudge: the Recheck assertion itself is never run" 1 "" -- test -e "$NUDGE_SENTINEL"
 # Issue #16: the printed command must actually run when pasted, from any cwd.
-NUDGE_CMD=$("$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge \
+NUDGE_CMD=$("$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge \
   | sed -n 's/.*(\(kb-verify [^)]*\)).*/\1/p' | head -1)
 mkdir -p "$TMP/nudge-elsewhere"
 case_run "nudge: the printed kb-verify command runs from another cwd" 0 "" -- \
@@ -1053,15 +1074,15 @@ printf -- '- [second-fact](second-fact.md) — a second stale, wrong fact\n' >> 
 case_run "nudge fixture: kb-verify queued exactly two open findings" 0 "" -- \
   sh -c "[ \$(grep -c '^- id:' '$NFX/kb/queue-due/needs-attention.md') = 2 ]"
 case_run "nudge: two open queue items are counted" 0 "2 open queue item" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/queue-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due" --nudge
 case_run "nudge: grouped by category" 0 "2 stale-recheck" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/queue-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due" --nudge
 # Acknowledge one entry — a human's triage action, nothing kb-due itself ever does.
 sed -i '0,/status: "open"/s//status: "acknowledged"/' "$NFX/kb/queue-due/needs-attention.md"
 case_run "nudge: an acknowledged item is not counted" 0 "1 open queue item" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/queue-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due" --nudge
 case_run "nudge: acknowledged count does not also read as two" 1 "" -- \
-  bash -c '"$1" /nonexistent "$2" --nudge | grep -qF "2 open queue item"' _ \
+  bash -c '"$1" "$2" --nudge | grep -qF "2 open queue item"' _ \
   "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due"
 
 # 4. Episodic notes: no marker in this codebase distinguishes a distilled note from an
@@ -1080,7 +1101,7 @@ done
 printf -- '---\nname: episodic-index\ndescription: fixture\nmemory_type: reference\ndomain: fx\nscope: general\nmetadata: {type: index, node_type: router, created: 2026-01-01}\ntags: [fx]\nkeywords: [episodic]\n---\n# Episodic\n' \
   > "$NFX/kb/episodic-due/episodic/INDEX.md"
 case_run "nudge: episodic notes are counted, INDEX.md excluded" 0 "2 episodic notes awaiting distillation" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/episodic-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/episodic-due" --nudge
 # A distilled note is not awaiting distillation. Both spellings in use are recognised: the
 # canonical "## Distilled" (kb-distill Step 5) and older notes' "## Distillation record".
 # Counting them would ask about the same notes at every session start, forever.
@@ -1090,7 +1111,7 @@ for h in "Distilled $(date +%F)" "Distillation record"; do
     "$(basename "$f" .md)" "$h" > "$f"
 done
 case_run "nudge: distilled notes (either heading spelling) are not counted" 0 "2 episodic notes awaiting distillation" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/episodic-due" --nudge
+  "$ENGINE/scripts/kb-due" "$NFX/kb/episodic-due" --nudge
 
 # 4b. Unstamped sourced sections (issue #29): §7 ranks unknown ahead of stale, so the nudge
 #     names them between sweeps. A CONFLICTED section, an episodic note and a source stub are
@@ -1106,16 +1127,16 @@ fm fx-open-questions general > "$NFX/kb/unstamped-due/fx-open-questions.md"
 printf '# Open questions\n\n## Is it blue?\n\nNo source says.\n\nSource: manual\n' >> "$NFX/kb/unstamped-due/fx-open-questions.md"
 printf -- '- [fx-open-questions](fx-open-questions.md) — open questions\n' >> "$NFX/kb/unstamped-due/INDEX.md"
 case_run "nudge: unstamped sourced sections are counted, CONFLICTED, episodic and state leaves excluded" 0 \
-  "2 unstamped sections (never verified)" -- "$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/unstamped-due" --nudge
+  "2 unstamped sections (never verified)" -- "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-due" --nudge
 case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- \
-  bash -c '"$1" /nonexistent "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
+  bash -c '"$1" "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
 # Without check-kb beside it, kb-due loses only this category: one warning, the rest intact.
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
 case_run "nudge: without check-kb the other categories still print" 0 "fact due for recheck" -- \
-  "$TMP/due-nockb/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+  "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
 case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
-  "$TMP/due-nockb/kb-due" /nonexistent "$NFX/kb/recheck-due" --nudge
+  "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
 
 # 5. A malformed (unreadable) queue file: one-line warning, never a crash, exit 0 — and
 #    every other tree and category still gets reported. Root only: chmod 000 has no
@@ -1148,7 +1169,7 @@ keywords: [queue]
 ```
 EOF
   chmod 000 "$NFX/kb/malformed-queue/needs-attention.md"
-  out=$("$ENGINE/scripts/kb-due" /nonexistent "$NFX/kb/malformed-queue" --nudge 2>&1); rc=$?
+  out=$("$ENGINE/scripts/kb-due" "$NFX/kb/malformed-queue" --nudge 2>&1); rc=$?
   chmod 644 "$NFX/kb/malformed-queue/needs-attention.md"   # restore so TMP cleanup can remove it
   case_run "nudge: malformed queue file never crashes the hook" 0 "" -- test "$rc" = 0
   case_run "nudge: malformed queue file is reported as a one-line warning" 0 "" -- \
@@ -1161,7 +1182,7 @@ fi
 # can never touch ~/.claude, and a cwd outside any git repo so the project-tree branch
 # stays inert.
 SFX="$TMP/session-fx"; mkdir -p "$SFX/scripts" "$SFX/kb"
-for f in kb-session-start kb-due kb-verify kb-watch check-kb; do
+for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX/scripts/$f"; chmod +x "$SFX/scripts/$f"
 done
 printf '# fixture contract\n' > "$SFX/CONVENTIONS.md"
@@ -1182,6 +1203,7 @@ Recheck: true
 EOF
 printf -- '- [stale-recheck](stale-recheck.md) — a stale fact with a Recheck\n' >> "$SFX/kb/libdue/INDEX.md"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX/kb/libdue/INDEX.md"
+HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libdue" >/dev/null   # installed = registered
 
 case_run "kb-session-start: nudge block appears when something is due" 0 \
   "Due for a librarian's attention" -- \
@@ -1192,15 +1214,16 @@ case_run "kb-session-start: names the due library and its recheck count" 0 \
 
 # A second fixture engine with nothing due at all: the block must be absent entirely.
 SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
-for f in kb-session-start kb-due kb-verify kb-watch check-kb; do
+for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX2/scripts/$f"; chmod +x "$SFX2/scripts/$f"
 done
 printf '# fixture contract\n' > "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
+SHOME2="$TMP/session-home2"; HOME="$SHOME2" "$ENGINE/scripts/kb-library" add "$SFX2/kb/libclean" >/dev/null
 case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
   bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
-  "$TMP/session-cwd" "$SHOME" "$SFX2/scripts/kb-session-start"
+  "$TMP/session-cwd" "$SHOME2" "$SFX2/scripts/kb-session-start"
 # Issue #40: --subagent is the same engine context, as a SubagentStart event, without the
 # librarian's nudge (a retrieval subagent has no use for it).
 case_run "kb-session-start --subagent: emits a SubagentStart event" 0 '"hookEventName":"SubagentStart"' -- \
@@ -1347,6 +1370,8 @@ mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
+case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \
+  grep -qF 'check-xlinks" --installed knowledge' "$TMP/kiproj/.githooks/pre-commit"
 printf '%s\n' "$PW" > "$TMP/kiproj/leak.md"; git -C "$TMP/kiproj" add -A >/dev/null 2>&1
 case_run "project hook blocks a staged secret" 1 "SECRET?" -- \
   sh -c "cd '$TMP/kiproj' && env -i HOME='$KIHOME' PATH='$PATH' KB_ENGINE_ROOT='$ENGINE' ./.githooks/pre-commit"
@@ -1775,13 +1800,13 @@ watch_snapshot "$X/snap/current.html"  500 "Home" 2026-01-01
 watch_allowlist "$X/allowlist.json" "$X/kb/fx" "$X/snap/baseline.html" "$X/snap/current.html"
 
 case_run "exit criterion: before checking, the nudge names the due recheck and no queue" 0 "fact due for recheck" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$X/kb/fx" --nudge
+  "$ENGINE/scripts/kb-due" "$X/kb/fx" --nudge
 "$ENGINE/scripts/kb-verify" "$X/kb/fx" --yes >/dev/null 2>&1
 "$ENGINE/scripts/kb-watch" "$X/allowlist.json" >/dev/null 2>&1
 case_run "exit criterion: the stale fact and the drift both land in one queue" 0 "" -- \
   bash -c 'q="$1/needs-attention.md"; grep -qF "category: \"stale-recheck\"" "$q" && grep -qF "category: \"drift\"" "$q"' _ "$X/kb/fx"
 case_run "exit criterion: the nudge names both open items" 0 "2 open queue items" -- \
-  "$ENGINE/scripts/kb-due" /nonexistent "$X/kb/fx" --nudge
+  "$ENGINE/scripts/kb-due" "$X/kb/fx" --nudge
 case_run "exit criterion: the stale fact itself is untouched" 0 "" -- \
   cmp -s "$X/service-port.before" "$X/kb/fx/service-port.md"
 case_run "exit criterion: the library still passes check-kb with its queue in it" 0 "clean" -- \
@@ -1893,6 +1918,8 @@ rec = ("- case: cross-root\n  question: Where is the widget limit explained?\n  
 p.write_text(t[:t.rindex("```")] + rec.rstrip("\n") + "\n```\n")
 PY
 sed -i 's/up to 12 things$/up to 12 things. See [[beta:widgets]]./' "$A/widgets.md"
+# Installed means registered (ADR-0014): alpha and beta are, in this suite's own registry.
+"$ENGINE/scripts/kb-library" add "$A" >/dev/null; "$ENGINE/scripts/kb-library" add "$B" >/dev/null
 grade() { # grade <name> <want-exit> <want-text> <Q-mapping lines...>
   local name="$1" ex="$2" tx="$3"; shift 3
   printf '%s\n' "$@" > "$RT/map"
@@ -1932,7 +1959,7 @@ grade "negative case: contamination still fails" 1 "contamination" "Q2|golden.js
 mkdir -p "$RT/legacy/knowledge"; printf '# legacy
 ' > "$RT/legacy/knowledge/INDEX.md"
 mk_tr "$RT/legacy.jsonl" "Read:$RT/legacy/knowledge/INDEX.md"
-grade "negative case answered from another knowledge tree: fail" 1 "nothing under" "Q2|legacy.jsonl"
+grade "negative case answered from another knowledge tree: fail" 1 "no installed library was Read" "Q2|legacy.jsonl"
 mk_tr "$RT/xboth.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
 grade "cross-root case: both libraries read: pass" 0 "1/1 graded" "Q4|xboth.jsonl"
 grade "cross-root case: linked library never read: fail" 1 "needed beta" "Q4|pass.jsonl"
@@ -1943,9 +1970,11 @@ grade "missing transcript is a format error" 2 "not found" "Q1|absent.jsonl"
 # Issue #36: a cross-root case may name its expected_file in the other library, as
 # <library>:<path>. The oracle then says WHICH file holds the answer, and every tier checks it.
 XR="$TMP/xr"; build_clean "$XR/kb/alpha"; build_clean "$XR/kb/beta"
+RT_HOME="$HOME"; export HOME="$TMP/xrhome"   # this block's own registry, holding its beta
 sed -i 's/up to 12 things\.$/up to 12 things. See [[beta:widgets]]./' "$XR/kb/alpha/widgets.md"
 printf 'A beta widget is serviced yearly.\n' >> "$XR/kb/beta/widgets.md"
 fm stray general > "$XR/kb/beta/stray.md"; printf '# Stray\n\nA stray is never routed.\n' >> "$XR/kb/beta/stray.md"
+"$ENGINE/scripts/kb-library" add "$XR/kb/beta" >/dev/null
 xr_golden() { # xr_golden <dir> <case> <expected_file> <excerpt>: alpha's golden set plus one record (Q4)
   rm -rf "$1"; cp -r "$XR/kb/alpha" "$1"
   python3 - "$1/fx-golden.md" "$2" "$3" "$4" <<'PY'
@@ -1970,7 +1999,7 @@ case_run "check-golden: only a cross-root case may name another library's file" 
 # the record is reported as not checked here, and checked where the siblings are installed.
 xr_golden "$XR/kb/xlone" cross-root "gamma:widgets.md" "serviced yearly"
 mkdir -p "$XR/lone"; mv "$XR/kb/xlone" "$XR/lone/xlone"
-case_run "check-golden: a sibling not installed alongside is reported, not failed" 0 "not installed alongside" -- "$ENGINE/scripts/check-golden" "$XR/lone/xlone"
+case_run "check-golden: a library not installed on this machine is reported, not failed" 0 "not installed on this machine" -- "$ENGINE/scripts/check-golden" "$XR/lone/xlone"
 xr_ge() { # xr_ge <name> <want-exit> <want-text> <Q4 answer line>
   printf 'Q1|widgets.md|A widget holds up to 12 things.\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n%s\n' "$4" > "$XR/answers"
   case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$XR/kb/xok" "$XR/answers"
@@ -1987,6 +2016,91 @@ mk_tr "$XR/xr-both.jsonl" "Read:$XA/INDEX.md" "Read:$XA/widgets.md" "Read:$XB/IN
 case_run "grade-routing: cross-root case reading the sibling's file passes" 0 "1/1 graded" -- "$ENGINE/scripts/grade-routing" "$XA" "$XR/map"
 mk_tr "$XR/xr-both.jsonl" "Read:$XA/INDEX.md" "Read:$XA/widgets.md"
 case_run "grade-routing: cross-root case never reading the sibling's file fails" 1 "never Read" -- "$ENGINE/scripts/grade-routing" "$XA" "$XR/map"
+export HOME="$RT_HOME"
+# ----------------------------------------- consumers read the registry (ADR-0014) ----
+# Two libraries registered OUTSIDE any engine's kb/, in different folders, one through a
+# symlink; and an unregistered library sitting in the engine's kb/, which nothing may see.
+CH="$TMP/conshome"; CD="$TMP/cons"; mkdir -p "$CD/a-side" "$CD/b-side" "$CD/engine/kb"
+for f in scripts library-hooks CONVENTIONS.md; do cp -r "$ENGINE/$f" "$CD/engine/$f"; done   # copies: a symlink resolves to the real engine
+build_clean "$CD/a-side/alpha"; build_clean "$CD/b-side/beta"; build_clean "$CD/engine/kb/ghost"
+fm gadgets general > "$CD/b-side/beta/gadgets.md"
+printf '# Gadgets\n\nA gadget is serviced yearly.\n' >> "$CD/b-side/beta/gadgets.md"
+printf -- '- [gadgets](gadgets.md) — what a gadget is\n' >> "$CD/b-side/beta/INDEX.md"
+printf '\nSee [[beta:gadgets]].\n' >> "$CD/a-side/alpha/widgets.md"
+git -C "$CD/a-side/alpha" add -A; git -C "$CD/b-side/beta" add -A
+ln -s "$CD/b-side" "$CD/b-link"
+CA="$(cd "$CD/a-side/alpha" && pwd -P)"; CB="$(cd "$CD/b-side/beta" && pwd -P)"
+HOME="$CH" "$ENGINE/scripts/kb-library" add "$CA" >/dev/null
+HOME="$CH" "$ENGINE/scripts/kb-library" add "$CD/b-link/beta" >/dev/null
+git config --file "$CH/.config/ai-kb/libraries" kb.migrated true   # a machine already bootstrapped
+cons() { HOME="$CH" "$@"; }
+
+# session start: absolute paths of what is registered, nothing else, and every problem named
+case_run "session start lists a library registered outside kb/" 0 "alpha -> $CA" -- \
+  sh -c "cd '$TMP' && HOME='$CH' '$CD/engine/scripts/kb-session-start'"
+case_run "session start does not list an unregistered folder in kb/" 1 "" -- \
+  sh -c "cd '$TMP' && HOME='$CH' '$CD/engine/scripts/kb-session-start' | grep -q ghost"
+case_run "session start says the libraries are the registered ones" 0 "registered on this machine (2)" -- \
+  sh -c "cd '$TMP' && HOME='$CH' '$CD/engine/scripts/kb-session-start'"
+mv "$CB" "$CD/b-side/beta-moved"
+case_run "session start names a registered library that went missing" 0 "! beta: missing at $CB" -- \
+  sh -c "cd '$TMP' && HOME='$CH' '$CD/engine/scripts/kb-session-start'"
+case_run "session start tells the person, not just the agent" 0 '"systemMessage":"1 registered knowledge library not available' -- \
+  sh -c "cd '$TMP' && HOME='$CH' '$CD/engine/scripts/kb-session-start'"
+mv "$CD/b-side/beta-moved" "$CB"
+# A machine set up before ADR-0014: libraries in the engine's kb/, no registry. Silence would
+# turn every answer they hold into "fact not found"; session start must say to migrate.
+case_run "session start on an unmigrated machine says to run kb-bootstrap --apply" 0 "not registered yet — run kb-bootstrap --apply" -- \
+  sh -c "cd '$TMP' && HOME='$TMP/unmigrated-home' '$CD/engine/scripts/kb-session-start'"
+case_run "...and tells the agent not to answer fact not found" 0 "NOT YET MIGRATED" -- \
+  sh -c "cd '$TMP' && HOME='$TMP/unmigrated-home' '$CD/engine/scripts/kb-session-start' --subagent"
+case_run "...without contradicting itself" 1 "" -- \
+  sh -c "cd '$TMP' && HOME='$TMP/unmigrated-home' '$CD/engine/scripts/kb-session-start' | grep -qE 'NOT served|Answer .{0,4}fact not found'"
+# kb-due covers every registered library
+case_run "kb-due covers a library registered outside kb/" 0 "alpha" -- cons "$ENGINE/scripts/kb-due"
+# check-xlinks --installed resolves against the registry
+case_run "check-xlinks --installed resolves into a registered library" 0 "1 cross-link(s) resolved" -- \
+  cons "$ENGINE/scripts/check-xlinks" --installed
+printf '\nAnd [[beta:no-such-thing]].\n' >> "$CA/widgets.md"
+case_run "check-xlinks --installed fails a dead link into a registered library" 1 "has no slug" -- \
+  cons "$ENGINE/scripts/check-xlinks" --installed
+sed -i '/no-such-thing/d' "$CA/widgets.md"
+printf '\nAnd [[ghost:widgets]].\n' >> "$CA/widgets.md"
+case_run "check-xlinks --installed: an unregistered library is not installed" 0 "1 unresolvable" -- \
+  cons "$ENGINE/scripts/check-xlinks" --installed
+sed -i '/ghost:widgets/d' "$CA/widgets.md"
+# the golden-set tiers find a cross-root library through the registry, not lib.parent
+python3 - "$CA/fx-golden.md" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+rec = ("- case: cross-root\n  question: How often is a gadget serviced?\n"
+       "  expected_file: beta:gadgets.md\n  expected_excerpt: \"serviced yearly\"\n\n")
+p.write_text(t[:t.rindex("```")] + rec.rstrip("\n") + "\n```\n")
+PY
+case_run "check-golden: cross-root file in a registered library elsewhere" 0 "clean" -- \
+  sh -c 'out=$(HOME="$1" "$2" "$3") && ! printf "%s" "$out" | grep -q "NOT CHECKED" && echo clean' _ "$CH" "$ENGINE/scripts/check-golden" "$CA"
+printf 'Q1|widgets.md|A widget holds up to 12 things.\nQ2||fact not found — check KB\nQ3||fact not found — check KB\nQ4|alpha/widgets.md, beta/gadgets.md|A gadget is serviced yearly.\n' > "$CD/answers"
+case_run "grade-eval: a library-prefixed citation resolves through the registry" 0 "4/4 passed" -- \
+  cons "$ENGINE/scripts/grade-eval" "$CA" "$CD/answers"
+printf 'Q4|cons.jsonl\n' > "$CD/map"
+mk_tr "$CD/cons.jsonl" "Read:$CA/INDEX.md" "Read:$CA/widgets.md" "Read:$CB/INDEX.md" "Read:$CB/gadgets.md"
+case_run "grade-routing: reads in registered libraries elsewhere are reads in the KB" 0 "1/1 graded" -- \
+  cons "$ENGINE/scripts/grade-routing" "$CA" "$CD/map"
+mk_tr "$CD/cons.jsonl" "Read:$CA/INDEX.md" "Read:$CA/widgets.md" "Read:$CD/engine/kb/ghost/widgets.md" "Read:$CB/gadgets.md"
+case_run "grade-routing: a read in an unregistered library is not in the KB, and not needed" 0 "1/1 graded" -- \
+  cons "$ENGINE/scripts/grade-routing" "$CA" "$CD/map"
+mk_tr "$CD/cons.jsonl" "Read:$CD/engine/kb/ghost/widgets.md"
+printf 'Q2|cons.jsonl\n' > "$CD/map"
+case_run "grade-routing: reading only an unregistered library is reading nothing in the KB" 1 "no installed library was Read" -- \
+  cons "$ENGINE/scripts/grade-routing" "$CA" "$CD/map"
+# the engine's library hook: a commit breaking a registered sibling's citation is blocked
+rm "$CB/gadgets.md"; sed -i '/gadgets.md) — what a gadget is/d' "$CB/INDEX.md"; git -C "$CB" add -A
+case_run "library hook blocks a commit that breaks a registered sibling's citation" 1 "has no slug" -- \
+  sh -c "cd '$CB' && env -i HOME='$CH' PATH='$PATH' '$ENGINE/library-hooks/pre-commit'"
+cp -r "$CB" "$TMP/beta-scratch"
+case_run "library hook on an unregistered copy skips cross-library links" 0 "not a registered library" -- \
+  sh -c "cd '$TMP/beta-scratch' && env -i HOME='$CH' PATH='$PATH' '$ENGINE/library-hooks/pre-commit'"
+
 # Grep is graded by what it RETURNED (tool_result paired by id), not by its arguments.
 NL=$'\n'
 fm golden-ratio general > "$A/golden-ratio.md"; printf '# Golden ratio\n\nPhi.\n' >> "$A/golden-ratio.md"

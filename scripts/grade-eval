@@ -18,7 +18,7 @@ kb-rooted (kb/<lib>/x.md); it is resolved to a file, not matched as text.
 Usage: grade-eval <library-root> <answers-file>
 Exit 0 if every record passes, 1 otherwise.
 """
-import pathlib, re, sys
+import functools, importlib.machinery, importlib.util, pathlib, re, sys
 
 
 def load_golden(lib: pathlib.Path):
@@ -40,27 +40,59 @@ def load_golden(lib: pathlib.Path):
     return recs
 
 
+@functools.lru_cache(maxsize=None)
+def installed():
+    """{name: root} of the libraries registered on this machine (ADR-0014), read through
+    kb-libraries, the registry's one reader."""
+    path = pathlib.Path(__file__).resolve().parent / "kb-libraries"
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("kb_libraries", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod.installed(), mod.declared_name
+
+
+def library_root(lib: pathlib.Path, name: str):
+    """The root of the library called `name`: the library being graded, if that is the name it
+    declares, else the registered one, else None (not installed on this machine)."""
+    libs, declared = installed()
+    lib = lib.resolve()
+    return lib if declared(lib) == name else libs.get(name)
+
+
 def expected_target(lib: pathlib.Path, expected: str):
     """(library root, path within it) of the file a golden record's expected_file names. A
-    cross-root case may name a file in a sibling library under the same kb/ as
-    <library>:<path> (issue #36); anything else is a path in the case's own library."""
-    lib = lib.resolve()
+    cross-root case may name a file in another installed library as <library>:<path> (issue
+    #36); anything else is a path in the case's own library. The root is None when the named
+    library is not installed on this machine."""
     m = re.fullmatch(r"([\w-]+):(.+)", expected)
-    return (lib.parent / m.group(1), m.group(2)) if m else (lib, expected)
+    return (library_root(lib, m.group(1)), m.group(2)) if m else (lib.resolve(), expected)
+
+
+def candidates(lib: pathlib.Path, cited: str):
+    """Every file a cited path may name. An agent cites by whatever path it walked:
+    library-relative (x.md), library-prefixed (<lib>/x.md), kb-rooted (kb/<lib>/x.md) or
+    absolute. A library prefix resolves through the registry, wherever that library lives;
+    the rest resolve against the library, its parent and its grandparent."""
+    lib = lib.resolve()          # "." has no parent to anchor on until it is resolved
+    p = pathlib.Path(cited)
+    out = [a / p for a in (lib, lib.parent, lib.parent.parent)]
+    parts = p.parts[1:] if p.parts[:1] == ("kb",) else p.parts
+    if len(parts) > 1 and (root := library_root(lib, parts[0])):
+        out.append(root.joinpath(*parts[1:]))
+    return out
 
 
 def resolves_to(lib: pathlib.Path, expected: str, cited) -> bool:
-    """True if any cited path names the expected file.
-
-    An agent cites by whatever path it walked: library-relative (x.md), library-
-    prefixed (<lib>/x.md) or kb-rooted (kb/<lib>/x.md). Each is RESOLVED against the
-    library, its kb/ directory and the engine, and compared as a file — never matched
-    as a suffix, which would let a same-named file in another library pass."""
-    lib = lib.resolve()          # "." has no parent to anchor on until it is resolved
+    """True if any cited path names the expected file. Each is RESOLVED and compared as a
+    file — never matched as a suffix, which would let a same-named file in another library
+    pass."""
     owner, rel = expected_target(lib, expected)
+    if owner is None:
+        return False
     want = (owner / rel).resolve()
-    anchors = (lib, lib.parent, lib.parent.parent)
-    return any((a / c).resolve() == want for c in cited for a in anchors)
+    return any(f.resolve() == want for c in cited for f in candidates(lib, c))
 
 
 def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
@@ -106,11 +138,11 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
         in_file   = True
         if ef:
             owner, rel = expected_target(lib, ef)
-            target = owner / rel
+            target = owner / rel if owner else None
             # An unresolved case's excerpt is the refusal phrase, in no fact file; its file
             # must instead still hold the dispute. Every other excerpt must be in its file.
             probes  = ["status: conflicted"] if case == "unresolved" else [norm(e) for e in excerpts]
-            in_file = target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
+            in_file = target is not None and target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
 
         ok = in_answer and file_ok and in_file
         npass += ok

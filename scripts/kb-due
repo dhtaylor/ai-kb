@@ -50,8 +50,9 @@ reports, per tree, everything a librarian should act on:
   printed as a one-line warning to stderr and that category is skipped for that tree only — every
   other tree and every other category still gets computed. This hook must never crash a session.
 
-Usage: kb-due <engine-root> [tree ...] [--quiet|--nudge]
-  Scans <engine-root>/kb/* plus any further trees given (a project knowledge/ tree).
+Usage: kb-due [tree ...] [--quiet|--nudge]
+  Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
+  trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
   --nudge   print the full librarian nudge (sweep + recheck + queue + episodic + unstamped), and
             nothing at all when nothing in any category is due
@@ -228,15 +229,13 @@ def main(argv) -> int:
     nudge = "--nudge" in argv
     quiet = "--quiet" in argv
     args = [a for a in argv if a not in ("--quiet", "--nudge")]
-    if not args:
-        print("usage: kb-due <engine-root> [tree ...] [--quiet|--nudge]", file=sys.stderr); return 0
-    engine = pathlib.Path(args[0])
 
     trees = []
-    kb = engine / "kb"
-    if kb.is_dir():
-        trees += [d for d in sorted(kb.iterdir()) if (d / "INDEX.md").is_file()]
-    trees += [pathlib.Path(a) for a in args[1:]]
+    try:   # the registry's one reader; an unreadable registry must not crash a session
+        trees += list(load_module("kb_libraries", "kb-libraries").installed().values())
+    except Exception as e:
+        print(f"kb-due: library registry unreadable, registered libraries skipped: {e}", file=sys.stderr)
+    trees += [pathlib.Path(a) for a in args]
 
     rows = [s for s in (status(t) for t in trees) if s]
     due = [s for s in rows if s["due"]]
