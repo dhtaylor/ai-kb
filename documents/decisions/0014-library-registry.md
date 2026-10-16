@@ -134,6 +134,26 @@ path, and never dropped silently.** A moved library goes from a silent `fact not
 
 `kb-create-domain` registers a new library as its last step.
 
+### Registering never writes to the library
+
+**A library is shareable: one repository, cloned by any number of people who do not own it.**
+Registering it, moving it or upgrading the engine therefore can never require a commit to it. The
+pre-commit hook is the one place today's design breaks that rule. Every library carries a copy of
+the hook template in `.githooks/pre-commit`, and the template hardcodes the engine's layout, so a
+layout change would mean a commit to every library.
+
+**The hook moves into the engine.** `<engine>/library-hooks/pre-commit` holds what the template does
+today. It finds the library's name and the other libraries through the registry. `kb-library add`,
+and `kb-bootstrap` when it migrates or repairs, set the clone's `core.hooksPath` to that folder.
+This is local git configuration. Git never commits or clones it, so every clone carries its own, and
+`kb-bootstrap --check` reports a clone whose setting has drifted, as it does now for `.githooks`.
+
+- A library carries no hook logic. The `.githooks/pre-commit` already in a library goes unused once
+  its clone is wired to the engine. Its author can delete it at any time, and nothing depends on
+  that happening.
+- `kb-create-domain` stops writing a hook into new libraries.
+- A library's CI is unchanged. It already fetches the engine and checks the library on its own.
+
 ### Migration
 
 **`kb-bootstrap --apply` registers every library under `<engine>/kb/` once.** It is idempotent: a
@@ -153,10 +173,7 @@ registered. That is the cost of having one way to be installed, and it was chose
   is not registered is not installed, which warns, as an absent library does today.
 - **`check-golden`, `grade-eval` and `grade-routing`** resolve a cross-root `library:path`, and
   decide which reads are inside a library, through the registry instead of `lib.parent`.
-- **The library hook template** checks cross-library links when its own path is the registered path
-  for its name, instead of when it sits under `$ENGINE/kb`. The six existing library hooks keep
-  working while those libraries stay under `kb/`. A library that moves needs the new template,
-  which is a commit in that library's own repository.
+- **The engine owns the library pre-commit hook** (see below).
 - **`kb-due`, `kb-bootstrap`'s hook wiring, and the engine's and `kb-init`'s hooks** iterate over
   the registry.
 
@@ -180,27 +197,34 @@ registered. That is the cost of having one way to be installed, and it was chose
   it, as it does for the other places it writes.
 - All engines and worktrees on a machine share one registry, because it belongs to the user. A
   per-engine override can be added if a real case needs one.
+- A library author can no longer add a library-specific step to the pre-commit hook, because the
+  clone's hook folder is the engine's. No library has one today.
 
 **Not covered.**
 
-- **Executable bits on a `core.fileMode=false` mount** such as `/mnt/c`: a library kept there can
-  silently lose its hook's executable bit. This is real but separate from how libraries are found,
-  and it is tracked in [#50](https://github.com/dhtaylor/ai-kb/issues/50).
+- **Executable bits on a `core.fileMode=false` mount** such as `/mnt/c` are tracked in
+  [#50](https://github.com/dhtaylor/ai-kb/issues/50). Moving the hook into the engine removes most
+  of that risk, because a library no longer holds an executable file. What remains is the engine's
+  own placement.
 - **Windows and WSL have separate home folders,** so a tool running on the Windows side does not see
   a registry in the WSL home. This is true of anything kept in the WSL home.
 
 ### Delivery
 
 1. **The resolver and its consumers.** `kb-libraries`, `kb-library add/remove/list`, the
-   migration in `kb-bootstrap`, and every consumer above. Tests first:
+   migration in `kb-bootstrap`, the engine-owned library hook, and every consumer above. Tests
+   first:
    - a fixture registry under a throwaway `HOME`, as the suite already does for `kb-init`, never the
      real file;
    - two libraries in different folders, one reached through a symlink;
    - every non-`ok` state reported;
    - a duplicate registration refused;
-   - with only migrated `kb/` libraries registered, behaviour identical to today.
+   - with only migrated `kb/` libraries registered, behaviour identical to today;
+   - registering, moving and re-registering a library leaves its working tree and history
+     untouched (`git status` clean, no new commit).
 2. **The library home, export/import, and the documentation:** `KB_LIBRARY_HOME`,
-   `kb-library export/import`, `kb-create-domain` registering its library, the hook template,
+   `kb-library export/import`, `kb-create-domain` registering its library and no longer writing a
+   hook,
    CONVENTIONS §2/§3, and this ADR moved to Accepted.
 
 A live check closes it: kb-retrieve answers a golden-set question from a library registered
