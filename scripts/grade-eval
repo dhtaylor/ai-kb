@@ -20,7 +20,9 @@ reads: one record per line, Q<n>|<transcript>, a path relative to the mapping fi
 absolute; # starts a comment. The answer is the message of the agent's SubagentHandback
 call, or, in a transcript with none, its last text block: text written before a hand-back is
 preamble, and grading it fails a correct answer (issue #32). The cited files are the answer's
-last `Sources:` line, comma-separated; `Sources: none`, or no such line, cites nothing.
+last `Sources:` line, comma-separated; `Sources: none`, or no such line, cites nothing. A
+note in parentheses on that line ("(reached via INDEX.md)") names no file the answer rests
+on, and is dropped.
 Only mapped cases are graded, as in grade-routing: a run is sampled.
 
 Usage: grade-eval <library-root> <answers-file>
@@ -159,7 +161,7 @@ def transcript_answer(transcript: pathlib.Path):
         return None
     found = SOURCES.findall(ans)
     cited = found[-1] if found else ""
-    cited = "" if cited.lower() == "none" else cited.replace("`", "")
+    cited = "" if cited.lower() == "none" else re.sub(r"\([^)]*\)", "", cited.replace("`", ""))
     return cited, SOURCES.sub("", ans)
 
 

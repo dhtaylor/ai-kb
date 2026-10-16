@@ -1572,6 +1572,8 @@ gt "preamble before the hand-back is not graded" 0 "3/3 passed" \
   "I think it is about a dozen." $'The file says "A widget holds up to 12 things."\n\nSources: widgets.md'
 gt "several cited files, backticked, resolve" 0 "3/3 passed" \
   "-" $'"A widget holds up to 12 things."\n\nSources: `INDEX.md`, `kb/fx/widgets.md`'
+gt "a note on the Sources: line is not a cited path" 0 "3/3 passed" \
+  "-" $'"A widget holds up to 12 things."\n\nSources: widgets.md (reached via INDEX.md, the router)'
 gt "the Sources: line is not part of the graded answer" 1 "excerpt not in answer" \
   "-" $'About a dozen.\n\nSources: widgets.md (up to 12 things)'
 gt "an answer with no Sources: line cites nothing" 1 "cited '(none)'" \

@@ -135,6 +135,9 @@ Sources: <path>, <path>
 Verified: <date> · by: <agent|human> · method: <…>     (when the fact carries a stamp)
 ```
 
+The `Sources:` line holds paths and nothing else. A note on it, such as how you reached the file,
+belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
+
 If you refused — not found, conflicted, or a secret — say which, and why.
 
 **On `fact not found`, the citation line is always `Sources: none`**, whatever you read on the way.
