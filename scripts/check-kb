@@ -225,6 +225,13 @@ def main(root: pathlib.Path) -> int:
     slugs = {f.stem for f in files}
     defects = []
 
+    # sources/ holds only .md citation stubs (§6); the artifacts they cite are archived under
+    # documents/. Only .md files are read below, so a raw file here would pass unseen (issue #71).
+    for p in sorted((root / "sources").rglob("*")) if (root / "sources").is_dir() else []:
+        if p.is_file() and p.suffix != ".md" and not p.name.startswith("."):
+            defects.append(f"{p}: raw artifact in sources/, which holds only .md citation stubs — "
+                           f"archive it under documents/ and cite it with a stub here (§6)")
+
     for f in files:
         text = f.read_text()
         if not text.startswith("---\n"):

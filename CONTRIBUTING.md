@@ -111,6 +111,19 @@ wherever the product appears goes in a library. The tie-breaker: would it stop b
 swapped the vendor? Yes means `product:<vendor>`; no means `general`. Never restate a fact across a
 boundary — link it with `[[library:slug]]`.
 
+**Where files go in a library.** Two folders are easy to confuse:
+
+| Folder | Holds | Example |
+|---|---|---|
+| `sources/` | only `.md` **citation stubs**: title, origin, date ingested, and where the artifact lives. Routed, and what a `Source:` line cites | `sources/billing-schema.md` |
+| `documents/` | the **artifacts themselves**, archived verbatim so a citation resolves on any machine. Not routed | `documents/billing-schema/*.sql`, the ERD export |
+
+A schema dump, an ERD, a PDF or a pasted document goes in `documents/`, with one stub in `sources/`
+pointing at it. Archive text as UTF-8, and redact any credential first (`CONVENTIONS.md` §6). The
+secret scan reads raw artifacts under `documents/` without the rule that flags long identifiers, so
+a schema dump does not drown in false alarms; under `sources/` it would, and `check-kb` rejects it
+there anyway.
+
 **Provenance and currency per section**, not per file:
 
 ```
@@ -225,6 +238,9 @@ mid-session.
 
 **`orphan — no router reaches it`** — the file exists but nothing lists it, so retrieval will never
 find it. Add its line to the right `INDEX.md`. The golden set and `documents/` are exempt by design.
+
+**`raw artifact in sources/`** — a non-`.md` file is in the folder for citation stubs. Move it to
+`documents/` and write (or point) a stub in `sources/` at it.
 
 **`scope 'x' disagrees with its library`** — the fact is in the wrong home. Move it, or link to it
 from where it belongs rather than restating it.

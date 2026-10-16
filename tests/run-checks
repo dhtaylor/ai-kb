@@ -125,6 +125,19 @@ build_clean "$TMP/fencedstamp"
 printf '\n## Example\n\n- How a stamp looks:\n\n  ```\n  Verified: 2026-09-22 · by: agent · method: manual\n  ```\n' >> "$TMP/fencedstamp/widgets.md"
 case_run "an indented stamp inside a code fence is an example, not a stamp" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fencedstamp"
 
+# Issue #71: sources/ holds only .md citation stubs (§6); a raw artifact (DDL, an ERD export, a
+# PDF) is archived under documents/ and cited with a stub. check-kb read only .md files, so a raw
+# file under sources/ passed silently and the user never learned it was in the wrong place.
+build_clean "$TMP/srcraw"; mkdir -p "$TMP/srcraw/sources/schema"
+printf 'CREATE TABLE t (id int);\n' > "$TMP/srcraw/sources/schema/t.sql"
+case_run "a raw artifact under sources/ fails, and says to archive it under documents/" 1 "archive it under documents/" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/srcraw"
+build_clean "$TMP/srcdoc"; mkdir -p "$TMP/srcdoc/documents/schema" "$TMP/srcdoc/sources"
+printf 'CREATE TABLE t (id int);\n' > "$TMP/srcdoc/documents/schema/t.sql"
+: > "$TMP/srcdoc/sources/.gitkeep"
+case_run "a raw artifact under documents/ and a dotfile under sources/ pass" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/srcdoc"
+
 # The frontmatter verified: floor is derived from the section stamps and lint-checked (§7,
 # issue #27): the oldest stamp among sections that are not CONFLICTED, and unknown when a
 # sourced section is unstamped or nothing is stamped. A stamp may not be dated in the future.
