@@ -1470,6 +1470,66 @@ git -C "$TMP/pii1" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>
 case_run "PII pass runs in --all mode" 1 "PII?" -- \
   sh -c "cd '$TMP/pii1' && '$ENGINE/scripts/check-secrets' --all"
 
+# Issue #56: a library archives raw artifacts verbatim under documents/ (§6). Their long
+# identifiers trip the bare-entropy rule on nearly every line, so a non-.md file under a
+# library's documents/ skips that one rule; the patterns, the labelled rule and PII still run.
+# The identifier lines are split in two so this file does not trip the rule it tests.
+IDENTS="$(printf '%s\n' 'USE [AcmeErp2019''SalesHistoryArchive]' \
+  'EXEC dbo.usp_GetOrderLines''2019ByCustomerId @CustomerId' \
+  'SELECT oh.OrderHeaderId2, ol.LineItem''Qty2019Adj FROM x')"
+arc_lib() { # arc_lib <dir> <path> <content> -- a library repo with one staged file at <path>
+  mkdir -p "$1/$(dirname "$2")"; git init -q "$1"
+  printf -- '---\nname: x-index\ndomain: x\n---\n# x\n' > "$1/INDEX.md"
+  printf '%s\n' "$3" > "$1/$2"; git -C "$1" add -A >/dev/null 2>&1
+}
+arc_lib "$TMP/arc1" documents/schema/dump.sql "$IDENTS"
+case_run "archived artifact's identifiers do not trip bare entropy" 0 "clean" -- \
+  sh -c "cd '$TMP/arc1' && '$ENGINE/scripts/check-secrets'"
+case_run "archive exemption holds in --worktree mode from a subdirectory" 0 "clean" -- \
+  sh -c "cd '$TMP/arc1/documents' && '$ENGINE/scripts/check-secrets' --worktree"
+git -C "$TMP/arc1" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>&1
+case_run "archive exemption holds in --all mode" 0 "clean" -- \
+  sh -c "cd '$TMP/arc1' && '$ENGINE/scripts/check-secrets' --all"
+arc_lib "$TMP/arc2" documents/dump.sql "CREATE LOGIN app WITH PASS""WORD = '$PW'"
+case_run "labelled secret in an archived artifact is still caught" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/arc2' && '$ENGINE/scripts/check-secrets'"
+arc_lib "$TMP/arc3" documents/dump.sql "key = \"$(printf '%s%s' AKIA ABCDEFGHIJKLMNOP)\""
+case_run "pattern secret in an archived artifact is still caught" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/arc3' && '$ENGINE/scripts/check-secrets'"
+arc_lib "$TMP/arc4" documents/dump.sql "-- owner jane.doe@corp""mail.io"
+case_run "PII in an archived artifact is still caught" 1 "PII?" -- \
+  sh -c "cd '$TMP/arc4' && '$ENGINE/scripts/check-secrets'"
+arc_lib "$TMP/arc5" documents/dump.sql "$PW"
+case_run "bare literal with a symbol in an archived artifact is not caught (stated limit)" 0 "clean" -- \
+  sh -c "cd '$TMP/arc5' && '$ENGINE/scripts/check-secrets'"
+arc_lib "$TMP/arc6" documents/notes.md "$IDENTS"
+case_run "a .md file under documents/ keeps the bare rule" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/arc6' && '$ENGINE/scripts/check-secrets'"
+arc_lib "$TMP/arc7" sources/dump.sql "$IDENTS"
+case_run "a non-.md file outside documents/ keeps the bare rule" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/arc7' && '$ENGINE/scripts/check-secrets'"
+mkdir -p "$TMP/arc8/documents"; git init -q "$TMP/arc8"
+printf '%s\n' "$IDENTS" > "$TMP/arc8/documents/dump.sql"; git -C "$TMP/arc8" add -A >/dev/null 2>&1
+case_run "documents/ outside a library (the engine's) keeps the bare rule" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/arc8' && '$ENGINE/scripts/check-secrets'"
+# UTF-16 text holds null bytes, so every pass would skip it as binary: never scanned at all.
+# A byte-order mark marks it as text, and it blocks until converted; a real binary still passes.
+arc_lib "$TMP/arc9" documents/dump.sql ""
+printf '\377\376U\000S\000E\000\n\000' > "$TMP/arc9/documents/dump.sql"; git -C "$TMP/arc9" add -A >/dev/null 2>&1
+case_run "UTF-16 text is blocked as unscanned" 1 "UTF-16" -- \
+  sh -c "cd '$TMP/arc9' && '$ENGINE/scripts/check-secrets'"
+case_run "UTF-16 block does not tell the reader to rotate" 0 "" -- \
+  sh -c "cd '$TMP/arc9' && ! '$ENGINE/scripts/check-secrets' | grep -q 'needs rotation'"
+arc_lib "$TMP/arc10" documents/erd.png ""
+printf '\211PNG\r\n\032\n\000\000\000\rIHDR' > "$TMP/arc10/documents/erd.png"; git -C "$TMP/arc10" add -A >/dev/null 2>&1
+case_run "a binary without a UTF-16 mark is still skipped" 0 "clean" -- \
+  sh -c "cd '$TMP/arc10' && '$ENGINE/scripts/check-secrets'"
+# The hit list stays at three lines but says how many more, so one rescan finds them all.
+sec_stage "$TMP/arc11" "$IDENTS
+$IDENTS"
+case_run "a file with more than three hits says how many more" 1 "and 3 more" -- \
+  sh -c "cd '$TMP/arc11' && '$ENGINE/scripts/check-secrets'"
+
 # Issue #35: pii-scan takes a directory too, so callers need not loop. A file's output is
 # unchanged (check-secrets parses it); a directory's lines are prefixed with the file.
 mkdir -p "$TMP/piidir/sub" "$TMP/piidir/.git"
