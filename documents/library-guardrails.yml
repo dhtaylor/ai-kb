@@ -91,5 +91,5 @@ jobs:
       # check-xlinks is NOT run here, and that is not an oversight: it resolves
       # [[library:slug]] BETWEEN installed libraries, and a library on its own
       # cannot see its siblings. It runs where they are all present — the engine's
-      # own hook, and this library's own hook, when siblings are installed
-      # alongside it under an engine's kb/ (.githooks/pre-commit).
+      # own hook, and the engine-owned library hook (library-hooks/pre-commit) when
+      # this clone is the copy registered on the machine (ADR-0014).
