@@ -152,6 +152,19 @@ When the source disagrees with what the KB already states and you cannot verify 
 
 Resolving a contradiction is never your call. It is never automated.
 
+**A single source the authority does not back is not a contradiction.** If a value comes from one
+source that is not the authority for it, and nothing else states it, mark its section
+`status: UNCORROBORATED · since: <today>` instead (§8). Name the source, and say what would confirm
+it. Retrieval serves it with the caveat first. **A source's own uncertainty marker** (a legacy
+`UNRESOLVED`, `TBD`, `unverified`, or a "do not quote" note) is mapped by what stands behind it,
+never by its name:
+
+| Behind the marker | Mark it |
+|---|---|
+| two sources that disagree | `CONFLICTED` (above) |
+| one source that is not the authority | `UNCORROBORATED` |
+| the source's own guess or inference, no source behind it | neither: keep its hedge wording, which retrieval reports as `Not established` (§10) |
+
 ## Step 6 — Provenance and currency on every section you touch
 
 - `Source: [[slug]]` on each topic section. A fact whose origin differs from its section gets its
@@ -186,7 +199,9 @@ Resolving a contradiction is never your call. It is never automated.
   obligation lands. Every record carries a `case:` label (§10). Include at least two `negative` cases and — if the
   fold produced a contradiction — an `unresolved` case proving the agent refuses it rather than
   serving a value. Its `expected_file` is the conflicted file, and its `expected_excerpt` is exactly
-  `disputed — not served` (§10). A `cross-root` case applies **only if the domain actually links
+  `disputed — not served` (§10). If the fold marked a section `UNCORROBORATED`, add an
+  `uncorroborated` case whose excerpt is the marked claim; `check-golden` fails the library without
+  one. A `cross-root` case applies **only if the domain actually links
   across libraries**, and its `expected_file` is the answering file in the other library, written
   `<library>:<path>` (§10); where it does not, say so in the file rather than inventing a link to satisfy a count.
 

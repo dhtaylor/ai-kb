@@ -60,7 +60,7 @@ Exit 0 if every graded case passes, 1 otherwise, 2 on a usage or format error.
 """
 import fnmatch, importlib.machinery, importlib.util, json, pathlib, re, sys
 
-AGENT_TIER_CASES = {"positive", "cross-root"}
+AGENT_TIER_CASES = {"positive", "cross-root", "uncorroborated"}
 # The answer key and the evidence behind it: a golden set, or anything under an eval folder.
 # (golden sets are named <lib>-golden.md, the convention load_golden relies on)
 CONTAMINATED = re.compile(r"-golden\.md(?!\w)|(^|/)evals?([-_./]|$)", re.I)

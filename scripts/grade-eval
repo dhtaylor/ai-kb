@@ -11,6 +11,9 @@ right substance, no file, or the wrong file — and that is a failure here, beca
 the claim under test is not "can it answer" but "did it retrieve". An LLM judge
 would forgive it; grep does not.
 
+An uncorroborated case also requires the answer to BEGIN "uncorroborated — single source": a
+one-source fact is served caveat first (CONVENTIONS §8), and a caveat after the value is read past.
+
 Answers file: one record per line,  Q<n>|<cited-files, comma-separated>|<answer text>
 A cited file may be library-relative (x.md), library-prefixed (<lib>/x.md) or
 kb-rooted (kb/<lib>/x.md); it is resolved to a file, not matched as text.
@@ -190,6 +193,10 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
     QUOTES = str.maketrans({c: '"' for c in "'“”„‟″‘’‚‛′"})
     norm = lambda s: re.sub(r"\s+", " ", s.replace('\\"', '"').replace("\\'", "'")
                             .translate(QUOTES)).strip().lower()
+    # An uncorroborated fact is served caveat first (CONVENTIONS §8): the answer must open with
+    # this phrase. Leading markup (bold, a heading, a quote mark) is presentation, not order.
+    LEAD = "uncorroborated — single source"
+    leads = lambda a: re.sub(r'^[\s*_#>"]+', "", norm(a)).startswith(LEAD)
     rows, npass, ngraded = [], 0, 0
     for i, r in enumerate(recs, 1):
         q = f"Q{i}"
@@ -225,10 +232,12 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
             probes  = ["status: conflicted"] if case == "unresolved" else [norm(e) for e in excerpts]
             in_file = target is not None and target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
 
-        ok = in_answer and file_ok and in_file
+        led = case != "uncorroborated" or leads(ans)
+        ok = in_answer and file_ok and in_file and led
         npass += ok
         why = []
         if not in_answer: why.append("excerpt not in answer")
+        if not led:       why.append(f"does not lead with {LEAD!r}")
         if not file_ok:   why.append(f"cited {cited or '(none)'!r}, expected {ef or '(none)'!r}")
         if not in_file:   why.append("excerpt not in the expected file — ORACLE ROT")
         rows.append((q, case, "yes" if in_answer else "no", "yes" if file_ok else "no",
