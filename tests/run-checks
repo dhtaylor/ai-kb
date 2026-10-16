@@ -708,6 +708,30 @@ case_run "weak recheck: reported without --yes, and nothing runs" 0 "NOT run" --
 case_run "weak recheck: a warning, never a failure" 0 "" -- "$ENGINE/scripts/kb-verify" "$TMP/vweak"
 case_run "weak recheck: the fixture library is otherwise clean" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/vweak"
 
+# Issue #60: an assertion runs from its fact file's directory, and a library may be registered
+# anywhere (ADR-0014), so `../../scripts` reaches the engine only in the default layout. kb-verify
+# exports the engine it belongs to as KB_ENGINE_ROOT, and flags a Recheck that climbs out of its
+# library by a relative path. These fixture libraries sit in $TMP, outside any engine.
+build_clean "$TMP/vengine"
+printf 'Recheck: [ -x "$KB_ENGINE_ROOT/scripts/kb-verify" ]\n' >> "$TMP/vengine/widgets.md"
+case_run "recheck: KB_ENGINE_ROOT names the engine, for a library outside it" 0 "still hold" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vengine" --all --yes
+case_run "recheck: KB_ENGINE_ROOT is the running engine, not a stale value from the caller" 0 "still hold" -- \
+  env KB_ENGINE_ROOT="$TMP/no-such-engine" "$ENGINE/scripts/kb-verify" "$TMP/vengine" --all --yes
+case_run "recheck: one using KB_ENGINE_ROOT is not flagged as reaching outside" 1 "" -- \
+  bash -c '"$1" "$2" | grep -q "OUTSIDE"' _ "$ENGINE/scripts/kb-verify" "$TMP/vengine"
+build_clean "$TMP/voutside"
+printf 'Recheck: s=$(cd ../../scripts && pwd) && [ -x "$s/kb-verify" ]\n' >> "$TMP/voutside/widgets.md"
+case_run "recheck: one reaching outside its library by a relative path is flagged" 0 "OUTSIDE widgets.md" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/voutside"
+case_run "recheck: the flag names the fix" 0 "KB_ENGINE_ROOT" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/voutside"
+mkdir -p "$TMP/voutside/sub"
+fm inner general > "$TMP/voutside/sub/inner.md"
+printf '# Inner\n\n## Sibling\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\nRecheck: [ -f ../widgets.md ]\n' >> "$TMP/voutside/sub/inner.md"
+case_run "recheck: a relative path that stays inside the library is not flagged" 1 "" -- \
+  bash -c '"$1" "$2" | grep -q "OUTSIDE sub/inner.md"' _ "$ENGINE/scripts/kb-verify" "$TMP/voutside"
+
 # A restamp moves the floor, so --apply rewrites a declared verified: to match (issue #27);
 # otherwise kb-verify's own output would fail check-kb in the library's pre-commit.
 build_clean "$TMP/vfloor"

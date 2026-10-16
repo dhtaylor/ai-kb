@@ -399,6 +399,12 @@ Verified: 2026-09-19 · by: agent · method: query
   shell and should carry none. **An assertion that cannot fail is worse than none**: it manufactures
   freshness on a schedule.
 
+  An assertion runs from its fact file's directory with `KB_ENGINE_ROOT` set to the engine running
+  it. One that tests an engine script names it as `"$KB_ENGINE_ROOT/scripts/<name>"`, never by a
+  relative path out of the library: a library can be registered anywhere (§2), so `../../scripts`
+  holds only in the default layout and elsewhere fails as though the fact were stale. `kb-verify`
+  reports such a path on every run.
+
   A `doc-review` assertion that fetches a page must grep **the sentence that states this section's
   claim** — not the page's title, its subject or an identifier (`DENY` on the DENY page passes
   while the page exists, which a source-liveness check already covers), and not one landing-page
