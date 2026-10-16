@@ -36,6 +36,14 @@ location, frontmatter template, escaping and dedupe-by-id, imported from
 drift apart. See the queue section below for the stable-ID scheme and what makes a
 failure merely FAILED versus unreachable.
 
+THE ENGINE PATH (issue #60). An assertion runs from its fact file's directory, with
+KB_ENGINE_ROOT set to the engine this script belongs to, overriding any value the caller
+had. A library may be registered anywhere (ADR-0014), so an assertion that tests an engine
+script names it as "$KB_ENGINE_ROOT/scripts/<name>"; a relative `../../scripts` reaches the
+engine only while the library sits at <engine>/kb/<name>, and elsewhere fails as though the
+fact were stale. Such an assertion is reported on every run, statically, as OUTSIDE: a
+relative path climbing above the library root. A warning, not a failure.
+
 ASSERTIONS THAT CANNOT FAIL (§7, issues #34 and #41) are reported on every run, statically,
 whether or not they are due: a page grepped for a few words (its title or subject), or one
 (url, fragment) pair backing more than two sections or sections in several files. Each passes
@@ -111,6 +119,8 @@ URL = re.compile(r"https?://[^\s'\"|;)<>]+")
 SHORT_FRAGMENT = 4      # words; 26 of 31 fragments in the #34 sample were 1-4 words long
 REUSE_LIMIT = 2         # sections one (url, fragment) pair may back, all in one file (#41)
 TODAY = datetime.date.today()
+ENGINE = pathlib.Path(__file__).resolve().parent.parent
+CLIMB = re.compile(r"(?<![\w.])((?:\.\./)+|(?:\.\./)*\.\.(?![\w./]))")
 
 
 # ---------------------------------------------------------- the needs-attention queue ----
@@ -346,6 +356,18 @@ def weak_rechecks(root: pathlib.Path, sections: list) -> list:
     return out
 
 
+def outside_rechecks(root: pathlib.Path, sections: list) -> list:
+    """Assertions whose relative path climbs above the library root (issue #60). Static, a
+    warning: the path resolves only in one layout, and elsewhere the fact reads as stale."""
+    out = []
+    for s in sections:
+        depth = len(s["file"].parent.relative_to(root).parts)
+        if any(m.group(1).count("..") > depth for m in CLIMB.finditer(s["cmd"] or "")):
+            out.append(f"OUTSIDE {s['file'].relative_to(root)} § {s['heading']}: a relative path climbs "
+                       f"out of the library — name the engine as \"$KB_ENGINE_ROOT/scripts/...\"")
+    return out
+
+
 def main(argv) -> int:
     args = [a for i, a in enumerate(argv)
             if not a.startswith("--") and (i == 0 or argv[i - 1] != "--budget")]
@@ -390,6 +412,12 @@ def main(argv) -> int:
         for w in weak:
             print(f"    {w}")
 
+    outside = outside_rechecks(root, with_cmd)
+    if outside:
+        print(f"\n  Assertions that reach outside the library — they hold in one layout only ({len(outside)}):")
+        for o in outside:
+            print(f"    {o}")
+
     # The facts no command can settle. Naming them is the point: a verifier that
     # only reports what it can check reads as though everything else were verified.
     unverifiable = [s for s in found if not s["cmd"] and is_due(s, horizon, ttl)]
@@ -416,6 +444,7 @@ def main(argv) -> int:
     for s in selected:
         try:
             r = subprocess.run(s["cmd"], shell=True, cwd=s["file"].parent,
+                               env={**os.environ, "KB_ENGINE_ROOT": str(ENGINE)},
                                capture_output=True, text=True, timeout=120)
         except subprocess.TimeoutExpired:
             r = None
