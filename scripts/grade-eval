@@ -15,10 +15,19 @@ Answers file: one record per line,  Q<n>|<cited-files, comma-separated>|<answer 
 A cited file may be library-relative (x.md), library-prefixed (<lib>/x.md) or
 kb-rooted (kb/<lib>/x.md); it is resolved to a file, not matched as text.
 
+--transcripts grades subagent transcripts instead, through the mapping file grade-routing
+reads: one record per line, Q<n>|<transcript>, a path relative to the mapping file or
+absolute; # starts a comment. The answer is the message of the agent's SubagentHandback
+call, or, in a transcript with none, its last text block: text written before a hand-back is
+preamble, and grading it fails a correct answer (issue #32). The cited files are the answer's
+last `Sources:` line, comma-separated; `Sources: none`, or no such line, cites nothing.
+Only mapped cases are graded, as in grade-routing: a run is sampled.
+
 Usage: grade-eval <library-root> <answers-file>
-Exit 0 if every record passes, 1 otherwise.
+       grade-eval <library-root> --transcripts <mapping-file>
+Exit 0 if every record passes, 1 otherwise, 2 on a usage error.
 """
-import functools, importlib.machinery, importlib.util, pathlib, re, sys
+import functools, importlib.machinery, importlib.util, json, pathlib, re, sys
 
 
 def load_golden(lib: pathlib.Path):
@@ -95,16 +104,83 @@ def resolves_to(lib: pathlib.Path, expected: str, cited) -> bool:
     return any(f.resolve() == want for c in cited for f in candidates(lib, c))
 
 
-def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
+def read_mapping(mapping: pathlib.Path, ncases: int) -> dict:
+    """{case number: transcript} from a Q<n>|<transcript> mapping file, shared with
+    grade-routing. Raises ValueError on a format error: a run graded from the wrong
+    transcripts would report on cases nobody ran."""
+    if not mapping.is_file():
+        raise ValueError(f"{mapping} is not a file")
+    graded = {}
+    for n, line in enumerate(mapping.read_text().splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        m = re.fullmatch(r"\s*Q(\d+)\|(.+?)\s*", line)
+        if not m:
+            raise ValueError(f"{mapping}: line {n}: expected Q<n>|<transcript>")
+        q, t = int(m.group(1)), pathlib.Path(m.group(2))
+        if not 1 <= q <= ncases:
+            raise ValueError(f"{mapping}: line {n}: Q{q} is not a case in the golden set (1..{ncases})")
+        if q in graded:
+            raise ValueError(f"{mapping}: line {n}: Q{q} is mapped twice — one transcript per case")
+        t = t if t.is_absolute() else mapping.parent / t
+        if not t.is_file():
+            raise ValueError(f"{mapping}: line {n}: transcript {t} not found")
+        graded[q] = t
+    if not graded:
+        raise ValueError(f"{mapping}: no cases mapped")
+    return graded
+
+
+SOURCES = re.compile(r"^\s*Sources:\s*(.*?)\s*$", re.M)
+
+
+def transcript_answer(transcript: pathlib.Path):
+    """(cited, answer) from a subagent transcript, or None if it holds no answer. Only
+    assistant records count: Claude Code also logs the requests it sent, which carry copies
+    of earlier blocks."""
+    handback, text = None, None
+    for line in transcript.read_text().splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        content = rec.get("message", {}).get("content") if isinstance(rec, dict) else None
+        if rec.get("type") != "assistant" or not isinstance(content, list):
+            continue
+        for b in content:
+            if not isinstance(b, dict):
+                continue
+            if b.get("type") == "tool_use" and b.get("name") == "SubagentHandback":
+                handback = (b.get("input") or {}).get("message")
+            elif b.get("type") == "text" and b.get("text", "").strip():
+                text = b["text"]
+    ans = handback if isinstance(handback, str) else text
+    if not ans:
+        return None
+    found = SOURCES.findall(ans)
+    cited = found[-1] if found else ""
+    cited = "" if cited.lower() == "none" else cited.replace("`", "")
+    return cited, SOURCES.sub("", ans)
+
+
+def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = False) -> int:
     recs = load_golden(lib)
     answers = {}
-    for line in answers_file.read_text().splitlines():
-        if not line.strip() or "|" not in line: continue
-        parts = line.split("|", 2)
-        if len(parts) < 3:               # the agent dropped a field: fail that record, not the run
-            answers[parts[0].strip()] = None; continue
-        q, f, a = parts
-        answers[q.strip()] = (f.strip(), a)
+    if transcripts:
+        try:
+            mapped = read_mapping(answers_file, len(recs))
+        except ValueError as e:
+            print(f"grade-eval: {e}", file=sys.stderr); return 2
+        for n, t in mapped.items():
+            answers[f"Q{n}"] = transcript_answer(t) or "no answer in the transcript"
+    else:
+        for line in answers_file.read_text().splitlines():
+            if not line.strip() or "|" not in line: continue
+            parts = line.split("|", 2)
+            if len(parts) < 3:               # the agent dropped a field: fail that record, not the run
+                answers[parts[0].strip()] = "malformed record — expected Q<n>|<cited>|<answer>"; continue
+            q, f, a = parts
+            answers[q.strip()] = (f.strip(), a)
 
     # Whitespace, case and QUOTE CHARACTERS are not grounding. An agent quoting a
     # quotation escapes it (\"), nests it as '…', or gets curly quotes from a
@@ -112,16 +188,19 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
     QUOTES = str.maketrans({c: '"' for c in "'“”„‟″‘’‚‛′"})
     norm = lambda s: re.sub(r"\s+", " ", s.replace('\\"', '"').replace("\\'", "'")
                             .translate(QUOTES)).strip().lower()
-    rows, npass = [], 0
+    rows, npass, ngraded = [], 0, 0
     for i, r in enumerate(recs, 1):
         q = f"Q{i}"
+        if transcripts and q not in answers:
+            continue
+        ngraded += 1
         case = r.get("case", "?")
         exc  = r.get("expected_excerpt", "")
         ef   = r.get("expected_file", "")
         if q not in answers:
             rows.append((q, case, "-", "-", "NO ANSWER")); continue
-        if answers[q] is None:
-            rows.append((q, case, "-", "-", "FAIL: malformed record — expected Q<n>|<cited>|<answer>")); continue
+        if isinstance(answers[q], str):
+            rows.append((q, case, "-", "-", "FAIL: " + answers[q])); continue
         cited, ans = answers[q]
 
         # A quote may stop before the sentence's full stop; the excerpt's trailing
@@ -158,11 +237,16 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path) -> int:
     for q, case, g, c, v in rows:
         print(f"{q:5}{case:11}{g:10}{c:10}{v}")
     print("-" * 78)
-    print(f"answer-grounding: {npass}/{len(recs)} passed")
-    return 0 if npass == len(recs) else 1
+    print(f"answer-grounding: {npass}/{ngraded} passed")
+    return 0 if npass == ngraded else 1
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("usage: grade-eval <library-root> <answers-file>", file=sys.stderr); sys.exit(2)
-    sys.exit(main(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])))
+    args = sys.argv[1:]
+    transcripts = args[1:2] == ["--transcripts"]
+    if transcripts:
+        del args[1]
+    if len(args) != 2:
+        print("usage: grade-eval <library-root> <answers-file>\n"
+              "       grade-eval <library-root> --transcripts <mapping-file>", file=sys.stderr); sys.exit(2)
+    sys.exit(main(pathlib.Path(args[0]), pathlib.Path(args[1]), transcripts))

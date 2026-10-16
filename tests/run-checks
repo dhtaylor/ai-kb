@@ -1534,6 +1534,64 @@ printf 'Q1|widgets.md|A widget holds up to 12 things.\nQ2|fact not found — che
 case_run "record missing its citation field fails, the grade still runs" 1 "Q2   negative   -         -         FAIL: malformed record" -- \
   "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" "$TMP/ge/answers"
 
+# --transcripts (issue #32): grade straight from subagent transcripts, mapped Q<n>|<transcript>
+# as grade-routing maps them. A subagent's answer is the message of its SubagentHandback call,
+# not its last text block: text written before the hand-back is preamble, and grading it fails
+# a correct answer. The citations are the answer's Sources: line; `Sources: none` cites nothing.
+# The transcripts are SYNTHETIC, in the shape Claude Code writes.
+mk_hb() { # mk_hb <out.jsonl> <text before the hand-back> <hand-back message, or - for none>
+  python3 - "$@" <<'PY'
+import json, sys
+out, text, msg = sys.argv[1:4]
+recs = [{"type": "user", "message": {"role": "user", "content": "a question"}},
+        {"type": "assistant", "message": {"role": "assistant", "content": [
+            {"type": "tool_use", "id": "r1", "name": "Read", "input": {"file_path": "widgets.md"}}]}},
+        {"type": "user", "message": {"role": "user", "content": [
+            {"type": "tool_result", "tool_use_id": "r1", "content": "A widget holds up to 12 things."}]}}]
+if text != "-":
+    recs.append({"type": "assistant", "message": {"role": "assistant", "content": [{"type": "text", "text": text}]}})
+if msg != "-":
+    recs.append({"type": "assistant", "message": {"role": "assistant", "content": [
+        {"type": "tool_use", "id": "h1", "name": "SubagentHandback", "input": {"message": msg}}]}})
+    # Claude Code also logs the request it sent, carrying copies of earlier blocks. Not an answer.
+    recs.append({"type": "api-request-blob", "message": {"content": [
+        {"type": "tool_use", "id": "h0", "name": "SubagentHandback", "input": {"message": "decoy\n\nSources: none"}}]}})
+open(out, "w").write("\n".join(json.dumps(r) for r in recs) + "\n")
+PY
+}
+GT="$TMP/ge/tr"; mkdir -p "$GT"
+mk_hb "$GT/neg.jsonl" "-" $'fact not found — check KB\nLooked at: INDEX.md\nSources: none'
+gt() { # gt <name> <want-exit> <want-text> <Q1 text> <Q1 hand-back>
+  mk_hb "$GT/q1.jsonl" "$4" "$5"
+  printf 'Q1|q1.jsonl\nQ2|neg.jsonl\n# a comment\nQ3|%s\n' "$GT/neg.jsonl" > "$GT/map"
+  case_run "grade-eval --transcripts: $1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" --transcripts "$GT/map"
+}
+gt "the hand-back message is the answer, its Sources: line the citations" 0 "3/3 passed" \
+  "Let me check the router first." $'"A widget holds up to 12 things."\n\nSources: widgets.md'
+gt "preamble before the hand-back is not graded" 0 "3/3 passed" \
+  "I think it is about a dozen." $'The file says "A widget holds up to 12 things."\n\nSources: widgets.md'
+gt "several cited files, backticked, resolve" 0 "3/3 passed" \
+  "-" $'"A widget holds up to 12 things."\n\nSources: `INDEX.md`, `kb/fx/widgets.md`'
+gt "the Sources: line is not part of the graded answer" 1 "excerpt not in answer" \
+  "-" $'About a dozen.\n\nSources: widgets.md (up to 12 things)'
+gt "an answer with no Sources: line cites nothing" 1 "cited '(none)'" \
+  "-" '"A widget holds up to 12 things."'
+gt "a refusal with Sources: none on a positive fails" 1 "cited '(none)'" \
+  "-" $'fact not found — check KB\nSources: none'
+gt "no hand-back: the last text block is the answer" 0 "3/3 passed" \
+  $'"A widget holds up to 12 things."\n\nSources: widgets.md' "-"
+gt "a transcript with no answer fails that case, the grade still runs" 1 "FAIL: no answer in the transcript" \
+  "-" "-"
+printf 'Q2|%s\n' "$GT/neg.jsonl" > "$GT/map"
+case_run "grade-eval --transcripts: only mapped cases are graded — a run is sampled" 0 "1/1 passed" -- \
+  "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" --transcripts "$GT/map"
+printf 'Q1|%s\nQ1|%s\n' "$GT/neg.jsonl" "$GT/neg.jsonl" > "$GT/map"
+case_run "grade-eval --transcripts: a case mapped twice is a usage error" 2 "mapped twice" -- \
+  "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" --transcripts "$GT/map"
+printf 'Q1|nowhere.jsonl\n' > "$GT/map"
+case_run "grade-eval --transcripts: a missing transcript is a usage error" 2 "not found" -- \
+  "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" --transcripts "$GT/map"
+
 
 # ---------------------------------------------------------------- kb-watch ----
 # Exit criterion (§5A "Testing the librarian agents"): against a saved snapshot

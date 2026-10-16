@@ -272,24 +272,10 @@ def main(lib: pathlib.Path, mapping: pathlib.Path) -> int:
     ge = load_grade_eval()
     recs = ge.load_golden(lib)
 
-    graded = {}
-    for n, line in enumerate(mapping.read_text().splitlines(), 1):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        m = re.fullmatch(r"\s*Q(\d+)\|(.+?)\s*", line)
-        if not m:
-            die(f"{mapping}: line {n}: expected Q<n>|<transcript>")
-        q, t = int(m.group(1)), pathlib.Path(m.group(2))
-        if not 1 <= q <= len(recs):
-            die(f"{mapping}: line {n}: Q{q} is not a case in the golden set (1..{len(recs)})")
-        if q in graded:
-            die(f"{mapping}: line {n}: Q{q} is mapped twice — one transcript per case")
-        t = t if t.is_absolute() else mapping.parent / t
-        if not t.is_file():
-            die(f"{mapping}: line {n}: transcript {t} not found")
-        graded[q] = t
-    if not graded:
-        die(f"{mapping}: no cases mapped")
+    try:
+        graded = ge.read_mapping(mapping, len(recs))
+    except ValueError as e:
+        die(str(e))
 
     npass = 0
     for q in sorted(graded):

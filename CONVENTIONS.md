@@ -463,6 +463,9 @@ Every retrieval agent's body states, and every agent is held to:
   a repo-tier fact. State when an answer is **partial**. A citation means *the answer rests on this
   file*, so a refusal cites nothing: the files checked to establish an absence are named in the answer
   text, never cited. `grade-eval` holds a negative case to exactly this.
+- **Quote what the answer rests on.** Each value the answer depends on comes with the sentence that
+  states it, quoted word for word from the cited file (markup dropped, words kept). The reader can
+  find the quote in the file, and `grade-eval` can tell it from a paraphrase of recall.
 - **Load only the libraries the question touches.** A question about one domain must not pay for
   every installed library; a question spanning a project fact and a library fact loads both.
 - **On absence:** answer *"fact not found — check KB"*. Never fill the gap from model memory — nor from
@@ -539,6 +542,10 @@ oracle naming only one fails it. Rules:
   and in the eval evidence it was prompted by, as the date and the run that prompted it. Stored
   grades are never re-stated under the amended oracle.
 
+**An excerpt is the one sentence, or the one clause, that carries the value**: never a passage
+of several sentences, and never a lone word. A lone word ("label") is passed by an answer that was
+guessed. A passage of several sentences fails an answer that quoted only the one that mattered.
+
 **Excerpts are matched with whitespace normalised**, so an excerpt may span a hard-wrapped line in the
 source. It may **not** contain markdown markup: emphasis exists in the file and never in a spoken
 answer, so an excerpt carrying it tests formatting rather than grounding. The golden set updates **in the same commit** as any
@@ -553,7 +560,8 @@ Two tiers test it, and they are not interchangeable:
   touch the golden set. It is graded from the transcript, not from what the agent says it did.
 - **Answer-grounding eval** (scheduled, sampled): the agent runs; its answer must contain the
   `expected_excerpt`, **verified by grep against the expected file** — not by an LLM judge. This is what
-  catches answering from memory.
+  catches answering from memory. `grade-eval --transcripts` grades the agents' transcripts directly,
+  through the same mapping file as `grade-routing`.
 
 The golden set is a fire alarm on fixed questions. The **embedded-fact lint** over agent and command
 files — flagging identifiers, numeric constants, environment-specific values and credential-shaped
