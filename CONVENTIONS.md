@@ -308,16 +308,26 @@ for them.
   (Conflicting sources are a different case entirely — §8.)
 - **Sources are `[[slug]]` backlinks.** Episodic notes already *are* sources — link straight to them
   (`[[YYYY-MM-DD-domain-notes]]`). An external artifact with no home in the KB (a spec, vendor page, PDF)
-  gets a lightweight stub under **`knowledge/sources/`** so its backlink resolves. Don't create a stub for
-  something already in the KB.
+  gets a lightweight stub under the library's **`sources/`** so its backlink resolves. Don't create a
+  stub for something already in the KB.
 - A source stub (`sources/<slug>.md`, inside the library) records: title, origin (URL / page-ID /
   filename), date ingested, and where the artifact itself lives.
+- **`sources/` and `documents/` hold different things.** `sources/` holds **only `.md` citation
+  stubs**: routed from the library's `INDEX.md`, checked like any other file, and what a `Source:`
+  line cites. `documents/` holds **the archived artifacts themselves**, kept verbatim: a schema dump,
+  an ERD export, a PDF, a copied document. It is not routed (§3). A raw artifact never goes in
+  `sources/`; it goes in `documents/`, and a stub in `sources/` points at it. `check-kb` fails a
+  non-`.md` file under `sources/`.
 
 **Citing an artifact — three cases, and only one is hard.**
 
 1. **Inside this library.** A `[[slug]]` or a relative path. Nothing special.
-2. **Never in any repository** — a vendor page, a spec, a PDF. The stub records *origin* (URL,
-   page ID, publisher, date ingested) and no filesystem path, because there is not one.
+2. **Never in any repository, and stable where it is** — a vendor page, a published spec, a PDF at a
+   permanent URL. The stub records *origin* (URL, page ID, publisher, date ingested) and no
+   filesystem path, because there is not one.
+   **A local file or export that would not survive elsewhere** — a schema dump, an ERD export, a
+   pasted document, a page that may move — is archived under `documents/`, and its stub records the
+   origin *and* the archived path. Evidence that exists on one machine resolves on no other.
 3. **In another repository.** Two rules, in this order:
    - **Evidence travels with the domain it was folded from.** Archive the artifact inside the
      library, under `documents/`. This is **not** a single-canonical-home violation: the rule is
@@ -697,6 +707,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | `check-links` | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
 | slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
 | orphans | every file reachable from the root `INDEX.md` by router links; golden set and `documents/` exempt (§3) | **built** — `check-kb` |
+| raw artifacts in `sources/` | `sources/` holds only `.md` citation stubs; an artifact is archived under `documents/` (§6) | **built** — `check-kb` |
 | stamp placement | no indented `Verified:` / `Recheck:` line outside a code fence (§7) | **built** — `check-kb` |
 | `verified:` floor | a declared floor equals the one derived from the section stamps; no stamp dated in the future (§7) | **built** — `check-kb` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |

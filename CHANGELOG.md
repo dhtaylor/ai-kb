@@ -4,6 +4,15 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
+## Unreleased
+
+Changes on `main` since v0.2.0. A contract or check change, so the next release is a minor bump
+(ADR-0015).
+
+- `sources/` holds only `.md` citation stubs, and raw artifacts are archived under `documents/`: now
+  stated in CONVENTIONS §6, with the missing case for a local file or export, and in CONTRIBUTING.
+  `check-kb` fails a non-`.md` file under `sources/` (#71).
+
 ## v0.2.0 — 2026-10-16
 
 The first tagged release. It covers everything from the first commit (2026-09-19) to this date;
