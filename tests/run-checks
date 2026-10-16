@@ -644,6 +644,39 @@ sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "
 case_run "stale section with no assertion is named, not skipped" 0 "no assertion" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vnone" --all
 
+# agent_ttl (issue #30): a domain may declare how long an agent stamp stays fresh. Derived as a
+# tenth of the horizon, a vendor-product library's agent stamps (90–180d band: 9–18d) expired
+# before every monthly sweep, and the only lever was the horizon, which also sets the human
+# TTL. The fixture's horizon is 90d (default agent TTL 9d); its agent stamp is 20 days old.
+ttl_lib() { # ttl_lib <dir> [agent_ttl line]
+  build_clean "$1"
+  printf 'Recheck: true\n' >> "$1/widgets.md"
+  sed -i "s/^Verified: .*\$/Verified: $(date -d '20 days ago' +%F) · by: agent · method: manual/" "$1/widgets.md"
+  [ -n "${2:-}" ] && sed -i "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/" "$1/INDEX.md"
+  return 0
+}
+ttl_lib "$TMP/ttl-default"
+case_run "agent_ttl: undeclared, it is a tenth of the horizon" 0 "agent TTL 9d" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
+case_run "agent_ttl: undeclared, a 20-day agent stamp is due" 0 "1 fact due for recheck" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/ttl-default" --nudge
+ttl_lib "$TMP/ttl-30" "agent_ttl: 30d   # outlasts the monthly sweep"
+case_run "agent_ttl: a declared value is used" 0 "agent TTL 30d" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-30"
+case_run "agent_ttl: within it, a 20-day agent stamp is not due" 0 "" -- \
+  bash -c '! "$1" "$2" --nudge | grep -q "due for recheck"' _ "$ENGINE/scripts/kb-due" "$TMP/ttl-30"
+case_run "agent_ttl: a declared value passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-30"
+# An agent TTL as long as the horizon erases the trust tier between agent and human stamps.
+ttl_lib "$TMP/ttl-eq" "agent_ttl: 90d"
+case_run "agent_ttl: not shorter than the horizon fails check-kb" 1 "agent_ttl" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ttl-eq"
+case_run "agent_ttl: not shorter than the horizon is refused by kb-verify" 2 "agent_ttl" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-eq"
+case_run "agent_ttl: an invalid one is a kb-due warning, never a crash" 0 "agent_ttl" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/ttl-eq" --nudge
+ttl_lib "$TMP/ttl-bad" "agent_ttl: a month"
+case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
+
 # kb-verify's own --yes gate (§3 of its docstring): without it, a Recheck command
 # is printed, never executed. Prove it with an observable side effect — a rewritten
 # date can be missed by eye, a file that must-not-exist cannot.
@@ -1140,10 +1173,14 @@ case_run "nudge: unstamped sourced sections are counted, CONFLICTED, episodic an
   "2 unstamped sections (never verified)" -- "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-due" --nudge
 case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
-# Without check-kb beside it, kb-due loses only this category: one warning, the rest intact.
+# Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
+# count, and the recheck count, whose agent TTL is check-kb's (issue #30). One warning each; the
+# rest intact.
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
-case_run "nudge: without check-kb the other categories still print" 0 "fact due for recheck" -- \
+case_run "nudge: without check-kb the other categories still print" 0 "episodic notes awaiting distillation" -- \
+  "$TMP/due-nockb/kb-due" "$NFX/kb/episodic-due" --nudge
+case_run "nudge: without check-kb the recheck count is a one-line warning" 0 "could not compute facts due for recheck" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
 case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge

@@ -9,6 +9,8 @@ Covers, within a single root:
   * stamp placement   — no indented Verified:/Recheck: line outside a code fence
   * verified: floor   — a declared floor equals the one derived from the section stamps (§7);
                         no stamp is dated in the future
+  * agent_ttl         — if the root INDEX.md declares one, it is <N>d and shorter than
+                        freshness_horizon (§7)
 
 ORPHANS are the defect nothing else catches at commit time: an unrouted file
 passes every other check and is invisible to retrieval, which descends routers
@@ -96,6 +98,24 @@ def derived_floor(body: str) -> str:
     if unstamped(body):
         return "unknown"
     return min((d for s in served for d in s["dates"]), default="unknown")
+
+
+def agent_ttl(declared, horizon: int) -> int:
+    """Days an agent stamp stays fresh (§7): the root INDEX.md's agent_ttl: if it declares one,
+    else a tenth of the horizon. Declared because a derived value surprised: a vendor-product
+    horizon of 90-180d gives 9-18d, so agent stamps expired before every monthly sweep, and
+    stretching the horizon to fix that stretched the human TTL too (issue #30). Raises
+    ValueError unless it is <N>d and shorter than the horizon: an agent TTL as long as the
+    horizon erases the trust tier between agent and human stamps. kb-verify and kb-due import
+    this, so the one rule has one copy."""
+    if declared is None:
+        return max(1, horizon // 10)
+    value = declared.split(" #")[0].strip().strip('"').strip("'")
+    m = re.fullmatch(r"(\d+)d", value)
+    if not m or not 0 < int(m.group(1)) < horizon:
+        raise ValueError(f"agent_ttl: {value!r} must be <N>d and shorter than freshness_horizon "
+                         f"({horizon}d), or an agent stamp is trusted as long as a human one")
+    return int(m.group(1))
 
 
 def kb_files(root: pathlib.Path) -> list:
@@ -218,6 +238,13 @@ def main(root: pathlib.Path) -> int:
                                f"at the start of a line, so this one certifies nothing")
             elif not fenced and (m := STAMP_DATE.match(line)) and m.group(1) > TODAY:
                 defects.append(f"{f}:{n}: stamp dated in the future ({m.group(1)})")
+
+        if f == root / "INDEX.md" and "agent_ttl" in fm:
+            h = re.match(r"(\d+)d", fm.get("freshness_horizon", ""))
+            try:
+                agent_ttl(fm["agent_ttl"], int(h.group(1)) if h else 0)
+            except ValueError as e:
+                defects.append(f"{f}: {e}")
 
         if "verified" in fm:
             declared = fm["verified"].split(" #")[0].strip()      # a trailing YAML comment

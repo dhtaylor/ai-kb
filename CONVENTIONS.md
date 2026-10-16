@@ -176,6 +176,8 @@ verifier_budget: <N>          # max facts re-checked per verification cycle, hig
 sweep_interval: <N>d          # how long a kb-audit sweep stays good for. 30d for a library, 14d for
                               # a project tree, whose facts churn faster. Explicit rather than derived
                               # from the horizon: a 90d horizon would imply a 9d nag.
+agent_ttl: <N>d               # optional: how long an agent stamp stays fresh. Default a tenth of
+                              # the horizon; check-kb fails one not shorter than the horizon (§7).
 last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `never` until the first.
                               # It lives here, not in needs-attention.md, because a CLEAN sweep
                               # writes no queue file and would erase the evidence that it ran.
@@ -370,7 +372,10 @@ Verified: 2026-09-19 · by: agent · method: query
   decides between a stale fact, a wrong assertion and a real contradiction (§8). And **the commands
   are printed and approved per run**, because a library is content that travels between people:
   running one executes its author's shell on your machine.
-- **Trust tiers.** Agent-verified TTL is materially shorter than human-verified (**1/10th**).
+- **Trust tiers.** Agent-verified TTL is materially shorter than human-verified: **1/10th** of the
+  horizon, unless the domain declares `agent_ttl` (§3), which must stay shorter than the horizon.
+  Declare it when agent stamps would otherwise expire before the next sweep. Do not stretch the
+  horizon instead: that stretches the human TTL with it.
   **High-blast-radius** facts require **human** re-verification regardless of any agent stamp:
   deploy targets, environment routing, credential references. **The test is the consequence, not the
   subject matter — if this fact is wrong, what happens?** Damage that is expensive or impossible to

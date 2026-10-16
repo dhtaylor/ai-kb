@@ -42,8 +42,8 @@ whether or not they are due: a page grepped for a few words (its title or subjec
 while the page exists and tests nothing about its own claim. A warning, not a failure.
 
 Selection is by staleness, per §7: a section is due when its stamp is older than the
-domain's freshness_horizon, or older than a TENTH of it for an agent stamp. The
-domain's verifier_budget caps how many run per sweep, oldest first.
+domain's freshness_horizon, or, for an agent stamp, older than its agent_ttl (a TENTH of
+the horizon unless the domain declares one). The domain's verifier_budget caps how many run per sweep, oldest first.
 
 THE QUEUE (Phase 5, plan §6 exit: "stale or drifted facts surface as a queue rather
 than rotting silently"): on every FAILED assertion run under --yes, kb-verify appends
@@ -134,16 +134,21 @@ def load_kb_watch():
     return mod
 
 
-def move_floor(path: pathlib.Path):
-    """Rewrite a declared frontmatter verified: to the floor the file's stamps now support. A
-    restamp can raise the oldest stamp, and check-kb fails a floor that disagrees with its
-    stamps (§7) — so the derivation is check-kb's own, imported, not a second copy of it."""
+def load_check_kb():
     loader = importlib.machinery.SourceFileLoader(
         "check_kb", str(pathlib.Path(__file__).resolve().parent / "check-kb"))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     check_kb = importlib.util.module_from_spec(spec)
     sys.dont_write_bytecode = True
     loader.exec_module(check_kb)
+    return check_kb
+
+
+def move_floor(path: pathlib.Path):
+    """Rewrite a declared frontmatter verified: to the floor the file's stamps now support. A
+    restamp can raise the oldest stamp, and check-kb fails a floor that disagrees with its
+    stamps (§7) — so the derivation is check-kb's own, imported, not a second copy of it."""
+    check_kb = load_check_kb()
     text = path.read_text()
     parts = text.split("---\n", 2)
     if not text.startswith("---\n") or len(parts) < 3:
@@ -221,9 +226,17 @@ def horizon_and_budget(root: pathlib.Path):
     return (int(h.group(1)) if h else None), (int(b.group(1)) if b else None)
 
 
+def agent_ttl(root: pathlib.Path, horizon: int) -> int:
+    """The domain's agent-stamp TTL: its agent_ttl:, else a tenth of the horizon (§7), by
+    check-kb's own rule. Raises ValueError on one check-kb would fail."""
+    idx = (root / "INDEX.md").read_text(errors="replace")
+    m = re.search(r"^agent_ttl:[ \t]*(.*?)[ \t]*$", idx, re.M)
+    return load_check_kb().agent_ttl(m.group(1) if m else None, horizon)
+
+
 def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
     """A stamped section is due for recheck once its age exceeds its trust tier's TTL —
-    a tenth of the domain horizon for an agent stamp, the full horizon for a human one (§7).
+    the domain's agent TTL for an agent stamp, the full horizon for a human one (§7).
     Top-level (not nested in main()) so kb-due can import and call it: the two scripts must
     judge staleness identically, and a condition copied into a second file is a condition
     that can drift out from under the first."""
@@ -356,14 +369,17 @@ def main(argv) -> int:
               file=sys.stderr)
         return 2
     budget = budget_override or budget or 5
-    agent_ttl = max(1, horizon // 10)
+    try:
+        ttl = agent_ttl(root, horizon)
+    except ValueError as e:
+        print(f"kb-verify: {root}/INDEX.md: {e}", file=sys.stderr); return 2
 
-    due, found, with_cmd = due_sections(root, horizon, agent_ttl, "--all" in flags)
+    due, found, with_cmd = due_sections(root, horizon, ttl, "--all" in flags)
     stamped = len(found)
     over_budget = max(0, len(due) - budget)
     selected = due[:budget]
 
-    print(f"kb-verify: {root}  (horizon {horizon}d, agent TTL {agent_ttl}d, budget {budget})")
+    print(f"kb-verify: {root}  (horizon {horizon}d, agent TTL {ttl}d, budget {budget})")
     print(f"  {stamped} stamped section(s), {len(with_cmd)} with a Recheck assertion, "
           f"{len(selected)} due to run"
           + (f", {over_budget} more past the budget" if over_budget else ""))
@@ -376,7 +392,7 @@ def main(argv) -> int:
 
     # The facts no command can settle. Naming them is the point: a verifier that
     # only reports what it can check reads as though everything else were verified.
-    unverifiable = [s for s in found if not s["cmd"] and is_due(s, horizon, agent_ttl)]
+    unverifiable = [s for s in found if not s["cmd"] and is_due(s, horizon, ttl)]
     if unverifiable:
         print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
         for s in unverifiable:
