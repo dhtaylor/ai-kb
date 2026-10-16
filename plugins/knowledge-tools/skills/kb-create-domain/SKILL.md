@@ -205,7 +205,9 @@ Create `<domain>-golden.md` **at the library root** — the oracle travels with 
 Records carry `case:`, `question:`, `expected_file:`, `expected_excerpt:`, and optionally one or more
 `alt_excerpt:` lines (CONVENTIONS §10). A domain with no golden set has no oracle, and a later
 rename will rot it silently. Choose each excerpt so it starts where a natural quote would start. An
-excerpt beginning mid-clause gets quoted around, and fails a correct answer.
+excerpt beginning mid-clause gets quoted around, and fails a correct answer. Make each excerpt the one
+sentence, or the one clause, that carries the value: never several sentences, which fail an answer
+that quoted only the one that mattered, and never a lone word, which a guessed answer also contains.
 
 Include from the start:
 

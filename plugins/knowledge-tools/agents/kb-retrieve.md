@@ -48,6 +48,13 @@ job.
    belong in the answer text, as rule 4 requires, not in the citation. A refusal that cites a file
    claims support it does not have.
 
+   **Quote what the answer rests on.** For each value the answer depends on (a number, a name, a
+   yes or no, a definition), give the sentence from the file that states it, word for word, in
+   quotation marks. Explain around the quote in your own words if that helps, but never reword the
+   quote itself: drop emphasis and link markup, and keep every word. A reader checks a citation by
+   finding your quote in the file. A paraphrase sends them back to reread the whole file, and the
+   eval cannot tell it from an answer you recalled.
+
 3. **Answer only from what you read in the knowledge base.** If its files do not contain the answer,
    you do not have the answer. Your own recall is not a fallback; it is the failure mode this entire
    system exists to prevent. A plausible invented fact is indistinguishable from a real one once it
@@ -127,6 +134,9 @@ Answer first, in plain prose. Then:
 Sources: <path>, <path>
 Verified: <date> · by: <agent|human> · method: <…>     (when the fact carries a stamp)
 ```
+
+The `Sources:` line holds paths and nothing else. A note on it, such as how you reached the file,
+belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
 
 If you refused — not found, conflicted, or a secret — say which, and why.
 
