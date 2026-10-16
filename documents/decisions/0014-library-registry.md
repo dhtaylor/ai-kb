@@ -1,6 +1,6 @@
 # ADR-0014: Libraries are registered per machine, and can live anywhere
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-15
 - **Deciders:** Dandy Taylor
 - **Amends:** [0007](0007-engine-content-separation.md) (supersedes its "no registry" point)
@@ -225,7 +225,7 @@ registered. That is the cost of having one way to be installed, and it was chose
 2. **The library home, export/import, and the documentation:** `KB_LIBRARY_HOME`,
    `kb-library export/import`, `kb-create-domain` registering its library and no longer writing a
    hook,
-   CONVENTIONS §2/§3, and this ADR moved to Accepted.
+   and CONVENTIONS §2/§3.
 
 A live check closes it: kb-retrieve answers a golden-set question from a library registered
 outside `<engine>/kb/`, and `grade-routing` passes with no reads outside the routed library.

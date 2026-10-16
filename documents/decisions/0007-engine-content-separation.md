@@ -5,6 +5,12 @@
 - **Deciders:** Dandy Taylor
 - **Amends:** [0003](0003-scoping-topology.md), [0006](0006-behaviour-distribution.md)
 
+> **Amended 2026-10-15 by [ADR-0014](0014-library-registry.md).** Its "no registry" point is
+> superseded. That objection was to a registry stored in the engine, which would drift or lie on
+> other machines. ADR-0014 keeps a per-machine registry outside every repository, and a library is
+> installed by being registered there, wherever it lives. `<engine>/kb/` becomes the default folder
+> for new libraries and is no longer scanned. Everything else here stands.
+
 ## Context and problem statement
 
 [ADR-0006](0006-behaviour-distribution.md) made the knowledge base its own repository, carrying the
