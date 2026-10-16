@@ -140,7 +140,10 @@ single-canonical-home rule (§4) spans the KB boundary.
   the entry point, always the first file loaded. A library is installed by being **registered** on
   the machine (`kb-library add`), wherever it lives, under the name its root `INDEX.md` declares as
   `domain:`. The registry is per machine and outside every repository, so registering writes nothing
-  into a library ([ADR-0014](documents/decisions/0014-library-registry.md)).
+  into a library ([ADR-0014](documents/decisions/0014-library-registry.md)). `kb-library add <git-url>`
+  clones into the **library home** (`$KB_LIBRARY_HOME`, else the home `kb-bootstrap` recorded, else
+  `<engine>/kb/`), which is only where new clones go; nothing is found by being there.
+  `kb-library export` and `import` carry a machine's set of libraries, by name and origin, to another.
 - Content lives in **single-topic files** sized as described in §4.
 - When a domain's topic files exceed **~15**, group the overflow into a sub-folder with its own
   sub-index. Below that threshold, stay **flat** — every sub-folder adds a routing hop.

@@ -72,8 +72,8 @@ domain, so a cheap question now beats a migration later.
 Every step from here on mutates: a new repository, a new directory tree, new files. State the plan
 and get explicit approval before Step 3 runs a single command:
 
-- the domain name and where it lives (`<engine>/kb/<domain>/` unless the user names another
-  folder, or the project's `knowledge/` for a `repo:` tier);
+- the domain name and where it lives (the library home, which `<engine>/scripts/kb-library home`
+  prints, unless the user names another folder; or the project's `knowledge/` for a `repo:` tier);
 - the `scope:` and the tier test that produced it (Step 1);
 - whether it will be seeded from source material (Step 4) or left an empty shelf.
 
@@ -83,8 +83,9 @@ is a confirmation of the plan, not a second interrogation of decisions already m
 
 ## Step 3 — Scaffold the library. It is a repository, not a folder.
 
-A domain library is its **own git repository**. It can live anywhere; by default it goes in
-`<engine>/kb/<domain>/`. Create and initialise it:
+A domain library is its **own git repository**. It can live anywhere; by default it goes in the
+library home (`kb-library home`: `$KB_LIBRARY_HOME`, else the home `kb-bootstrap` recorded, else
+`<engine>/kb/`). Create and initialise it:
 
 ```
 mkdir -p <dir>/<domain> && cd <dir>/<domain> && git init

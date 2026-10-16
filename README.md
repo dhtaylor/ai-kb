@@ -48,8 +48,7 @@ Requirements: git, bash, Python 3 (standard library only) and Claude Code.
 ```bash
 git clone https://github.com/dhtaylor/ai-kb.git ~/kb-engine
 ~/kb-engine/scripts/kb-bootstrap --apply                  # register the engine on this machine
-git clone <library-url> <anywhere>/<library-name>         # each library you have access to
-~/kb-engine/scripts/kb-library add <anywhere>/<library-name>   # ...registered on this machine
+~/kb-engine/scripts/kb-library add <library-git-url>      # each library you have access to
 ```
 
 Then restart your terminal and any open Claude Code session. Run `kb-bootstrap` (no flag, same as

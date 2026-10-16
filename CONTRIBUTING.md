@@ -18,9 +18,15 @@ is the path through it, not a summary of it.
 ```bash
 git clone https://github.com/dhtaylor/ai-kb.git ~/kb-engine      # the engine, anywhere you like
 ~/kb-engine/scripts/kb-bootstrap --apply                         # register the engine on this machine
-git clone <library-url> <anywhere>/<library-name>                # each library you need
-~/kb-engine/scripts/kb-library add <anywhere>/<library-name>     # ...registered on this machine
+~/kb-engine/scripts/kb-library add <library-git-url>             # each library you need
 ```
+
+`kb-library add <git-url>` clones into the **library home** and registers the clone. The home is
+`<engine>/kb/` unless you choose another: `kb-bootstrap --apply --library-home <dir>` records it, and
+`KB_LIBRARY_HOME` overrides it for one shell. `kb-library add <path>` registers a library you have
+already cloned anywhere. Setting up a second machine with the same libraries is
+`kb-library export > libraries.txt` on the first and `kb-library import libraries.txt` on the second:
+the export carries each library's name and origin, never a path.
 
 The engine is wherever the script lives; nothing else is typed. `kb-bootstrap` writes
 `~/.claude/settings.json` (the engine path, the plugin, the session hook), `git config --global
