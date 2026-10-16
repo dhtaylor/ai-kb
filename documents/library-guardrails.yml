@@ -13,6 +13,11 @@ name: guardrails
 # rotate, and nothing to leak. The knowledge may stay private in this repository;
 # only the behaviour that checks it has to be public.
 #
+# WHICH ENGINE: a release tag, never main (ADR-0015). This library is checked
+# against a named engine release, so an engine change cannot fail this CI until
+# the library's owner moves the pin. Moving it is a one-line pull request here,
+# which this workflow then checks against the new release.
+#
 # WHAT IT IS NOT: detection, not prevention — the push lands and then the run
 # fails. A real leak still needs rotation AND a history rewrite (both facts are
 # in knowledge-architecture/secret-governance.md, with re-check assertions).
@@ -38,7 +43,7 @@ jobs:
 
       - name: Fetch the engine
         run: |
-          git clone --depth 1 --quiet https://github.com/dhtaylor/ai-kb.git "$RUNNER_TEMP/engine"
+          git clone --depth 1 --branch v0.2.0 --quiet https://github.com/dhtaylor/ai-kb.git "$RUNNER_TEMP/engine"
           echo "ENGINE=$RUNNER_TEMP/engine" >> "$GITHUB_ENV"
 
       - name: Structure
