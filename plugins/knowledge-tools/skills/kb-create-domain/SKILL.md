@@ -252,6 +252,20 @@ so the hook is not the enforcement boundary — a fact this knowledge base holds
 workflow fetches the engine at run time and needs no credential: the engine is public, while the
 library's knowledge stays private.
 
+The workflow's high-blast-radius step fails a pull request that deletes a fact file, removes a
+`CONFLICTED` or `UNCORROBORATED` marker or promotes a scope, unless the pull request carries the
+`owner-approved` label, so **the label must exist** in the library's GitHub repository. Once the
+library has a GitHub remote, create it:
+
+```bash
+gh label create owner-approved --color 0E8A16 --description "Owner attests to a high-blast-radius change"
+```
+
+**Create it; never apply it.** The label is the owner's attestation that a high-blast change was
+reviewed, and the gate exists so that someone other than the agent gives it. If the library has no
+GitHub remote yet, say in your report that the label is a manual step for when it does, rather than
+skipping it silently.
+
 ## Step 6c — Name an owner
 
 Write `.github/CODEOWNERS` in the new library — copy the shape from an installed one. It is advisory
