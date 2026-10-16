@@ -23,14 +23,15 @@ facts**:
 | [`CONVENTIONS.md`](CONVENTIONS.md) | The contract: scope tiers, provenance, currency stamps, slugs and cross-links, contradictions, the retrieval rules. It settles any question this README leaves open. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating. |
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills and the `kb-retrieve` agent. |
-| `scripts/` | Setup commands (`kb-bootstrap`, `kb-init`, `kb-capture`) and the checks that guard the contract. |
+| `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`) and the checks that guard the contract. |
 | `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0013). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
 The facts live elsewhere, in two kinds of home:
 
-- **Domain libraries.** Each library is its own git repository, one per subject domain, cloned into
-  the engine's `kb/` directory. A library holds facts that are true wherever its subject appears,
+- **Domain libraries.** Each library is its own git repository, one per subject domain, cloned
+  anywhere and registered on the machine with `kb-library add` (the engine's `kb/` is the default
+  place). A library holds facts that are true wherever its subject appears,
   plus their sources and a golden set of test questions. Libraries may be private or public: the engine
   is public, and the knowledge doesn't have to be.
 - **Project trees.** A `knowledge/` directory inside an ordinary project repository holds facts
@@ -46,9 +47,9 @@ Requirements: git, bash, Python 3 (standard library only) and Claude Code.
 
 ```bash
 git clone https://github.com/dhtaylor/ai-kb.git ~/kb-engine
-mkdir -p ~/kb-engine/kb
-git clone <library-url> ~/kb-engine/kb/<library-name>     # each library you have access to
 ~/kb-engine/scripts/kb-bootstrap --apply                  # register the engine on this machine
+git clone <library-url> <anywhere>/<library-name>         # each library you have access to
+~/kb-engine/scripts/kb-library add <anywhere>/<library-name>   # ...registered on this machine
 ```
 
 Then restart your terminal and any open Claude Code session. Run `kb-bootstrap` (no flag, same as

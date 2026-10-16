@@ -27,9 +27,11 @@ run "exec bits"          ./scripts/check-exec-bits
 run "secret scan"        ./scripts/check-secrets
 run "embedded-fact lint" ./scripts/check-embedded-facts
 run "tool-scope lint"    ./scripts/check-tool-scope
-# Libraries cannot see each other, so cross-library resolution can only run here.
-[ -d kb ] && run "cross-library links" ./scripts/check-xlinks kb
-[ -d kb ] && [ -n "$(ls -d kb/*/ 2>/dev/null)" ] && run "scope" ./scripts/check-scope kb/*/
+# Libraries cannot see each other, so cross-library resolution runs here, over every library
+# registered on this machine wherever it lives (ADR-0014).
+run "cross-library links" ./scripts/check-xlinks --installed
+mapfile -t libs < <(./scripts/kb-libraries | awk -F'\t' '$1 == "ok" {print $3}')
+[ "${#libs[@]}" -gt 0 ] && run "scope" ./scripts/check-scope "${libs[@]}"
 
 # The suite takes a few seconds and only matters when the checked thing changed,
 # so it runs when this commit touches a check or the suite itself. CI runs it

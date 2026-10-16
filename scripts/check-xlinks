@@ -20,15 +20,18 @@ That WARNS. A link into a library that IS installed, naming a slug it does not
 have, is dead and FAILS — the difference matters, because treating absence as
 breakage would punish the portability the whole design is for.
 
-Usage: check-xlinks <kb-root> [tree ...]
-  kb-root   the engine's kb/ directory: the libraries a link can resolve INTO
+Usage: check-xlinks --installed [tree ...]
+       check-xlinks <kb-root> [tree ...]
+  --installed  resolve against the libraries registered on this machine (ADR-0014): the
+            installed set, wherever each one lives. This is what the hooks run.
+  kb-root   a directory whose library folders are the set a link can resolve INTO
   tree      any further tree whose links should be resolved — a project
             knowledge/ tree, typically. It is a source of links, never a target:
             nothing may cite a project's facts, because they are true of one
             deployment only.
 Exit 0 when nothing is dead, 1 otherwise. Warnings alone do not fail.
 """
-import pathlib, re, sys
+import importlib.machinery, importlib.util, pathlib, re, sys
 
 # episodic/ is NOT excluded: a session note is a routed, citable file, and a fact
 # in one library legitimately cites one in another. Excluding it here called such
@@ -89,14 +92,28 @@ def links_in(tree: pathlib.Path, label: str, index, dead, warn):
     return ok
 
 
-def main(kb: pathlib.Path, trees) -> int:
-    if not kb.is_dir():
-        print(f"check-xlinks: {kb} is not a directory", file=sys.stderr); return 2
+def registered():
+    """{name: root} from the registry, through kb-libraries, its one reader."""
+    path = pathlib.Path(__file__).resolve().parent / "kb-libraries"
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("kb_libraries", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return dict(sorted(mod.installed().items()))
 
-    libs = {d.name: d for d in sorted(kb.iterdir())
-            if d.is_dir() and (d / "INDEX.md").is_file()}
+
+def main(kb, trees) -> int:
+    if kb == "--installed":
+        libs, where = registered(), "on this machine (kb-library list)"
+    else:
+        kb = pathlib.Path(kb)
+        if not kb.is_dir():
+            print(f"check-xlinks: {kb} is not a directory", file=sys.stderr); return 2
+        libs, where = {d.name: d for d in sorted(kb.iterdir())
+                       if d.is_dir() and (d / "INDEX.md").is_file()}, f"under {kb}"
     if not libs:
-        print(f"check-xlinks: no libraries installed under {kb} — nothing to resolve")
+        print(f"check-xlinks: no libraries installed {where} — nothing to resolve")
         return 0
 
     index = {name: slugs_of(path) for name, path in libs.items()}
@@ -126,5 +143,5 @@ def main(kb: pathlib.Path, trees) -> int:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("usage: check-xlinks <kb-root> [tree ...]", file=sys.stderr); sys.exit(2)
-    sys.exit(main(pathlib.Path(sys.argv[1]), sys.argv[2:]))
+        print("usage: check-xlinks --installed | <kb-root> [tree ...]", file=sys.stderr); sys.exit(2)
+    sys.exit(main(sys.argv[1], sys.argv[2:]))

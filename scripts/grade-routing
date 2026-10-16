@@ -10,8 +10,8 @@ membership, not judgement.
 Per golden case, from Read/Glob/Grep calls only, it reports
   (a) whether the expected_file was Read (a path is RESOLVED to a file, as grade-eval does;
       never suffix-matched, so a same-named file in another library does not pass);
-  (b) which libraries had content read beyond their INDEX.md (any Read of kb/<lib>/... whose
-      file is not INDEX.md);
+  (b) which libraries had content read beyond their INDEX.md (any Read inside a library
+      registered on this machine, or the graded one, whose file is not INDEX.md);
   (c) whether the golden set or an eval folder was touched (a Read of *-golden.md or of a
       path under an eval* folder, a Glob/Grep path or glob naming either, or either one
       appearing in what a Glob or Grep RETURNED, in any output mode: a bare file list shows
@@ -27,7 +27,7 @@ Per golden case, from Read/Glob/Grep calls only, it reports
       starting with ! excludes: it is never contamination and is applied when computing the
       scope. The per-case line says so.
 
-Every case, negative included, fails if nothing under the engine's kb/ was Read at all: a
+Every case, negative included, fails if nothing in an installed library was Read at all: a
 refusal from an agent that searched some other knowledge tree looks exactly like a correct
 one (issue #40).
 
@@ -49,7 +49,8 @@ whose {"type":"tool_use","id":...,"name":...,"input":{...}} blocks are the calls
 a later user record whose content holds {"type":"tool_result","tool_use_id":...,"content":...}
 (content a string or a list of {"type":"text","text":...}). Read carries
 input.file_path; Glob and Grep carry pattern and path (Grep also glob). A relative Read path
-is tried against the engine root, kb/ and the library, as grade-eval does.
+is resolved as grade-eval resolves a citation: against the library, its parent and
+grandparent, or through the registry when it starts with a library's name.
 
 Nothing here runs an agent. A routing run is sampled and started by a person, never per
 commit (ADR-0013); check-golden is the per-commit tier.
@@ -109,25 +110,30 @@ def tool_calls(transcript: pathlib.Path):
     return [(name, inp, results.get(i)) for i, name, inp in calls]
 
 
-def locate(lib: pathlib.Path, p: str):
+def locate(ge, lib: pathlib.Path, p: str):
     """A Read path as a resolved file. Absolute paths resolve as given; a relative one is
-    tried against the engine root, kb/ and the library, taking the first that is a file."""
+    tried the way grade-eval resolves a citation (ge.candidates), taking the first file."""
     if pathlib.Path(p).is_absolute():
         return pathlib.Path(p).resolve()
-    for a in (lib.parent.parent, lib.parent, lib):
-        if (a / p).is_file():
-            return (a / p).resolve()
-    return None
+    return next((f.resolve() for f in ge.candidates(lib, p) if f.is_file()), None)
+
+
+def libraries(ge, lib: pathlib.Path) -> dict:
+    """{name: root} of every library a read can be in: those registered on this machine
+    (ADR-0014), and the library being graded, under the name it declares."""
+    libs, declared = ge.installed()
+    return {**libs, (declared(lib) or lib.name): lib}
 
 
 def needed_libraries(ge, lib: pathlib.Path, rec: dict) -> set:
-    need = {lib.name}
+    libs = libraries(ge, lib)
+    need = {n for n, root in libs.items() if root == lib}
     if rec.get("case") == "cross-root":
         for e in [rec.get("expected_excerpt", "")] + rec.get("alt_excerpt", []):
-            need |= {x for x in XLINK.findall(e) if (lib.parent / x).is_dir()}
-        owner = ge.expected_target(lib, rec.get("expected_file", ""))[0]
-        if owner.is_dir():       # expected_file named as <library>:<path> (issue #36)
-            need.add(owner.name)
+            need |= {x for x in XLINK.findall(e) if x in libs}
+        m = re.fullmatch(r"([\w-]+):.+", rec.get("expected_file", ""))
+        if m and m.group(1) in libs:     # expected_file named as <library>:<path> (issue #36)
+            need.add(m.group(1))
     return need
 
 
@@ -173,10 +179,10 @@ def glob_regex(g: str):
     return re.compile("".join(out) + ")" * depth)
 
 
-def scope_files(lib: pathlib.Path, inp: dict):
+def scope_files(ge, lib: pathlib.Path, inp: dict):
     """Files a Grep with no result could have shown: everything under its path (the library
     if none given), narrowed by its glob."""
-    s = locate(lib, inp["path"]) if inp.get("path") else lib
+    s = locate(ge, lib, inp["path"]) if inp.get("path") else lib
     if s is None:
         s = pathlib.Path(inp["path"])
     files = [s] if s.is_file() else sorted(f for f in s.rglob("*") if f.is_file()) if s.is_dir() else []
@@ -192,22 +198,25 @@ def scope_files(lib: pathlib.Path, inp: dict):
 
 def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
     """(passed, expected_read, content_libs, contamination, why, notes) for one case."""
-    kb = lib.parent
+    libs = libraries(ge, lib)
     reads, touched, listed, notes, content = [], [], set(), [], set()
     in_kb = False
 
+    def owner(f):
+        return next((n for n, root in libs.items() if f is not None and root in f.parents), None)
+
     def lib_of(f):
-        return f.relative_to(kb).parts[0] if f is not None and f.name != "INDEX.md" and kb in f.parents else None
+        return owner(f) if f is not None and f.name != "INDEX.md" else None
 
     for name, inp, res in tool_calls(transcript):
         if name == "Read" and inp.get("file_path"):
             reads.append(inp["file_path"])
-            f = locate(lib, inp["file_path"])
+            f = locate(ge, lib, inp["file_path"])
             if CONTAMINATED.search(str(f or inp["file_path"])):
                 touched.append(f"Read {inp['file_path']}")
             if lib_of(f):
                 content.add(lib_of(f))
-            in_kb |= f is not None and kb in f.parents
+            in_kb |= owner(f) is not None
         elif name in ("Glob", "Grep"):
             if res is None:   # no result: the arguments are all there is. A returned result
                 # is exactly what the agent saw, so it alone is judged (below).
@@ -223,11 +232,11 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
                 continue
             mode = inp.get("output_mode") or "files_with_matches"
             if res is not None:
-                files = [locate(lib, p) or pathlib.Path(p) for p in result_paths(res, mode)]
+                files = [locate(ge, lib, p) or pathlib.Path(p) for p in result_paths(res, mode)]
                 touched += [f"Grep returned {f}" for f in files if CONTAMINATED.search(str(f))]
             else:
                 notes.append("Grep had no tool_result: scope assumed read")
-                files = scope_files(lib, inp)
+                files = scope_files(ge, lib, inp)
                 touched += [f"Grep scope holds {f}" for f in files if CONTAMINATED.search(str(f))]
             for f in files:
                 if lib_of(f):
@@ -242,7 +251,7 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
     if touched:
         why.append("contamination: " + "; ".join(dict.fromkeys(touched)))
     if not in_kb:   # it answered from some other corpus, or none: every case is void (issue #40)
-        why.append(f"nothing under {kb} was Read")
+        why.append("no installed library was Read")
     if case in AGENT_TIER_CASES:
         need = needed_libraries(ge, lib, rec)
         if not expected_read:

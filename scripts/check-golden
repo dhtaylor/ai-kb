@@ -7,8 +7,9 @@ present in the file it names, and every expected_file is REACHABLE from the libr
 root INDEX.md by router links (check-kb's own reachability, imported, not copied). Retrieval
 descends routers and never searches, so a file no router reaches cannot be routed to — and
 check-kb's orphan check exempts documents/ and the golden set, which would otherwise be
-places a record could hide. A cross-root case may name its expected_file in a sibling library
-under the same kb/ as <library>:<path>; it is checked there, against that library's routers. No LLM, no agent, no network — it runs on every commit and is
+places a record could hide. A cross-root case may name its expected_file in another library
+registered on this machine as <library>:<path>; it is checked there, against that library's
+routers. No LLM, no agent, no network — it runs on every commit and is
 cheap enough to.
 
 What it CANNOT do, and this is the point of the split: it cannot tell whether an
@@ -108,16 +109,16 @@ def main(root: pathlib.Path) -> int:
             defects.append(f"{where} [{case}]: no expected_file")
             continue
         owner, rel = ge.expected_target(root, ef)
-        if owner != root.resolve():         # <library>:<path>, a file in a sibling (issue #36)
+        if owner != root.resolve():         # <library>:<path>, another library (issue #36)
             if case != "cross-root":
                 defects.append(f"{where} [{case}]: expected_file '{ef}' names another library — "
                                f"only a cross-root case may")
                 continue
-            if not owner.is_dir():
-                # A library checked on its own (its CI) cannot see its siblings, as check-xlinks
-                # cannot. The record is checked where they are installed together.
-                unchecked.append(f"{where} [{case}]: library '{owner.name}' is not installed "
-                                 f"alongside — '{ef}' is checked where it is")
+            if owner is None:
+                # A library checked on its own (its CI) cannot see the others, as check-xlinks
+                # cannot. The record is checked on a machine where both are registered.
+                unchecked.append(f"{where} [{case}]: library '{ef.split(':')[0]}' is not "
+                                 f"installed on this machine — '{ef}' is checked where it is")
                 continue
             if owner not in reached:
                 reached[owner] = ckb.reachable(owner, ckb.kb_files(owner))

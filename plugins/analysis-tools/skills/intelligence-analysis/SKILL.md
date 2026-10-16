@@ -44,10 +44,9 @@ indistinguishable from the retrieved kind right up until it is subtly wrong.
 
 ### Finding the library
 
-Your session context may already name the installed knowledge libraries. If it does, use that. If it
-does not, locate the engine root your session context provides (never write a literal path for it —
-see the engine's `CONVENTIONS.md` §1) and glob `<engine>/kb/*/INDEX.md`. Do not infer the library set
-from a bare directory listing of `kb/`. Find the library whose `INDEX.md` describes
+Your session context lists the knowledge libraries registered on this machine, each with its
+absolute path. That list is the complete set: a library can live anywhere, so never search
+`<engine>/kb/` or any other folder for one. Find the library whose `INDEX.md` describes
 intelligence-analysis tradecraft, and load it first — always the router, never a guess at a filename.
 
 If no such library is found: **say so plainly** — "the intelligence-analysis knowledge library isn't
