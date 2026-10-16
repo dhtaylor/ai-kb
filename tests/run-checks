@@ -191,6 +191,34 @@ mkdir -p "$TMP/proj"; git init -q "$TMP/proj"
 build_clean "$TMP/proj/knowledge" "general"; rm -rf "$TMP/proj/knowledge/.git"
 case_run "project tree declaring a general tier" 1 "project tree" -- "$ENGINE/scripts/check-scope" "$TMP/proj/knowledge"
 
+# A comparative product library (issue #37): product:<category> names a set of alternatives,
+# not a vendor, so the root INDEX.md lists the vendors it compares. Without the list, a
+# category passes as if it were a vendor.
+build_comp() { # build_comp <dir> <scope> <vendors: frontmatter, as printf %b text>
+  build_clean "$1" "$2"
+  python3 - "$1/INDEX.md" "$3" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+i = t.index("\n", t.index("\nscope:") + 1) + 1
+p.write_text(t[:i] + sys.argv[2].encode().decode("unicode_escape") + "\n" + t[i:])
+PY
+}
+build_comp "$TMP/comp" "product:message-brokers" "vendors: [kafka, rabbitmq, azure-service-bus]"
+case_run "comparative library: product:<category> with its vendors passes" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/comp"
+case_run "comparative library: vendors: passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/comp"
+build_comp "$TMP/comp-block" "product:message-brokers" 'vendors:\n  - kafka\n  - rabbitmq'
+case_run "comparative library: a block list of vendors is read" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/comp-block"
+build_comp "$TMP/comp-one" "product:message-brokers" "vendors: [kafka]"
+case_run "comparative library: one vendor is not a comparison" 1 "at least two" -- "$ENGINE/scripts/check-scope" "$TMP/comp-one"
+build_comp "$TMP/comp-gen" "general" "vendors: [kafka, rabbitmq]"
+case_run "comparative library: vendors: on a general library fails" 1 "only a product:" -- "$ENGINE/scripts/check-scope" "$TMP/comp-gen"
+build_comp "$TMP/comp-self" "product:kafka" "vendors: [kafka, rabbitmq]"
+case_run "comparative library: a category that is one of its vendors fails" 1 "is one of its own vendors" -- "$ENGINE/scripts/check-scope" "$TMP/comp-self"
+build_comp "$TMP/comp-slug" "product:message-brokers" "vendors: [kafka, Rabbit MQ]"
+case_run "comparative library: a vendor that is not a slug fails" 1 "not a slug" -- "$ENGINE/scripts/check-scope" "$TMP/comp-slug"
+build_comp "$TMP/comp-dup" "product:message-brokers" "vendors: [kafka, rabbitmq, kafka]"
+case_run "comparative library: a vendor listed twice fails" 1 "listed twice" -- "$ENGINE/scripts/check-scope" "$TMP/comp-dup"
+
 build_clean "$TMP/escape"
 printf '\nSee [the engine](../../CONVENTIONS.md).\n' >> "$TMP/escape/widgets.md"
 case_run "relative link climbing out of a library" 1 "climbs out" -- "$ENGINE/scripts/check-scope" "$TMP/escape"

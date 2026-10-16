@@ -11,6 +11,13 @@ about every deployment made from one, and a `product:` fact filed as `general` i
 a claim about every product made from one. Both read as ordinary facts. Neither
 announces itself.
 
+A COMPARATIVE PRODUCT LIBRARY (issue #37) compares alternatives from several vendors (a broker
+capability matrix, say). Its scope is product:<category>, and its root INDEX.md lists the vendors
+it compares in `vendors:`. A category is not a vendor, so without the list nothing says which
+products its facts are true of. Checked: the list names at least two vendors, each a slug, none
+twice; the library's scope is product:; and the category is not one of the vendors. NOT checkable:
+whether a slug really names a vendor, or a category is narrow enough. That is review's job (§1).
+
 NOT covered: the CODEOWNER audit on promotion to a shared tier (dormant — there
 is one owner), and cross-library slug uniqueness, which is obsolete: every
 cross-library reference carries a mandatory prefix, so nothing can collide.
@@ -52,6 +59,31 @@ def scope_of(text):
     return m.group(1) if m else None
 
 
+SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+def vendors_of(text):
+    """The `vendors:` list in a router's frontmatter, inline ([a, b]) or as a block list, or None
+    when it declares none."""
+    if not text.startswith("---\n"):
+        return None
+    lines = text.split("---\n", 2)[1].split("\n")
+    for i, line in enumerate(lines):
+        m = re.match(r"^vendors:\s*(.*?)\s*(?:\s#.*)?$", line)
+        if not m:
+            continue
+        if m.group(1).startswith("["):
+            return [v.strip().strip("'\"") for v in m.group(1).strip("[]").split(",") if v.strip()]
+        out = []
+        for item in lines[i + 1:]:
+            b = re.match(r"^\s+-\s*(.*?)\s*(?:\s#.*)?$", item)
+            if not b:
+                break
+            out.append(b.group(1).strip("'\""))
+        return out
+    return None
+
+
 def main(roots) -> int:
     defects = []
     total = 0
@@ -65,6 +97,23 @@ def main(roots) -> int:
             defects.append(f"{idx}: library router declares no scope:"); continue
         if not VALID.match(lib_scope):
             defects.append(f"{idx}: library scope '{lib_scope}' is not a valid value")
+
+        vendors = vendors_of(idx.read_text())
+        if vendors is not None:
+            if not lib_scope.startswith("product:"):
+                defects.append(f"{idx}: declares vendors:, but only a product: library compares "
+                               f"vendors — '{lib_scope}' does not")
+            elif lib_scope.split(":", 1)[1] in vendors:
+                defects.append(f"{idx}: its category '{lib_scope}' is one of its own vendors — a "
+                               f"comparative library's scope names the category, not a vendor")
+            if len(set(vendors)) < 2:
+                defects.append(f"{idx}: vendors: must name at least two vendors — one is a "
+                               f"product:<vendor> library, not a comparison")
+            for v in sorted({v for v in vendors if vendors.count(v) > 1}):
+                defects.append(f"{idx}: vendor '{v}' is listed twice")
+            for v in vendors:
+                if not SLUG.match(v):
+                    defects.append(f"{idx}: vendor {v!r} is not a slug (lowercase, digits, hyphens)")
 
         kind = classify(root)
         if kind == "library" and lib_scope.startswith("repo:"):

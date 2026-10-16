@@ -50,6 +50,13 @@ The two are not interchangeable: they carry different promotion guards, and a ve
 `general` is a claim about the whole world made from one product's behavior. **Do not decide this
 from whichever word the user happened to use** — they are describing their need, not classifying.
 
+**Comparing several vendors' products** (a capability matrix, per-product notes for one job) is a
+comparative product library: `scope: product:<category>`, with the vendors it compares listed as
+`vendors: [<vendor>, <vendor>, …]` in the root `INDEX.md`, under `scope:` (CONVENTIONS §1). Choose
+it only when the comparison is the point. Make each INDEX hook name the vendor its file covers,
+so retrieval can route a question about one product. Where a single-vendor library already holds
+a vendor's facts, link to them instead of restating them.
+
 If the answer is "both", it is **two domains, or one domain and a cross-link** — never one domain
 straddling two tiers. If you cannot tell, **ask the user**. Guessing here is the failure this
 whole test exists to prevent, and it is far cheaper to fix now than after facts accumulate.
