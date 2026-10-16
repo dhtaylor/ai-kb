@@ -411,7 +411,10 @@ Verified: 2026-09-19 · by: agent · method: query
   line reused across sections: a page cannot state twenty different specific facts in one
   sentence, so one fragment cannot defend them. A stamp the assertion backs is no stronger than
   the assertion. `kb-verify` reports, on every run, a fetched fragment of four words or fewer and
-  a (url, fragment) pair backing more than two sections or sections in more than one file.
+  a (url, fragment) pair backing more than two sections or sections in more than one file. A short
+  fragment that binds two runs of text, split by markup or by regex outside `grep -F` (a field and
+  its value, say `Story Points</a> (Agile)`), tests a relation rather than a title and is not
+  reported; an alternation counts as its weakest branch.
 
   Two rules make this safe to run. **A failing assertion is reported, never applied** — a verifier
   that rewrites a fact it has just contradicted destroys the evidence that something changed; a human
