@@ -701,6 +701,23 @@ fm gadgets general > "$TMP/vweak/gadgets.md"
 { printf '# Gadgets\n\n## Reuse three\n\nSource: manual\n%s\n' "$S"
   printf "Recheck: curl -fsSL %s | grep -qiF '%s'\n" "$U" "$LONG"; } >> "$TMP/vweak/gadgets.md"
 printf -- '- [gadgets](gadgets.md) — gadgets\n' >> "$TMP/vweak/INDEX.md"
+# Issue #65: a short pattern that BINDS two pieces of text, split by markup or (outside -F) by
+# regex, tests a relation, not a title: not flagged. One run of text, however wrapped, still is.
+# An alternation is as weak as its weakest branch.
+{
+  printf '\n## Bound by a tag\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qF 'Story Points</a> (Agile)'\n" "$U"
+  printf '\n## Bound by a regex\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | tr -d '\\\\n' | grep -qE 'Data type=HTML(<[^>]*>)+All<'\n" "$U"
+  printf '\n## Wrapped title\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qF '<h1>Widgets</h1>'\n" "$U"
+  printf '\n## Literal regex under F\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qF 'Widgets.*Limits'\n" "$U"
+  printf '\n## Grouped alternation\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qE '<h1>(Widgets|widgets)</h1>'\n" "$U"
+  printf '\n## Alternation\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: curl -fsSL %s | grep -qE 'Widgets|Max</td><td>12'\n" "$U"
+} >> "$TMP/vweak/widgets.md"
 case_run "weak recheck: a short fragment is flagged" 0 "WEAK widgets.md § Title grep: greps 1 word" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vweak"
 case_run "weak recheck: one (url, fragment) backing three sections in two files is flagged" 0 "WEAK one fragment backs 3 sections in 2 files" -- \
@@ -711,6 +728,14 @@ case_run "weak recheck: a local query that greps a file is not flagged" 1 "" -- 
   bash -c '"$1" "$2" | grep -qE "WEAK .*Local query"' _ "$ENGINE/scripts/kb-verify" "$TMP/vweak"
 case_run "weak recheck: reported without --yes, and nothing runs" 0 "NOT run" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vweak" --all
+for sec in "Bound by a tag" "Bound by a regex"; do
+  case_run "weak recheck: a pattern binding two texts is not flagged ($sec)" 1 "" -- \
+    bash -c '"$1" "$2" | grep -qF "WEAK widgets.md § $3:"' _ "$ENGINE/scripts/kb-verify" "$TMP/vweak" "$sec"
+done
+for sec in "Wrapped title" "Literal regex under F" "Alternation" "Grouped alternation"; do
+  case_run "weak recheck: one run of text is still flagged ($sec)" 0 "WEAK widgets.md § $sec:" -- \
+    "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+done
 case_run "weak recheck: a warning, never a failure" 0 "" -- "$ENGINE/scripts/kb-verify" "$TMP/vweak"
 case_run "weak recheck: the fixture library is otherwise clean" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/vweak"
 
