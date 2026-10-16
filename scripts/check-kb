@@ -89,9 +89,13 @@ def marked_sections(body: str, marker=UNCORROBORATED) -> list:
 
 def served_sections(body: str) -> list:
     """The sections of a file's body that are served — not CONFLICTED (§8) — each as
-    {sourced, dates}. derived_floor and kb-due's unstamped count read sections through this,
-    so "unstamped" means one thing everywhere."""
-    sections, cur, fenced = [], {"sourced": False, "dates": [], "conflicted": False}, False
+    {sourced, dates, sources}. `sources` holds one flag per Source: line, true once a Verified:
+    stamp follows it before the next Source: line: §6 stacks one stamp per source, so a second
+    source under one stamp is unstamped though its section is not (issue #64). derived_floor
+    and kb-due's unstamped count read sections through this, so "unstamped" means one thing
+    everywhere."""
+    new = lambda: {"sourced": False, "dates": [], "conflicted": False, "sources": []}
+    sections, cur, fenced = [], new(), False
     for line in body.split("\n"):
         if FENCE.match(line):
             fenced = not fenced
@@ -99,11 +103,14 @@ def served_sections(body: str) -> list:
             continue
         elif HEADING.match(line):
             sections.append(cur)
-            cur = {"sourced": False, "dates": [], "conflicted": False}
+            cur = new()
         elif SOURCE.match(line):
             cur["sourced"] = True
+            cur["sources"].append(False)
         elif m := STAMP_DATE.match(line):
             cur["dates"].append(m.group(1))
+            if cur["sources"]:
+                cur["sources"][-1] = True
         elif CONFLICTED.match(line):
             cur["conflicted"] = True
     sections.append(cur)
@@ -111,14 +118,15 @@ def served_sections(body: str) -> list:
 
 
 def unstamped(body: str) -> int:
-    """Served sections that cite a Source: and carry no stamp: unknown, not fresh (§7)."""
-    return sum(1 for s in served_sections(body) if s["sourced"] and not s["dates"])
+    """Source: lines in served sections with no Verified: stamp of their own: unknown, not
+    fresh (§7). Counted per source, not per section (§6 stacks one stamp per source; #64)."""
+    return sum(s["sources"].count(False) for s in served_sections(body))
 
 
 def derived_floor(body: str) -> str:
     """The frontmatter verified: floor a file's body supports (§7): the oldest stamp among its
     sections that are not CONFLICTED, or 'unknown' when one of those sections cites a Source:
-    and carries no stamp, or when nothing is stamped. Absent is not fresh. kb-verify imports
+    that carries no stamp of its own, or when nothing is stamped. Absent is not fresh. kb-verify imports
     this to move the floor when it restamps, so there is one derivation, not two."""
     served = served_sections(body)
     if unstamped(body):

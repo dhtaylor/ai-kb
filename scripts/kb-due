@@ -40,12 +40,17 @@ reports, per tree, everything a librarian should act on:
                              beginning "## Distill" (kb-distill Step 5 now names "## Distilled";
                              older notes say "## Distillation record", which the same prefix
                              matches). A note without one is counted.
-  5. unstamped sections    — sections that cite a Source:, carry no Verified: stamp and are not
-                             CONFLICTED, read with check-kb's own section reader (the one its
-                             verified: floor uses). §7 ranks unknown ahead of stale, and until
-                             now only a sweep surfaced them (issue #29).
+  5. unstamped sources     — Source: lines with no Verified: stamp of their own, in sections that
+                             are not CONFLICTED, read with check-kb's own section reader (the one
+                             its verified: floor uses). Counted per source, since §6 stacks one
+                             stamp per source (issue #64). §7 ranks unknown ahead of stale, and
+                             until now only a sweep surfaced them (issue #29).
+  6. stale, no assertion   — stamped sections past the horizon or agent TTL that carry no
+                             Recheck:, by kb-verify's own is_due(). kb-verify cannot settle them,
+                             so they are told apart from category 2, and the budget does not cap
+                             them (issue #63).
 
-  A tree with nothing due in any of the five contributes no line at all. A failure computing one
+  A tree with nothing due in any of the six contributes no line at all. A failure computing one
   category for one tree (a malformed needs-attention.md, an INDEX.md with no freshness_horizon) is
   printed as a one-line warning to stderr and that category is skipped for that tree only — every
   other tree and every other category still gets computed. This hook must never crash a session.
@@ -54,7 +59,7 @@ Usage: kb-due [tree ...] [--quiet|--nudge]
   Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
   trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
-  --nudge   print the full librarian nudge (sweep + recheck + queue + episodic + unstamped), and
+  --nudge   print the full librarian nudge (sweep + recheck + queue + episodic + unstamped + stale), and
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
@@ -119,6 +124,20 @@ def recheck_due(root: pathlib.Path, kb_verify):
     budget = budget or 5
     due, _found, _with_cmd = kb_verify.due_sections(root, horizon, kb_verify.agent_ttl(root, horizon))
     return due[:budget]
+
+
+def stale_unasserted(root: pathlib.Path, kb_verify):
+    """Stamped sections past their horizon or agent TTL that carry no Recheck: (issue #63).
+    kb-verify reports these as "STALE, no assertion" but only when someone runs it, and
+    recheck_due() counts only what a command can settle, so between sweeps they were silent.
+    The same is_due() decides, so there is one judgment of "due". Not capped by
+    verifier_budget: the budget limits what kb-verify RUNS, and nothing runs these."""
+    horizon, _budget = kb_verify.horizon_and_budget(root)
+    if horizon is None:
+        return None
+    ttl = kb_verify.agent_ttl(root, horizon)
+    _due, found, _with_cmd = kb_verify.due_sections(root, horizon, ttl)
+    return [s for s in found if not s["cmd"] and kb_verify.is_due(s, horizon, ttl)]
 
 
 def queue_due(root: pathlib.Path, kb_watch):
@@ -194,6 +213,14 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         parts.append(f"{plural(len(due), 'fact')} due for recheck (kb-verify {shlex.quote(str(tree.resolve()))} --yes)")
 
     try:
+        stale = stale_unasserted(tree, kb_verify)
+    except Exception as e:
+        warnings.append(f"{lbl}: could not compute stale facts with no assertion ({e}) — skipped")
+        stale = None
+    if stale:
+        parts.append(f"{plural(len(stale), 'stale fact')} with no assertion (re-check by hand, or kb-audit)")
+
+    try:
         qn, cats = queue_due(tree, kb_watch)
     except Exception as e:
         warnings.append(f"{lbl}: could not read needs-attention.md ({e}) — skipped")
@@ -218,7 +245,7 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         warnings.append(f"{lbl}: could not count unstamped sections ({e}) — skipped")
         un = 0
     if un:
-        parts.append(f"{plural(un, 'unstamped section')} (never verified)")
+        parts.append(f"{plural(un, 'unstamped source')} (never verified)")
 
     line = f"{lbl}: " + "; ".join(parts) if parts else None
     return line, warnings
@@ -258,7 +285,7 @@ def main(argv) -> int:
             print("\n".join(lines))
             print("Commands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
                   "the rechecks above; kb-distill for the episodic notes above; kb-audit "
-                  "<library> queues unstamped sections for verification.")
+                  "<library> queues unstamped sources and stale facts with no assertion.")
         return 0
 
     if quiet:

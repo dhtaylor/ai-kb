@@ -1,6 +1,6 @@
 # ADR-0013: Steady state is surfaced when due, not run unattended
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-16 (see *What changed* below)
 - **Date:** 2026-10-01
 - **Deciders:** Dandy Taylor
 
@@ -77,3 +77,20 @@ full reference.
 - **Bad:** a watched source is only as fresh as its last saved snapshot. The Watcher detects drift
   between two copies; it does not notice that a copy has gone stale. An isolated fetcher was
   declined for now, and adding one is a separate decision with its own security review (§5A).
+
+## What changed on 2026-10-16
+
+The nudge's list above had grown without this record. It now reports two more categories:
+
+- **Unstamped sources** ([#29](https://github.com/dhtaylor/ai-kb/issues/29), counted per `Source:`
+  line since [#64](https://github.com/dhtaylor/ai-kb/issues/64)). §7 ranks unknown ahead of stale, and
+  only a sweep used to surface them. §6 stacks one stamp per source, so a second source under one stamp
+  is unstamped even when its section is not.
+- **Stale facts with no assertion** ([#63](https://github.com/dhtaylor/ai-kb/issues/63)). The recheck
+  count covers only facts carrying a `Recheck:`, which most do not. Before a sweep on 2026-10-16 the
+  nudge printed nothing while 49 agent-stamped facts were past their TTL. They are reported as their own
+  category, because `kb-verify --yes` cannot settle them, and `verifier_budget` does not cap them,
+  because it limits what runs and nothing runs these.
+
+Silence still means nothing is due; it now means it in more cases.
+

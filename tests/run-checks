@@ -146,6 +146,12 @@ floor_lib "$TMP/floorconf" 2026-09-22
 printf '\n## Colour\n\nstatus: CONFLICTED · since: 2026-01-01\n\nClaim A: red. Claim B: blue.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n\n## Size\n\nSource: manual\n' >> "$TMP/floorconf/widgets.md"
 sed -i 's/^## Size$/## Size\n\nstatus: CONFLICTED · since: 2026-01-01/' "$TMP/floorconf/widgets.md"
 case_run "floor: CONFLICTED sections' stamps and gaps are ignored" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorconf"
+floor_lib "$TMP/floorstacked" 2026-09-22
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nSource: vendor sheet\nVerified: 2026-09-22 · by: agent · method: manual\n' >> "$TMP/floorstacked/widgets.md"
+case_run "floor: a date over a stacked source with no stamp of its own fails (#64)" 1 "derived floor is unknown" -- "$ENGINE/scripts/check-kb" "$TMP/floorstacked"
+floor_lib "$TMP/floorpaired" 2026-09-22
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\nSource: vendor sheet\nVerified: 2026-09-23 · by: agent · method: manual\n' >> "$TMP/floorpaired/widgets.md"
+case_run "floor: one stamp per stacked source passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorpaired"
 floor_lib "$TMP/floorcomment" "2026-09-22  # oldest of one"
 case_run "floor: an inline YAML comment on verified: is allowed" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorcomment"
 build_clean "$TMP/floorfuture"
@@ -1163,6 +1169,9 @@ NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
 #    queue, no episodic/. --nudge must print nothing at all.
 build_clean "$NFX/kb/nothing-due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/nothing-due/INDEX.md"
+# The fact must really be fresh: build_clean's literal 2026-09-22 stamp ages past the 9d agent TTL,
+# and this case passed only because the nudge ignored stale facts with no Recheck (issue #63).
+sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/nothing-due/widgets.md"
 HOME="$TMP/nfxhome" "$ENGINE/scripts/kb-library" add "$NFX/kb/nothing-due" >/dev/null   # installed = registered
 case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
   bash -c '[ -z "$(HOME="$2" "$1" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome"
@@ -1279,10 +1288,35 @@ printf -- '---\nname: 2026-01-01-note\ndescription: fixture\nmemory_type: episod
 fm fx-open-questions general > "$NFX/kb/unstamped-due/fx-open-questions.md"
 printf '# Open questions\n\n## Is it blue?\n\nNo source says.\n\nSource: manual\n' >> "$NFX/kb/unstamped-due/fx-open-questions.md"
 printf -- '- [fx-open-questions](fx-open-questions.md) — open questions\n' >> "$NFX/kb/unstamped-due/INDEX.md"
-case_run "nudge: unstamped sourced sections are counted, CONFLICTED, episodic and state leaves excluded" 0 \
-  "2 unstamped sections (never verified)" -- "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-due" --nudge
+case_run "nudge: unstamped sources are counted, CONFLICTED, episodic and state leaves excluded" 0 \
+  "2 unstamped sources (never verified)" -- "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-due" --nudge
 case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
+# Issue #64: §6 stacks one stamp per source, so a Source: line with no Verified: of its own is
+# unstamped even when the section's other source is stamped. Counted per Source: line.
+build_clean "$NFX/kb/stacked-due"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/stacked-due/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/stacked-due/widgets.md"
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nSource: vendor sheet\nVerified: %s · by: agent · method: manual\n\n## Colour\n\nRed.\n\nSource: manual\nVerified: %s · by: agent · method: manual\nSource: vendor sheet\nVerified: %s · by: agent · method: manual\n' \
+  "$(date +%F)" "$(date +%F)" "$(date +%F)" >> "$NFX/kb/stacked-due/widgets.md"
+case_run "nudge: a stacked source with no stamp of its own is counted" 0 "1 unstamped source (never verified)" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/stacked-due" --nudge
+# Issue #63: a stale fact with no Recheck is due too. kb-verify cannot settle it, so it is its own
+# category, told apart from rechecks a command can run, and it is not capped by verifier_budget.
+build_clean "$NFX/kb/stale-noassert"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/stale-noassert/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: 2026-01-01/" "$NFX/kb/stale-noassert/widgets.md"
+for i in 1 2 3 4 5 6; do
+  printf '\n## Limit %s\n\nA widget holds %s.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n' "$i" "$i" >> "$NFX/kb/stale-noassert/widgets.md"
+done
+printf '\n## Fresh\n\nNew.\n\nSource: manual\nVerified: %s · by: agent · method: manual\n' "$(date +%F)" >> "$NFX/kb/stale-noassert/widgets.md"
+case_run "nudge: stale facts with no Recheck are reported, all of them, past the budget" 0 \
+  "7 stale facts with no assertion" -- "$ENGINE/scripts/kb-due" "$NFX/kb/stale-noassert" --nudge
+case_run "nudge: ...and not as facts a recheck can run" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "due for recheck"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/stale-noassert"
+# recheck-due holds one stale fact with a Recheck and build_clean's stale one without: 1, not 2.
+case_run "nudge: a stale fact WITH a Recheck is not also counted as having none" 0 "1 stale fact with no assertion" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 # Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
 # count, and the recheck count, whose agent TTL is check-kb's (issue #30). One warning each; the
 # rest intact.
@@ -1377,6 +1411,7 @@ done
 printf '# fixture contract\n' > "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$SFX2/kb/libclean/widgets.md"   # really fresh (#63)
 SHOME2="$TMP/session-home2"; HOME="$SHOME2" "$ENGINE/scripts/kb-library" add "$SFX2/kb/libclean" >/dev/null
 case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
   bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
