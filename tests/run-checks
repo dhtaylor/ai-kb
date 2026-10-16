@@ -1687,6 +1687,14 @@ case_run "check-stamps default range on a first commit checks it" 0 "clean (1 co
 case_run "check-stamps: an unresolvable explicit range is still an error" 2 "cannot resolve" -- \
   sh -c "cd '$TMP/stampnew' && '$ENGINE/scripts/check-stamps' nosuch..HEAD"
 
+# ADR-0015: library CI checks a library against a named engine release, never whatever main
+# holds that day. The template's fetch step must clone the engine at a release tag.
+fetch_step() {
+  awk '/- name: Fetch the engine/{f=1; next} f && /^      - name:/{exit} f' "$ENGINE/documents/library-guardrails.yml"
+}
+case_run "library CI template pins the engine to a release tag" 0 "" -- \
+  sh -c "printf '%s' \"\$1\" | grep -qE 'git clone .*--branch v[0-9]+\\.[0-9]+\\.[0-9]+ '" _ "$(fetch_step)"
+
 # The stamps live in libraries, so the library CI template must run this check.
 # Run the template's own step — extracted from the YAML, with GitHub's
 # expressions filled in — rather than the script, so a step that drifts from the
