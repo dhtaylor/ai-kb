@@ -246,7 +246,7 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
     print(f"{'':5}{'case':11}{'grounded':10}{'cited ok':10}verdict")
     print("-" * 78)
     for q, case, g, c, v in rows:
-        print(f"{q:5}{case:11}{g:10}{c:10}{v}")
+        print(f"{q:5}{case + ' ':11}{g:10}{c:10}{v}")
     print("-" * 78)
     print(f"answer-grounding: {npass}/{ngraded} passed")
     return 0 if npass == ngraded else 1

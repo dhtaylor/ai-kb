@@ -282,7 +282,7 @@ def main(lib: pathlib.Path, mapping: pathlib.Path) -> int:
         rec = recs[q - 1]
         ok, got, content, touched, why, notes = grade(ge, lib, rec, graded[q])
         npass += ok
-        print(f"Q{q:<3}{rec.get('case', '?'):11}{'PASS' if ok else 'FAIL'}  "
+        print(f"Q{q:<3}{rec.get('case', '?') + ' ':11}{'PASS' if ok else 'FAIL'}  "
               f"expected-read={'yes' if got else 'no'}  "
               f"content-in={','.join(sorted(content)) or '-'}  "
               f"contamination={'YES' if touched else 'none'}"
