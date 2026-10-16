@@ -349,6 +349,10 @@ front door, as documentation. Correct shape:
 
 No value, full traceability, actionable. A source artifact that contains a live credential is
 **redacted before it is archived** under `documents/` — the archive is a copy, and a copy leaks.
+A raw artifact archived there (a schema dump, an export, anything not `.md`) is scanned without
+the bare-entropy rule, whose long-identifier hits would bury it; the credential patterns, the labelled
+rule and the PII pass still read every line. Archive text as **UTF-8**: UTF-16 reads as binary to
+every pass, so `check-secrets` blocks it as unscanned until it is converted.
 **Personal identifiers follow the same shape:** a finding names the role or account type ("the
 service account", "a former contractor"), not the colleague — no names, personal emails or personal
 accounts. `check-secrets` (credential patterns, entropy, PII passes) is the net behind this rule, not
