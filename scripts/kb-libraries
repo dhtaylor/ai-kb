@@ -25,7 +25,7 @@ Shell callers run it; Python callers import it (the SourceFileLoader pattern kb-
 Usage: kb-libraries          one line per registered library: <state>TAB<name>TAB<path>
 Exit 0, or 2 if the registry exists and git cannot read it.
 """
-import pathlib, re, subprocess, sys
+import os, pathlib, re, subprocess, sys
 
 REGISTRY = pathlib.Path.home() / ".config" / "ai-kb" / "libraries"
 DOMAIN = re.compile(r"^domain:\s*[\"']?([\w-]+)[\"']?\s*(?:#.*)?$")
@@ -79,6 +79,20 @@ def entries():
         out.append({"name": name, "path": path, "origin": libs[name].get("origin", ""),
                     "state": state_of(name, path)})
     return out
+
+
+def library_home(engine: pathlib.Path) -> pathlib.Path:
+    """Where new libraries are cloned: $KB_LIBRARY_HOME, else kb.libraryHome in the registry
+    (kb-bootstrap records it), else <engine>/kb. Only a default for kb-library add and import;
+    a library is never discovered by being in it."""
+    if os.environ.get("KB_LIBRARY_HOME"):
+        return pathlib.Path(os.environ["KB_LIBRARY_HOME"]).expanduser()
+    if REGISTRY.is_file():
+        r = subprocess.run(["git", "config", "--file", str(REGISTRY), "--get", "kb.libraryHome"],
+                           capture_output=True, text=True)
+        if r.returncode == 0 and r.stdout.strip():
+            return pathlib.Path(r.stdout.strip()).expanduser()
+    return engine / "kb"
 
 
 def installed():

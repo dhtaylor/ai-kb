@@ -544,6 +544,16 @@ HOME="$BHOME" "$BFX/scripts/kb-library" remove mig >/dev/null
 bstrap --apply >/dev/null 2>&1
 case_run "bootstrap: the migration runs once — a removed library stays removed" 1 "" -- \
   git config --file "$BREG" --get library.mig.path
+case_run "bootstrap: --apply records the library home, defaulting to the engine's kb/" 0 "$BFX/kb" -- \
+  git config --file "$BREG" --get kb.libraryHome
+case_run "bootstrap: --library-home without --apply changes nothing" 1 "would-set" -- bstrap --library-home "$TMP/bhome-lib"
+case_run "bootstrap: ...and the home is unchanged" 0 "$BFX/kb" -- git config --file "$BREG" --get kb.libraryHome
+mkdir -p "$TMP/bhome-lib"
+bstrap --apply --library-home "$TMP/bhome-lib" >/dev/null 2>&1
+case_run "bootstrap: --apply --library-home sets it" 0 "$TMP/bhome-lib" -- git config --file "$BREG" --get kb.libraryHome
+case_run "bootstrap: a home that was set is not reset by a later --apply" 0 "" -- \
+  sh -c 'env -i HOME="$1" PATH="$PATH" "$2" --apply >/dev/null 2>&1; [ "$(git config --file "$3" --get kb.libraryHome)" = "$4" ]' _ "$BHOME" "$BFX/scripts/kb-bootstrap" "$BREG" "$TMP/bhome-lib"
+case_run "bootstrap: an unknown option is still refused" 2 "unknown option" -- bstrap --frobnicate
 HOME="$BHOME" "$BFX/scripts/kb-library" add "$BFX/kb/mig" >/dev/null
 mv "$BFX/kb/mig" "$BFX/kb/mig-moved"
 case_run "bootstrap: a registered library gone missing is drift, named" 1 "missing  mig" -- bstrap --check
@@ -2017,6 +2027,62 @@ case_run "grade-routing: cross-root case reading the sibling's file passes" 0 "1
 mk_tr "$XR/xr-both.jsonl" "Read:$XA/INDEX.md" "Read:$XA/widgets.md"
 case_run "grade-routing: cross-root case never reading the sibling's file fails" 1 "never Read" -- "$ENGINE/scripts/grade-routing" "$XA" "$XR/map"
 export HOME="$RT_HOME"
+# --------------------------- library home, add <git-url>, export / import (ADR-0014) ----
+# Upstream libraries to clone from: repositories with a commit, reached by file:// URL. No case
+# may clone into the real engine's kb/, so every add or import below names its destination.
+P2="$TMP/p2"; P2H="$P2/home"; mkdir -p "$P2/up"
+for n in delta epsilon; do
+  build_clean "$P2/up/$n"; git -C "$P2/up/$n" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
+done
+mkdir -p "$P2/up/plain"; git init -q "$P2/up/plain"; printf 'x\n' > "$P2/up/plain/README.md"
+git -C "$P2/up/plain" add -A; git -C "$P2/up/plain" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
+p2() { HOME="$P2H" "$ENGINE/scripts/kb-library" "$@"; }
+P2REG="$P2H/.config/ai-kb/libraries"
+
+case_run "home: defaults to the engine's kb/" 0 "$ENGINE/kb" -- p2 home
+mkdir -p "$P2/lib-home" "$P2H/.config/ai-kb"; git config --file "$P2REG" kb.libraryHome "$P2/lib-home"
+case_run "home: kb.libraryHome in the registry sets it" 0 "$P2/lib-home" -- p2 home
+case_run "home: KB_LIBRARY_HOME overrides the registry" 0 "$P2/env-home" -- \
+  env KB_LIBRARY_HOME="$P2/env-home" HOME="$P2H" "$ENGINE/scripts/kb-library" home
+
+case_run "add <git-url>: clones into the library home and registers" 0 "registered delta at $P2/lib-home/delta" -- \
+  p2 add "file://$P2/up/delta"
+case_run "add <git-url>: records where it came from" 0 "file://$P2/up/delta" -- \
+  git config --file "$P2REG" --get library.delta.origin
+case_run "add <git-url>: wires the clone to the engine's hook" 0 "$ENGINE/library-hooks" -- \
+  git -C "$P2/lib-home/delta" config --get core.hooksPath
+case_run "add <git-url> --into: clones where it is told" 0 "registered epsilon at $P2/elsewhere/epsilon" -- \
+  p2 add "file://$P2/up/epsilon" --into "$P2/elsewhere"
+case_run "add <git-url>: an existing folder is never cloned over" 1 "already exists" -- \
+  p2 add "file://$P2/up/delta" --into "$P2/lib-home"
+case_run "add <git-url>: a repository that is not a library registers nothing" 1 "not a library" -- \
+  p2 add "file://$P2/up/plain" --into "$P2/lib-home"
+case_run "add <git-url>: ...and nothing was registered" 1 "" -- git config --file "$P2REG" --get library.plain.path
+case_run "add: --into only goes with a URL" 2 "usage" -- p2 add "$P2/lib-home/delta" --into "$P2/x"
+
+# export: name and origin, never a path
+build_clean "$P2/local/zeta"; p2 add "$P2/local/zeta" >/dev/null
+p2 export > "$P2/export"
+case_run "export: each library's origin" 0 "file://$P2/up/epsilon" -- git config --file "$P2/export" --get library.epsilon.origin
+case_run "export: never a path" 1 "" -- grep -q "path" "$P2/export"
+case_run "export: a library with no remote is a comment, not an entry" 0 "zeta" -- grep -E '^#.*zeta.*no origin' "$P2/export"
+case_run "export: ...which import cannot see" 1 "" -- git config --file "$P2/export" --get-regexp '^library\.zeta\.'
+
+# import: on another machine (a fresh HOME), clone what is missing and register it
+P2B="$P2/home-b"
+p2b() { HOME="$P2B" "$ENGINE/scripts/kb-library" "$@"; }
+case_run "import: clones and registers every library" 0 "2 registered" -- p2b import "$P2/export" --into "$P2/machine-b"
+case_run "import: ...each is ok on the new machine" 0 "ok	epsilon	$P2/machine-b/epsilon" -- \
+  env HOME="$P2B" "$ENGINE/scripts/kb-libraries"
+case_run "import twice: nothing to do" 0 "2 already registered" -- p2b import "$P2/export" --into "$P2/machine-b"
+P2C="$P2/home-c"; build_clean "$P2/c/delta"
+HOME="$P2C" "$ENGINE/scripts/kb-library" add "$P2/c/delta" >/dev/null
+case_run "import: a name registered with another origin is reported, never overwritten" 1 "delta is already registered" -- \
+  env HOME="$P2C" "$ENGINE/scripts/kb-library" import "$P2/export" --into "$P2/machine-c"
+case_run "import: ...the existing entry is untouched" 0 "$P2/c/delta" -- \
+  git config --file "$P2C/.config/ai-kb/libraries" --get library.delta.path
+case_run "import: ...and the other library still came in" 0 "ok	epsilon	" -- env HOME="$P2C" "$ENGINE/scripts/kb-libraries"
+
 # ----------------------------------------- consumers read the registry (ADR-0014) ----
 # Two libraries registered OUTSIDE any engine's kb/, in different folders, one through a
 # symlink; and an unregistered library sitting in the engine's kb/, which nothing may see.

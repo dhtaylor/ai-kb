@@ -10,13 +10,24 @@ engine's library hook), which git never commits or clones.
                   (domain:), and wire its clone to the engine's library hook. Re-adding the same
                   path is a no-op. A name already registered at another path is refused while
                   that path is still `ok`; if it is not (the library moved), the entry is updated.
+  add <git-url> [--into DIR]
+                  clone it into the library home (or DIR), then register it as above. Never
+                  clones over an existing folder.
   remove <name>   unregister, and unwire the hook if it points at this engine. Never deletes files.
   list            every registered library: state, name, path (see kb-libraries for the states).
+  home            where new libraries are cloned: $KB_LIBRARY_HOME, else kb.libraryHome in the
+                  registry (kb-bootstrap records it), else <engine>/kb.
+  export          every registered library's name and origin, never its path (paths differ
+                  between machines), in git-config format. A library with no origin is a comment.
+  import <file> [--into DIR]
+                  clone every library in an export that is not registered here into the library
+                  home (or DIR), and register it. A name registered here with another origin is
+                  reported and skipped, never overwritten.
 
 The registry is read only through kb-libraries; this is the only thing that writes it.
 Exit 0 on success, 1 on a refusal, 2 on a usage error.
 """
-import importlib.machinery, importlib.util, pathlib, subprocess, sys
+import importlib.machinery, importlib.util, pathlib, re, subprocess, sys, tempfile
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 HOOKS = ENGINE / "library-hooks"
@@ -49,6 +60,44 @@ def reg(*args):
 def is_repo(path: pathlib.Path) -> bool:
     top = git("rev-parse", "--show-toplevel", cwd=path)
     return top.returncode == 0 and pathlib.Path(top.stdout.strip()).resolve() == path
+
+
+URL = re.compile(r"^[a-z][a-z0-9+.-]*://|^[\w.-]+@[\w.-]+:")
+
+
+def same_origin(a: str, b: str) -> bool:
+    norm = lambda u: re.sub(r"(\.git)?/*$", "", u.strip())
+    return norm(a) == norm(b)
+
+
+def clone(url: str, dest: pathlib.Path):
+    """Clone url into dest, a folder that must not exist yet. The clone path, or None."""
+    if dest.exists():
+        print(f"kb-library: {dest} already exists — not cloned over "
+              f"(kb-library add {dest} registers what is there)")
+        return None
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    r = git("clone", "--quiet", url, str(dest))
+    if r.returncode != 0:
+        print(f"kb-library: cannot clone {url}: {r.stderr.strip()}")
+        return None
+    if not KL.declared_name(dest.resolve()):
+        print(f"kb-library: cloned {url} to {dest}, but it is not a library (no root INDEX.md "
+              f"declaring domain:) — nothing registered; delete {dest} if you do not want it")
+        return None
+    return dest
+
+
+def add_url(url: str, into) -> int:
+    into = pathlib.Path(into).expanduser() if into else KL.library_home(ENGINE)
+    name = re.sub(r"\.git$", "", url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1])
+    path = clone(url, into / name)
+    if not path:
+        return 1
+    rc = add(str(path))
+    if rc:
+        print(f"kb-library: the clone at {path} was left in place")
+    return rc
 
 
 def add(arg: str) -> int:
@@ -107,6 +156,56 @@ def remove(name: str) -> int:
     return 0
 
 
+def export() -> int:
+    rows = KL.entries()
+    with tempfile.TemporaryDirectory() as d:
+        out = pathlib.Path(d) / "export"
+        out.touch()
+        for e in rows:
+            if e["origin"]:
+                git("config", "--file", str(out), f"library.{e['name']}.origin", e["origin"])
+        body = out.read_text()
+    print("# kb-library export: name and origin of each library registered on a machine.")
+    print("# Paths are left out, because they differ between machines. On another machine:")
+    print("#   kb-library import <this file> [--into DIR]")
+    for e in rows:
+        if not e["origin"]:
+            print(f"# {e['name']}: no origin (no git remote) — it cannot be reproduced elsewhere")
+    print(body, end="")
+    return 0
+
+
+def import_(file: str, into) -> int:
+    r = git("config", "--file", file, "--null", "--list")
+    if r.returncode != 0:
+        print(f"kb-library: cannot read {file}: {r.stderr.strip()}"); return 1
+    wanted = {}
+    for rec in r.stdout.split("\0"):
+        key, _, value = rec.partition("\n")
+        if key.startswith("library.") and key.endswith(".origin"):
+            wanted[key[len("library."):-len(".origin")]] = value
+    into = pathlib.Path(into).expanduser() if into else KL.library_home(ENGINE)
+    current = {e["name"]: e for e in KL.entries()}
+    done = already = refused = 0
+    for name, url in sorted(wanted.items()):
+        e = current.get(name)
+        if e and same_origin(e["origin"], url):
+            print(f"kb-library: {name} is already registered at {e['path']}"); already += 1
+            continue
+        if e:
+            print(f"kb-library: {name} is already registered at {e['path']} from "
+                  f"{e['origin'] or 'no origin'} — not imported from {url}"); refused += 1
+            continue
+        path = clone(url, into / name)
+        if path and add(str(path)) == 0:
+            done += 1
+        else:
+            refused += 1
+    print(f"kb-library import: {done} registered, {already} already registered, "
+          f"{refused} not imported")
+    return 1 if refused else 0
+
+
 def list_() -> int:
     rows = KL.entries()
     if not rows:
@@ -117,13 +216,27 @@ def list_() -> int:
 
 
 def main(argv) -> int:
+    into = None
+    if len(argv) == 4 and argv[2] == "--into":
+        into, argv = argv[3], argv[:2]
     if argv[:1] == ["add"] and len(argv) == 2:
-        return add(argv[1])
-    if argv[:1] == ["remove"] and len(argv) == 2:
-        return remove(argv[1])
-    if argv == ["list"]:
-        return list_()
-    print("usage: kb-library add <path> | remove <name> | list", file=sys.stderr)
+        if URL.match(argv[1]):
+            return add_url(argv[1], into)
+        if into is None:
+            return add(argv[1])
+    if argv[:1] == ["import"] and len(argv) == 2:
+        return import_(argv[1], into)
+    if into is None:
+        if argv[:1] == ["remove"] and len(argv) == 2:
+            return remove(argv[1])
+        if argv == ["list"]:
+            return list_()
+        if argv == ["home"]:
+            print(KL.library_home(ENGINE)); return 0
+        if argv == ["export"]:
+            return export()
+    print("usage: kb-library add <path> | add <git-url> [--into DIR] | remove <name> | list\n"
+          "                  | home | export | import <file> [--into DIR]", file=sys.stderr)
     return 2
 
 
