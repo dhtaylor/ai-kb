@@ -57,7 +57,7 @@ and per the contract §7 it surfaces **first** — a sweep cannot flag what was 
 absence is the finding.
 
 **Stale currency.** A stamp older than its domain's `freshness_horizon`. Agent-verified stamps
-expire at **one tenth** the human interval. High-blast-radius facts — deploy targets, environment
+expire at **one tenth** the human interval, or at the domain's `agent_ttl` if it declares one. High-blast-radius facts — deploy targets, environment
 routing, credential references — are stale the moment their last stamp was written by an agent,
 regardless of date.
 
@@ -159,7 +159,7 @@ Each item carries:
   4. **unstamped fact** (`unknown`) — ahead of stale, per §7: absence hides more easily than age.
      A frontmatter `verified:` date with no section stamp behind it is this too (locus
      `unsupported-floor`): it claims a freshness nothing supports, which is worse than silence;
-  5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval;
+  5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval (or the domain's `agent_ttl`);
   6. **orphan** — real knowledge nothing can route to;
   7. **informational contradiction, empty routed leaf, index bloat, scope misfiling**.
 

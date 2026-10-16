@@ -1,6 +1,6 @@
 # ADR-0005: Currency cadence — TTLs, budgets, and the automation gate
 
-- **Status:** Accepted, amended 2026-10-02 (see *What changed on 2026-10-02*)
+- **Status:** Accepted, amended 2026-10-02 and 2026-10-16 (see *What changed* below)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 1 (inventory, map & decide)
@@ -119,3 +119,15 @@ commits under the human's own git identity, so there are not two identities to t
 instead refuses a commit that carries a Claude co-authorship trailer and also adds a `by: human` stamp.
 It guards against the accident, not a determined author who drops the trailer. The other open items
 are unchanged.
+
+## What changed on 2026-10-16
+
+The 1/10 agent TTL ratio, recorded above as an arbitrary starting point, met its first evidence
+([#30](https://github.com/dhtaylor/ai-kb/issues/30)). Across the 90–180d vendor-product band it gives
+agent stamps 9–18 days, which is shorter than the 30d default `sweep_interval`, so every
+agent-verified section was stale at every sweep. The only lever was the horizon, and a pilot library
+moved its horizon to 365d, which also gave its human stamps a year. **A domain may now declare
+`agent_ttl: <N>d`** in its root `INDEX.md`. The ratio stays the default, so a domain that declares
+nothing is unchanged. `check-kb` fails an `agent_ttl` that is not shorter than the horizon, so the
+trust tier between agent and human stamps cannot be declared away. `kb-verify` and `kb-due` read it
+through `check-kb`'s rule.

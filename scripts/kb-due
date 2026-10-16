@@ -117,8 +117,7 @@ def recheck_due(root: pathlib.Path, kb_verify):
     if horizon is None:
         return None
     budget = budget or 5
-    agent_ttl = max(1, horizon // 10)
-    due, _found, _with_cmd = kb_verify.due_sections(root, horizon, agent_ttl)
+    due, _found, _with_cmd = kb_verify.due_sections(root, horizon, kb_verify.agent_ttl(root, horizon))
     return due[:budget]
 
 

@@ -145,6 +145,12 @@ against, so start from these bands and say which you picked and why:
 These are starting points to be revised from evidence, not thresholds to defend. If a domain's
 facts keep going stale before its horizon, the horizon is wrong.
 
+An agent stamp stays fresh for a tenth of the horizon: 9–18 days across the vendor-product band,
+shorter than a 30d `sweep_interval`. If agent stamps are how this domain will be kept current, add
+`agent_ttl: <N>d` to the frontmatter above, at least the sweep interval and shorter than the
+horizon (CONVENTIONS §7). Do not stretch the horizon to buy agent stamps time: the horizon is also
+the human TTL, and a year-long human TTL on vendor behavior is the wrong fix.
+
 `verifier_budget` is a **cost ceiling, not a target** — the most facts a cycle may re-check, not
 how many it should. Start at **5** and raise it only when the attention queue shows the cap is
 actually binding. A new domain with no facts still declares it, so the cadence has a bound the
