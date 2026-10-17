@@ -144,10 +144,21 @@ a memo: review it at Medium. Two defaults cover the rest:
 
 Promoting a product because it matters is the usual route to over-reviewing it.
 
-**Retrieve which checks actually apply at each level** from the library's tradecraft-standards file
-before scoring — the mapping above is this skill's plain-language paraphrase for calibrating quickly.
-The library's calibration table governs *which standards apply* at a level, and is the one you cite
-from; the form rule above governs *which level* a product is at.
+**Which standards apply at each level** is this skill's own review procedure, like the caps. The
+library's tradecraft-standards file holds the standards themselves and the directive's rule that they
+are applied "in a manner appropriate to" each product; retrieve the standards from it by name, and
+apply them at the level the form rule above sets:
+
+- **Light:** the clear main message, information kept apart from assumptions and judgments, and
+  judgments not stated more confidently than their basis allows. Analysis of alternatives does not
+  apply.
+- **Medium:** sources characterized, uncertainty expressed, information kept apart from assumptions
+  and judgments, alternatives analysed, clear and logical argumentation, and accurate judgments.
+  Customer relevance applies when the product is addressed to a decision-maker; change or consistency
+  of judgments applies when it revises a prior position.
+- **Full:** all of the standards, with analysis of alternatives and change or consistency of
+  judgments evaluated explicitly. Change or consistency applies only when there is prior coverage to
+  compare against: an initial-coverage product is exempt.
 
 The caps are ceilings on a *prioritized* list, not quotas — come in under them freely, and a genuinely
 clean product at any level gets **zero** findings and a plain "this is sound." When the level is
@@ -192,11 +203,19 @@ stated in this file would itself be an embedded fact.
 
 ### 4. Score against the rubric
 
-Retrieve the library's tradecraft-standards file and its rating scale. Rate the product against the
-standards that apply at the calibrated level — no more. Anchor every rating to the text: quote the
+Retrieve the library's tradecraft-standards file. Rate the product against the standards that apply at
+the calibrated level — no more — on this skill's own scale:
+
+- **Excellent** — meets the standard and does something exemplary another product could learn from.
+- **Good** — meets the standard; no material problem.
+- **Fair** — partially meets it; a real weakness a reader would notice; fixable.
+- **Poor** — fails the standard in a way that undermines the product's conclusion.
+- **N/A** — the standard does not apply at this product's level.
+
+The scale is review procedure, not an ODNI scale: ICD 203 refers to evaluation rating criteria it does
+not publish, so never present these ratings as the IC's own. Anchor every rating to the text: quote the
 passage that justifies it. Give an overall read in prose, never a single rolled-up score across
-standards — the library explains why that's unreliable; retrieve and, if useful, echo that reasoning
-rather than restating it from memory.
+standards: one number hides which standard failed and why.
 
 ### 5. Deliver findings — strengths first, then prioritized weaknesses
 
@@ -222,7 +241,7 @@ the library, which holds facts about tradecraft, not this skill's formatting cho
 ### Scorecard (only the applicable standards)
 | Standard | Rating | Anchor |
 |----------|--------|--------|
-| <as the library names it> | <as the library's scale names it> | <quoted text> |
+| <as the library names it> | <this skill's scale> | <quoted text> |
 
 ### If I were the analyst, the one change I'd make first
 <the single highest-leverage fix>
@@ -236,11 +255,12 @@ Rules on top of the format:
   exactly as the library states it, numbering and name included — and a *concrete rewrite or fix*. No
   floating criticisms.
 - **Name a bias or fallacy precisely when one applies to a finding that has already survived the
-  gates**, using the library's own name for it and its own prescribed mitigation from its
-  bias-to-technique mapping — never "watch out for bias" on its own,
-  and never a bias name you're recalling rather than retrieving. Getting the substance right but
+  gates**, using the library's own name for it, and the remedy the library gives for it where it gives
+  one; otherwise the technique whose stated purpose fits, from the library's technique file — never
+  "watch out for bias" on its own, and never a bias name you're recalling rather than retrieving. If the
+  library gives no remedy for a bias, say so rather than supplying one. Getting the substance right but
   reaching for the wrong retrieved label sends the user to the wrong fix, so if you're not sure which
-  entry in the mapping fits, say so rather than guessing.
+  bias or technique fits, say so rather than guessing.
 - **Prioritize and cap.** Order weaknesses by how much they threaten the conclusion, and stop at the
   level's cap. Coming in under the cap is good, not lazy.
 - **Expected count tracks quality, not level.** The caps are ceilings for products *with several real
@@ -325,8 +345,8 @@ the `create-user-story` skill lives by.
 
 Reusable challenges to pull from once you've diagnosed the weakness. Each targets a specific reasoning
 gap; when you use one, name the pattern it's exposing using the library's own term for it (retrieve the
-bias-to-technique mapping or the technique catalog rather than labeling it from memory) — don't invent
-or recall a label here.
+bias file or the technique file rather than labeling it from memory) — don't invent or recall a label
+here.
 
 - "What would change your mind?" — if they can't answer, something is closed off from evidence.
 - "If the opposite had happened, would you have been surprised?" — if no, the confidence is unearned.

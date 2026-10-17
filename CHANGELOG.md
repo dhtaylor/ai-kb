@@ -12,6 +12,10 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
 - `sources/` holds only `.md` citation stubs, and raw artifacts are archived under `documents/`: now
   stated in CONVENTIONS §6, with the missing case for a local file or export, and in CONTRIBUTING.
   `check-kb` fails a non-`.md` file under `sources/` (#71).
+- `analysis-tools`: the review skill owns its product-level calibration (which standards apply at
+  Light, Medium and Full) and its five-point rating scale, which had lived in the intelligence-analysis
+  library but are review procedure with no primary source. Bias remedies are retrieved from the rebuilt
+  library, which states only the remedies its sources give.
 
 ## v0.2.0 — 2026-10-16
 
