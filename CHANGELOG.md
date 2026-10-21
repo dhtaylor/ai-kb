@@ -16,6 +16,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   Light, Medium and Full) and its five-point rating scale, which had lived in the intelligence-analysis
   library but are review procedure with no primary source. Bias remedies are retrieved from the rebuilt
   library, which states only the remedies its sources give.
+- ADR-0016: the library contract gets its own version (`MAJOR.MINOR`, today 2.0), a library declares
+  the version it was built to (`kb_contract:`, read as 2.0 when absent), and rules apply by that
+  version, so upgrading the engine never makes an older library unusable. Pinning becomes the library
+  owner's choice; ADR-0015's pinning section is superseded. Decision only: the implementation follows,
+  and this release waits for #71's rejection to be gated to contract 2.1.
 - `kb-sources` retries with GET when HEAD answers any HTTP error except 429, and GET's answer
   decides. A server that answers HEAD with 400 (or 404, or 500) but serves GET is no longer queued as
   `source-unreachable`, and a source is `dead` only when GET also answers 404 or 410 (#74).
