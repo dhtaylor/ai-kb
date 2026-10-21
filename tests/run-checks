@@ -1037,6 +1037,10 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_response(302); self.send_header("Location", "/ok"); self.end_headers(); return
         if self.path == "/nohead":
             st = 405 if method == "HEAD" else 200
+        # Servers that mishandle HEAD but serve GET (issue #74), and one that rate-limits.
+        mishead = {"/head400": 400, "/head404": 404, "/head500": 500, "/busy": 429}
+        if self.path in mishead:
+            st = mishead[self.path] if method == "HEAD" else 200
         self.send_response(st); self.send_header("Content-Length", "0"); self.end_headers()
     def do_HEAD(self): self._do("HEAD")
     def do_GET(self): self._do("GET")
@@ -1159,8 +1163,10 @@ case_run "kb-sources: one record per failing stub (five)" 0 "" -- \
   bash -c '[ "$(grep -c "^- id:" "$1")" = 5 ]' _ "$KQ"
 case_run "kb-sources: every record is status open" 0 "" -- \
   bash -c '[ "$(grep -c "status: \"open\"" "$1")" = 5 ]' _ "$KQ"
-case_run "kb-sources: each unique URL fetched once (HEAD, GET only after 405)" 0 "" -- \
+case_run "kb-sources: each unique URL is sent one HEAD" 0 "" -- \
   bash -c '[ "$(grep -c "^HEAD /gone$" "$1")" = 1 ]' _ "$SRV/access.log"
+case_run "kb-sources: a 404 from HEAD is confirmed with GET before it is called dead" 0 "" -- \
+  grep -qxF 'GET /gone' "$SRV/access.log"
 
 case_run "kb-sources: rerun still exits 1" 1 "already queued" -- \
   "$ENGINE/scripts/kb-sources" "$TMP/ksrc" --yes
@@ -1177,6 +1183,32 @@ case_run "kb-sources: a library holding the queue still passes check-kb" 0 "clea
   "$ENGINE/scripts/check-kb" "$TMP/ksrc"
 case_run "kb-sources: kb-due counts the open records without a change" 0 "5 open queue item" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ksrc" --nudge
+
+# HEAD is a cheap first try, GET the answer (issue #74): a server that answers HEAD with any
+# error but serves GET is alive, and only GET's 404/410 is dead. 429 is the exception: the
+# server asked us to back off, so no second request is sent.
+build_clean "$TMP/ksrc-head"
+mkdir -p "$TMP/ksrc-head/sources"
+fm fx-sources general > "$TMP/ksrc-head/sources/INDEX.md"
+printf '# Sources\n' >> "$TMP/ksrc-head/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc-head/INDEX.md"
+for s in head400 head404 head500 busy; do
+  fm "s-$s" general > "$TMP/ksrc-head/sources/s-$s.md"
+  printf '# Source: s-%s\n\n- **URL:** http://127.0.0.1:%s/%s\n' "$s" "$SP" "$s" >> "$TMP/ksrc-head/sources/s-$s.md"
+  printf -- '- [s-%s](s-%s.md) — stub\n' "$s" "$s" >> "$TMP/ksrc-head/sources/INDEX.md"
+done
+git -C "$TMP/ksrc-head" add -A >/dev/null 2>&1
+: > "$SRV/access.log"
+case_run "kb-sources: only the 429 is queued (HEAD 400/404/500 then GET 200 are alive)" 1 "queued" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc-head" --yes
+KHQ="$TMP/ksrc-head/needs-attention.md"
+case_run "kb-sources: HEAD 400 then GET 200 is not queued" 1 "" -- grep -qF 'sources/s-head400.md' "$KHQ"
+case_run "kb-sources: HEAD 404 then GET 200 is not queued" 1 "" -- grep -qF 'sources/s-head404.md' "$KHQ"
+case_run "kb-sources: HEAD 500 then GET 200 is not queued" 1 "" -- grep -qF 'sources/s-head500.md' "$KHQ"
+case_run "kb-sources: HEAD 429 queued as source-unreachable" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-busy.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$KHQ"
+case_run "kb-sources: HEAD 429 sends no GET" 1 "" -- grep -qxF 'GET /busy' "$SRV/access.log"
+case_run "kb-sources: HEAD 400 was retried with GET" 0 "" -- grep -qxF 'GET /head400' "$SRV/access.log"
 
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
