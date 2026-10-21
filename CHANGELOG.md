@@ -16,6 +16,9 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   Light, Medium and Full) and its five-point rating scale, which had lived in the intelligence-analysis
   library but are review procedure with no primary source. Bias remedies are retrieved from the rebuilt
   library, which states only the remedies its sources give.
+- `kb-sources` retries with GET when HEAD answers any HTTP error except 429, and GET's answer
+  decides. A server that answers HEAD with 400 (or 404, or 500) but serves GET is no longer queued as
+  `source-unreachable`, and a source is `dead` only when GET also answers 404 or 410 (#74).
 
 ## v0.2.0 — 2026-10-16
 
