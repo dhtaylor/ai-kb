@@ -24,7 +24,7 @@ facts**:
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating. |
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills and the `kb-retrieve` agent. |
 | `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`) and the checks that guard the contract. |
-| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0015). Each one explains why a rule exists. |
+| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0016). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
 The facts live elsewhere, in two kinds of home:
@@ -92,8 +92,9 @@ fetches only when told `--yes`. All three report rather than repair.
 ## Status
 
 This is early, working software, version 0.2.0, with one author so far. Releases are tagged and
-described in [CHANGELOG.md](CHANGELOG.md); what a version number means, and how libraries pin the engine,
-is [ADR-0015](documents/decisions/0015-releases-and-pinning.md).
+described in [CHANGELOG.md](CHANGELOG.md); what a version number means is
+[ADR-0015](documents/decisions/0015-releases-and-pinning.md), and how a library states which version of
+the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-library-contract.md).
 
 - **Built and tested:** the contract, ADRs 1 to 15, the five skills, the retrieval agent, both
   halves of the retrieval eval, and the guardrails above.

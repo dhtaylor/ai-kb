@@ -5,6 +5,12 @@
 - **Deciders:** Dandy Taylor
 - **Applies:** [0003](0003-scoping-topology.md) ("Latest-wins for humans; pin for automation")
 
+> **Amended 2026-10-21 by [ADR-0016](0016-versioned-library-contract.md).** Libraries are expected to be
+> owned by people the engine's maintainer does not know, so the engine publishes a versioned library
+> contract instead of coordinating pins. "Library CI pins the engine to a release tag" is superseded:
+> pinning is the library owner's choice. A library release names the contract version it conforms to,
+> not an engine version. The engine's semantic versioning below stands.
+
 ## Context and problem statement
 
 Nothing had been released. The engine had no tags, no changelog and no stated meaning for a version
