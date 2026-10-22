@@ -120,6 +120,7 @@ scope: <the value from step 1>
 freshness_horizon: <e.g. 30d — how fast this domain's facts decay>
 verifier_budget: <N — max facts re-checked per cycle>
 sweep_interval: 30d
+kb_contract: "<MAJOR.MINOR — the current contract version, CONVENTIONS §14>"
 last_swept: never
 metadata:
   type: index
@@ -130,7 +131,8 @@ keywords: [<terms an agent would grep for>]
 ---
 ```
 
-`sweep_interval` is how long a `kb-audit` sweep stays good for; 30d suits a library. `last_swept`
+`kb_contract` is the contract version the library is built to (CONVENTIONS §14): the newest version
+there, quoted. `sweep_interval` is how long a `kb-audit` sweep stays good for; 30d suits a library. `last_swept`
 starts as `never`, which makes the domain due immediately — correct, since a domain nobody has ever
 swept is exactly the one worth sweeping.
 
