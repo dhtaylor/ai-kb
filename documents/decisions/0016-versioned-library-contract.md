@@ -23,7 +23,7 @@ work, versioned so a library can say which statement it was built to.
 The pressing case is #71, merged and unreleased: `check-kb` now fails a non-`.md` file under
 `sources/`. Released as it stands, it would fail libraries nobody has told, on the day their user
 upgrades the engine. A library built correctly to the rules of its day must not become unusable
-because the engine moved on.
+because the engine released again.
 
 ## Considered options
 
@@ -62,11 +62,18 @@ How does a stricter rule reach a library the engine's maintainer does not know?
 - A library's own release notes, if it has releases, name the contract version it conforms to, not an
   engine version.
 
-### An engine never makes an older library unusable
+### An engine supports the last two contract majors
 
-- An engine supports every contract version it has ever published. It keeps the reader for each one
-  rather than dropping old versions after a window, so upgrading the engine never stops it checking or
-  serving a library that was valid when it was built.
+- An engine supports every minor of the current contract major and of the one before it. Upgrading the
+  engine never stops it checking or serving a library within that window. The contract is not expected
+  to change often, so the window spans years, not releases.
+- When a new major is published, the engine drops the major two behind it. A library still declaring
+  that major is not served: the engine says which version it declares, which versions it supports, and
+  where the migration notes are. It is not served for the same reason as a library that is ahead: its
+  markers may mean something this engine no longer reads.
+- A library on the previous major is warned ahead of time: the behind notice says its major leaves
+  support when the next major is published.
+- Every major ships with migration notes from the major before it, in the contract's changelog.
 - Rules apply by the library's declared version. A rejection introduced in 2.1 fails a library that
   declares 2.1 or later; a library declaring 2.0 gets a warning naming the rule and the version that
   brings it in, and its check still passes.
@@ -106,7 +113,8 @@ How does a stricter rule reach a library the engine's maintainer does not know?
 
 **Good.**
 
-- Upgrading the engine never breaks a library. A stricter rule reaches a library when its owner opts in.
+- Upgrading the engine never breaks a library within the supported window. A stricter rule reaches a
+  library when its owner opts in.
 - A library's owner is told what a newer contract would give them, so staying behind is a choice, not
   ignorance.
 - An engine release costs no pull requests in any library.
@@ -115,8 +123,10 @@ How does a stricter rule reach a library the engine's maintainer does not know?
 
 **Bad.**
 
-- Every new rejection carries a version check, and the engine keeps every contract version's rules for
-  good. That complexity only grows; keeping majors rare is what bounds it.
+- Every new rejection carries a version check, and the engine keeps two majors' rules. Dropping the
+  older major when a new one ships is what bounds that complexity.
+- A library whose owner ignores two majors' warnings stops being served. That is the price of the
+  bound, and it falls only on a library nobody has updated across two contract majors.
 - `check-kb` and its siblings can no longer simply apply "the rules": each rule needs the version that
   introduced it, and the tests must cover each rule both below and at its version.
 - A library behind the contract is reminded at every session start until it moves. That is deliberate
@@ -144,5 +154,5 @@ rejection.
 
 ## Review trigger
 
-Revisit when keeping every contract version's rules makes a change hard to write or test, or when a
-contract major is proposed.
+Revisit when keeping two majors' rules makes a change hard to write or test, or when a contract major
+is proposed.
