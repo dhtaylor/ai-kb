@@ -42,7 +42,9 @@ fm() { # frontmatter: name, scope, [extra]
 build_clean() {
   local d="$1" scope="${2:-general}"
   mkdir -p "$d"
-  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nlast_swept: never\n' > "$d/INDEX.md"
+  # Declares the newest contract (CONVENTIONS §14), so a fixture is not "behind" (ADR-0016).
+  # Publishing a new contract version means raising this line.
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.1"\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
   sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
@@ -499,6 +501,14 @@ sed -i 's/^domain: beta2$/domain: beta/' "$REG_BETA/INDEX.md"
 mv "$REG_BETA/INDEX.md" "$REG_BETA/INDEX.md.off"
 case_run "registry: a registered folder with no INDEX.md is not-a-library" 0 "not-a-library	beta	" -- kbls
 mv "$REG_BETA/INDEX.md.off" "$REG_BETA/INDEX.md"
+# A library on a contract major this engine does not support is not served (ADR-0016), and
+# neither is one whose version cannot be read (here, unquoted). Only state ok is served.
+sed -i 's/^kb_contract: .*$/kb_contract: "3.0"/' "$REG_BETA/INDEX.md"
+case_run "registry: an unsupported contract major is unsupported-contract" 0 "unsupported-contract	beta	" -- kbls
+sed -i 's/^kb_contract: .*$/kb_contract: 2.1/' "$REG_BETA/INDEX.md"
+case_run "registry: an unreadable contract version is unsupported-contract" 0 "unsupported-contract	beta	" -- kbls
+sed -i 's/^kb_contract: .*$/kb_contract: "2.1"/' "$REG_BETA/INDEX.md"
+case_run "registry: ...and a supported version is ok again" 0 "ok	beta	" -- kbls
 case_run "registry: remove unregisters and deletes nothing" 0 "nothing at $REG_ALPHA was deleted" -- kbl remove alpha
 case_run "registry: ...the files are still there" 0 "" -- test -f "$REG_ALPHA/widgets.md"
 case_run "registry: ...and the hook is unwired" 1 "" -- git -C "$REG_ALPHA" config --get core.hooksPath
@@ -833,12 +843,42 @@ case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/
 
 # kb_contract (ADR-0016): a root INDEX.md may declare the contract version it was built to,
 # MAJOR.MINOR. Absent is read as 2.0, so a library that predates the field stays valid.
-kc_lib() { # kc_lib <dir> <kb_contract line>
+kc_lib() { # kc_lib <dir> <kb_contract line, or empty for none>
   build_clean "$1"
-  sed -i "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/" "$1/INDEX.md"
+  sed -i '/^kb_contract:/d' "$1/INDEX.md"
+  [ -n "$2" ] && sed -i "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/" "$1/INDEX.md"
+  return 0
 }
-case_run "kb_contract: absent passes check-kb (read as 2.0)" 0 "clean" -- \
-  "$ENGINE/scripts/check-kb" "$(build_clean "$TMP/kc-none"; echo "$TMP/kc-none")"
+kc_lib "$TMP/kc-none" ""
+case_run "kb_contract: absent passes check-kb (read as 2.0)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/kc-none"
+
+# Version gating (ADR-0016 step 2). The engine knows the versions CONVENTIONS §14 lists.
+case_run "kb_contract: absent is read as 2.0, and told it is behind" 0 "built to contract 2.0" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-none"
+case_run "kb_contract: the behind note says what the newer version adds" 0 "2.1: " -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-none"
+build_clean "$TMP/kc-newest"
+case_run "kb_contract: a library on the newest version gets no note" 0 "" -- \
+  bash -c '"$1" "$2" | grep -q "built to contract" && exit 1; exit 0' _ "$ENGINE/scripts/check-kb" "$TMP/kc-newest"
+# #71's rejection is contract 2.1: a 2.0 library is warned and passes; 2.1 fails (the srcraw case).
+kc_lib "$TMP/kc-raw20" 'kb_contract: "2.0"'; mkdir -p "$TMP/kc-raw20/sources"
+printf 'CREATE TABLE t (id int);\n' > "$TMP/kc-raw20/sources/t.sql"
+case_run "contract 2.0: a raw artifact under sources/ is a warning, and the check passes" 0 "WARN" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-raw20"
+case_run "contract 2.0: the warning names the version that makes it a failure" 0 "fails from contract 2.1" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-raw20"
+# Ahead by a minor: checked by the newest rules this engine knows, and served.
+kc_lib "$TMP/kc-ahead" 'kb_contract: "2.9"'
+case_run "contract ahead by a minor: passes, and says to upgrade the engine" 0 "upgrade the engine" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-ahead"
+mkdir -p "$TMP/kc-ahead/sources"; printf 'CREATE TABLE t (id int);\n' > "$TMP/kc-ahead/sources/t.sql"
+case_run "contract ahead by a minor: the newest known rules apply" 1 "archive it under documents/" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-ahead"
+# Unsupported majors: one this engine has not seen, and one it never published.
+for v in 3.0 1.0; do
+  kc_lib "$TMP/kc-major$v" "kb_contract: \"$v\""
+  case_run "contract $v: an unsupported major fails check-kb" 1 "not supported" -- "$ENGINE/scripts/check-kb" "$TMP/kc-major$v"
+done
 kc_lib "$TMP/kc-quoted" 'kb_contract: "2.0"'
 case_run "kb_contract: a quoted MAJOR.MINOR passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/kc-quoted"
 kc_lib "$TMP/kc-comment" "kb_contract: '2.0'   # built to contract 2.0"
@@ -1467,7 +1507,7 @@ SFX="$TMP/session-fx"; mkdir -p "$SFX/scripts" "$SFX/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX/scripts/$f"; chmod +x "$SFX/scripts/$f"
 done
-printf '# fixture contract\n' > "$SFX/CONVENTIONS.md"
+cp "$ENGINE/CONVENTIONS.md" "$SFX/CONVENTIONS.md"   # the engine reads its contract versions (§14) here
 SHOME="$TMP/session-home"; mkdir -p "$SHOME" "$TMP/session-cwd"
 
 build_clean "$SFX/kb/libdue"
@@ -1493,13 +1533,26 @@ case_run "kb-session-start: nudge block appears when something is due" 0 \
 case_run "kb-session-start: names the due library and its recheck count" 0 \
   "libdue: 1 fact due for recheck" -- \
   sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+# A library behind the contract is nudged; one on an unsupported major is named as not served.
+build_clean "$SFX/kb/libold"
+sed -i '/^kb_contract:/d; s/^last_swept: never$/last_swept: '"$(date +%F)"'/' "$SFX/kb/libold/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$SFX/kb/libold/widgets.md"
+build_clean "$SFX/kb/libfuture"; sed -i 's/^kb_contract: .*$/kb_contract: "3.0"/' "$SFX/kb/libfuture/INDEX.md"
+HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libold" >/dev/null
+HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libfuture" >/dev/null 2>&1
+case_run "kb-session-start: a library behind the contract is nudged" 0 \
+  "libold: built to contract 2.0" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+case_run "kb-session-start: an unsupported contract major is named as not served" 0 \
+  "libfuture: unsupported-contract" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 
 # A second fixture engine with nothing due at all: the block must be absent entirely.
 SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX2/scripts/$f"; chmod +x "$SFX2/scripts/$f"
 done
-printf '# fixture contract\n' > "$SFX2/CONVENTIONS.md"
+cp "$ENGINE/CONVENTIONS.md" "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
 sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$SFX2/kb/libclean/widgets.md"   # really fresh (#63)
@@ -1712,7 +1765,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.0"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.1"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \

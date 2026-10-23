@@ -79,7 +79,7 @@ fi
 if [ "$nbroken" -gt 0 ]; then
   broken="
 Registered but NOT served — anything they hold is unavailable, so say so rather than \"fact not found\":${broken}
-Fix with kb-library add <path> (moved), or kb-library remove <name>."
+Fix with kb-library add <path> (moved), or kb-library remove <name>. For unsupported-contract, check-kb <path> names the contract versions this engine supports."
 fi
 
 # The libraries, plus this session's own project tree if it is in one.

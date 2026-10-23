@@ -247,6 +247,26 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
     if un:
         parts.append(f"{plural(un, 'unstamped source')} (never verified)")
 
+    try:   # ADR-0016: a library behind the contract is told; never a failure
+        if check_kb is None:
+            raise RuntimeError("check-kb could not be loaded")
+        st, v, newest, newer = check_kb.contract_status(check_kb.declared_contract(tree))
+    except ValueError:
+        st = "malformed"
+    except Exception as e:
+        warnings.append(f"{lbl}: could not read the contract version ({e}) — skipped")
+        st = None
+    if st == "behind":
+        parts.append(f"built to contract {check_kb.fmt(v)}; this engine knows {check_kb.fmt(newest)} "
+                     f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
+    elif st == "ahead":
+        parts.append(f"declares contract {check_kb.fmt(v)}, newer than this engine "
+                     f"({check_kb.fmt(newest)}) — upgrade the engine")
+    elif st == "unsupported":
+        parts.append(f"declares contract {check_kb.fmt(v)}, which this engine does not support — not served")
+    elif st == "malformed":
+        parts.append("kb_contract cannot be read — not served (check-kb says why)")
+
     line = f"{lbl}: " + "; ".join(parts) if parts else None
     return line, warnings
 
