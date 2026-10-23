@@ -7,3 +7,7 @@ kb/
 # Watcher snapshots are copies of third-party pages (ADR-0012: saved by hand, compared
 # offline). This repository is public, so they stay local; only the allowlist is tracked.
 watcher/snapshots/
+
+# Bytecode caches. The engine's own loaders turn bytecode off, but an ad-hoc import of an
+# extensionless script (SourceFileLoader) writes one next to it (issue #80).
+__pycache__/

@@ -841,6 +841,12 @@ case_run "agent_ttl: an invalid one is a kb-due warning, never a crash" 0 "agent
 ttl_lib "$TMP/ttl-bad" "agent_ttl: a month"
 case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
 
+# Issue #80: importing an extensionless script as a module (an ad-hoc SourceFileLoader, as an
+# agent or a person debugging does) writes scripts/__pycache__/, and the engine checkout then
+# looks modified. The engine's own loaders turn bytecode off; anyone else's are covered here.
+case_run "a bytecode cache under scripts/ is ignored by git (#80)" 0 "" -- \
+  git -C "$ENGINE" check-ignore -q scripts/__pycache__/kb-sourcescpython-314.pyc
+
 # kb_contract (ADR-0016): a root INDEX.md may declare the contract version it was built to,
 # MAJOR.MINOR. Absent is read as 2.0, so a library that predates the field stays valid.
 kc_lib() { # kc_lib <dir> <kb_contract line, or empty for none>

@@ -36,6 +36,8 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
 - `kb-sources` retries with GET when HEAD answers any HTTP error except 429, and GET's answer
   decides. A server that answers HEAD with 400 (or 404, or 500) but serves GET is no longer queued as
   `source-unreachable`, and a source is `dead` only when GET also answers 404 or 410 (#74).
+- `__pycache__/` is ignored, so an ad-hoc import of an engine script no longer leaves the engine
+  checkout looking modified (#80).
 
 ## v0.2.0 — 2026-10-16
 
