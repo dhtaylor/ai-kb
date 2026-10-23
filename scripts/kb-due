@@ -63,7 +63,7 @@ Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
   Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
   trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
-  --nudge   print the full librarian nudge (sweep + recheck + queue + episodic + unstamped + stale), and
+  --nudge   print the full librarian nudge (review packets + sweep + recheck + queue + episodic + unstamped + stale), and
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
@@ -198,7 +198,7 @@ def plural(n: int, word: str) -> str:
 
 
 # The --summary categories, in the order they are shown: (key, heading).
-SUMMARY = (("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
+SUMMARY = (("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
            ("queue", "queue"), ("distill", "to distill"), ("unstamped", "unstamped"),
            ("contract", "contract"))
 
@@ -215,12 +215,18 @@ def summary_line(counts: list) -> str:
     return "KB due — " + " · ".join(out) if out else ""
 
 
-def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
+def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=()):
     """(line-or-None, [warning, ...], {summary key: count}) for one tree's row from status(). A
     warning never stops the other categories, this tree's own line, or any other tree — see
     module docstring: a malformed or uncomputable category is reported once and skipped."""
     tree, lbl = s["tree"], label(s["tree"])
     parts, warnings, counts = [], [], {}
+
+    # Review packets kb-prepare drafted for this tree (ADR-0017): the decisions already waiting.
+    mine = [h for _, h in packets if h.get("library_path") == str(tree.resolve())]
+    if mine:
+        counts["packets"] = len(mine)
+        parts.append(f"{plural(len(mine), 'review packet')} awaiting your decision (kb-apply list)")
 
     if s["due"]:
         counts["sweep"] = " "     # named, not counted: one sweep per tree
@@ -327,8 +333,13 @@ def main(argv) -> int:
         except Exception:
             check_kb = None
         lines, warnings, counts = [], [], []
+        try:
+            packets = load_module("kb_apply", "kb-apply").pending()
+        except Exception as e:
+            print(f"kb-due: review packets unreadable, skipped: {e}", file=sys.stderr)
+            packets = []
         for s in rows:
-            line, warn, c = nudge_for(s, kb_verify, kb_watch, check_kb)
+            line, warn, c = nudge_for(s, kb_verify, kb_watch, check_kb, packets)
             if line:
                 lines.append(line)
             warnings += warn

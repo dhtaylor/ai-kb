@@ -87,6 +87,16 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   the matched text nowhere. `lint-allow` exempts nothing in filtered text. It exits 2 with no output
   when the input cannot be scanned (UTF-16, binary, or a pass that failed), so a caller holds the
   input rather than passing it through unscanned. The gate modes are unchanged.
+- Review packets: `kb-prepare` and `kb-apply` (#99, ADR-0017). `kb-prepare distill|audit <library>`
+  drafts the half of a skill before its review gate, unattended. It runs only when notes await
+  distillation or a sweep is due. It runs `claude -p` with Read, Grep and Glob only: no MCP servers,
+  no session persistence, a dollar cap. The header (library, the commit drafted against, date) is
+  written by the script, not the model. The body is redacted, and the packet is saved outside the
+  library. `kb-apply list|show|done` lists packets, marks one STALE when its library has moved, and
+  closes one. In a session, `kb-distill` and `kb-audit` resume from a packet at their own gate. The
+  person decides each item, and only then does the skill write and commit. `kb-due --nudge` names the
+  packets waiting. Tested with a stub `claude` that records its arguments. Run once for real on a
+  scratch clone: $0.55, an injected instruction in the note not acted on, and the library unchanged.
 
 ## v0.2.0 — 2026-10-16
 

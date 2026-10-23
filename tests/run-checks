@@ -2954,6 +2954,118 @@ case_run "--redact: a scanner that cannot run is exit 2, not a pass-through" 2 "
   bash -c 'd=$(mktemp -d); cp "$1/scripts/check-secrets" "$1/scripts/secret-patterns.txt" "$1/scripts/pii-scan" "$d/"; printf "#!/bin/sh\nexit 3\n" > "$d/secret-entropy"; chmod +x "$d/secret-entropy"; "$d/check-secrets" --redact < "$2" > "$d/out"; rc=$?; [ -s "$d/out" ] && rc=98; exit $rc' _ "$ENGINE" "$RD/mixed.txt"
 
 
+# --------------------------------------- kb-prepare, kb-apply: review packets (#99) ----
+# The unattended half of kb-distill and kb-audit (ADR-0017). kb-prepare runs a headless model only
+# when something is due, gives it read tools and nothing else, wraps what it returns in a header
+# the model does not write, redacts it, and saves it OUTSIDE the library. A person decides it later
+# in a session, where the skill resumes at its own review gate. A stub stands in for `claude`: it
+# records its arguments, so the containment flags are proven without a login.
+PK="$TMP/prep"; mkdir -p "$PK"
+cat > "$PK/claude" <<'STUB'
+#!/usr/bin/env python3
+import json, os, sys
+with open(os.environ["STUB_LOG"], "w") as log:
+    for arg in sys.argv[1:]:
+        log.write(arg + "\n")
+if os.environ.get("STUB_RC"):
+    sys.exit(int(os.environ["STUB_RC"]))
+reply = {"type": "result", "total_cost_usd": 0.02}
+reply["is_error"] = os.environ.get("STUB_ERR") == "1"
+reply["result"] = open(os.environ["STUB_RESULT"]).read()
+print(json.dumps(reply))
+STUB
+chmod +x "$PK/claude"
+export STUB_LOG="$PK/args" STUB_RESULT="$PK/result"
+printf '# Review packet\n\n| # | Proposed fact | Target |\n|---|---|---|\n| 1 | SCHED-CANARY-PACKET widgets hold 12 | widgets.md |\nkey = "%s"\n' "$(printf '%s%s' AKIA ABCDEFGHIJKLMNOP)" > "$PK/result"
+PL="$PK/kb/fx"; build_clean "$PL"
+git -C "$PL" -c user.email=t@t -c user.name=t commit -qm init
+PKOUT="$HOME/.local/state/ai-kb/packets"
+prep() { "$ENGINE/scripts/kb-prepare" "$@" --claude "$PK/claude"; }
+
+rm -f "$STUB_LOG"
+case_run "kb-prepare: no notes awaiting distillation runs no model, exits 0" 0 "nothing to prepare" -- prep distill "$PL"
+case_run "kb-prepare: ...and the model was never called" 1 "" -- test -e "$STUB_LOG"
+
+mkdir -p "$PL/episodic"; fm 2026-10-01-fx-notes general > "$PL/episodic/2026-10-01-fx-notes.md"
+printf '# Notes\n\nObserved: widgets hold 12.\n' >> "$PL/episodic/2026-10-01-fx-notes.md"
+git -C "$PL" add -A && git -C "$PL" -c user.email=t@t -c user.name=t commit -qm notes
+case_run "kb-prepare: a note awaiting distillation writes a packet, exits 1" 1 "packet written" -- prep distill "$PL"
+PKF=$(ls "$PKOUT"/fx/*-kb-distill.md 2>/dev/null | head -1)
+case_run "kb-prepare: the packet lands outside the library, under the packets directory" 0 "" -- test -f "$PKF"
+case_run "kb-prepare: the run gets exactly Read, Grep and Glob" 0 "" -- \
+  bash -c 'grep -x -A1 -- "--tools" "$1" | tail -1 | grep -qx "Read,Grep,Glob"' _ "$STUB_LOG"
+case_run "kb-prepare: no write, edit, shell or network tool is named anywhere" 1 "" -- \
+  grep -E -w 'Write|Edit|Bash|WebFetch|WebSearch|NotebookEdit' "$STUB_LOG"
+for f in --strict-mcp-config --no-session-persistence --max-budget-usd; do
+  case_run "kb-prepare: the run is given $f" 0 "" -- grep -qx -- "$f" "$STUB_LOG"
+done
+case_run "kb-prepare: the engine is the only extra directory" 0 "" -- \
+  bash -c 'grep -x -A1 -- "--add-dir" "$1" | tail -1 | grep -qx "$2"' _ "$STUB_LOG" "$ENGINE"
+case_run "kb-prepare: the prompt names the skill's prepare mode" 0 "" -- \
+  grep -qF 'kb-distill/SKILL.md' "$STUB_LOG"
+case_run "kb-prepare: the header records the library commit it was drafted against" 0 "" -- \
+  grep -qx "library_head: $(git -C "$PL" rev-parse HEAD)" "$PKF"
+case_run "kb-prepare: the header says pending" 0 "" -- grep -qx 'status: pending' "$PKF"
+case_run "kb-prepare: the packet is redacted before it is written" 0 "[redacted: secret]" -- cat "$PKF"
+case_run "kb-prepare: ...and holds no credential" 1 "" -- grep -q 'AKIA' "$PKF"
+case_run "kb-prepare: the library is untouched" 0 "" -- bash -c '[ -z "$(git -C "$1" status --porcelain)" ]' _ "$PL"
+case_run "kb-prepare: a packet already waiting is not drafted again" 1 "already waiting" -- prep distill "$PL"
+case_run "kb-prepare: an output directory inside the library is refused" 2 "outside" -- \
+  prep distill "$PL" --out "$PL/packets" --force
+case_run "schedulable: kb-prepare prints no packet text" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/kb-prepare" distill "$PL" --claude "$PK/claude"
+
+PO="$PK/out2"
+printf 'NO ITEMS\n' > "$PK/none"
+case_run "kb-prepare: a run that finds nothing to propose writes no packet" 0 "nothing to propose" -- \
+  env STUB_RESULT="$PK/none" "$ENGINE/scripts/kb-prepare" distill "$PL" --out "$PO" --claude "$PK/claude" --force
+case_run "kb-prepare: ...none at all" 1 "" -- bash -c 'compgen -G "$1/fx/*.md" >/dev/null' _ "$PO"
+case_run "kb-prepare: a failed model run is exit 2 and writes nothing" 2 "" -- \
+  env STUB_RC=1 "$ENGINE/scripts/kb-prepare" distill "$PL" --out "$PO" --claude "$PK/claude" --force
+case_run "kb-prepare: a run that reports an error is exit 2" 2 "" -- \
+  env STUB_ERR=1 "$ENGINE/scripts/kb-prepare" distill "$PL" --out "$PO" --claude "$PK/claude" --force
+case_run "kb-prepare: ...and still writes nothing" 1 "" -- bash -c 'compgen -G "$1/fx/*.md" >/dev/null' _ "$PO"
+case_run "kb-prepare: an unknown skill is a usage error" 2 "" -- prep organize "$PL"
+case_run "kb-prepare: its output names the packet, never its text" 1 "" -- \
+  bash -c '"$1" distill "$2" --out "$3" --claude "$4" --force 2>&1 | grep -q SCHED-CANARY' _ "$ENGINE/scripts/kb-prepare" "$PL" "$PK/out3" "$PK/claude"
+
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$PL/INDEX.md"
+rm -f "$STUB_LOG"
+case_run "kb-prepare audit: a sweep not due runs no model" 0 "nothing to prepare" -- prep audit "$PL" --out "$PO"
+sed -i "s/^last_swept: .*\$/last_swept: never/" "$PL/INDEX.md"
+case_run "kb-prepare audit: a sweep due writes a packet" 1 "packet written" -- prep audit "$PL" --out "$PO"
+case_run "kb-prepare audit: the model gets the mechanical checks' results, since it cannot run them" 0 "" -- \
+  grep -qF 'check-kb' "$STUB_LOG"
+git -C "$PL" checkout -q INDEX.md
+
+case_run "kb-apply list: a pending packet is listed, exit 1" 1 "pending" -- "$ENGINE/scripts/kb-apply" list
+case_run "kb-apply list: ...named by its path" 1 "$PKF" -- "$ENGINE/scripts/kb-apply" list
+case_run "schedulable: kb-apply list prints no packet text" 1 "exit=1" -- sched "$ENGINE/scripts/kb-apply" list
+printf '\nmore\n' >> "$PL/widgets.md"; git -C "$PL" -c user.email=t@t -c user.name=t commit -qam moved
+case_run "kb-apply list: a library that moved since the packet was drafted marks it STALE" 1 "STALE" -- \
+  "$ENGINE/scripts/kb-apply" list
+case_run "kb-apply show: prints the packet and warns that it is stale" 0 "STALE" -- "$ENGINE/scripts/kb-apply" show "$PKF"
+case_run "kb-apply done: a verdict other than applied or rejected is a usage error" 2 "" -- \
+  "$ENGINE/scripts/kb-apply" done "$PKF" maybe
+case_run "kb-apply done: a decided packet is closed" 0 "applied" -- "$ENGINE/scripts/kb-apply" done "$PKF" applied
+case_run "kb-apply done: ...moved under done/ with its verdict" 0 "" -- \
+  grep -qx 'status: applied' "$(dirname "$PKF")/done/$(basename "$PKF")"
+case_run "kb-apply list: nothing pending in the default directory" 0 "no packets" -- \
+  "$ENGINE/scripts/kb-apply" list
+
+prep distill "$PL" >/dev/null 2>&1
+case_run "kb-due --nudge names a review packet awaiting decision" 0 "review packet" -- \
+  "$ENGINE/scripts/kb-due" "$PL" --nudge
+case_run "kb-distill describes its prepare mode" 0 "" -- \
+  grep -q '^## Prepare mode' "$ENGINE/plugins/knowledge-tools/skills/kb-distill/SKILL.md"
+case_run "kb-distill describes resuming from a review packet" 0 "" -- \
+  grep -q '^## Resuming from a review packet' "$ENGINE/plugins/knowledge-tools/skills/kb-distill/SKILL.md"
+case_run "kb-audit describes its prepare mode" 0 "" -- \
+  grep -q '^## Prepare mode' "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
+case_run "kb-audit describes resuming from a review packet" 0 "" -- \
+  grep -q '^## Resuming from a review packet' "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
+
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0
