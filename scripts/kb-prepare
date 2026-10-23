@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""kb-prepare — draft the legwork of kb-distill or kb-audit unattended, as a review packet (ADR-0017, #99).
+
+The decision stays attended. This runs only the half before a skill's review gate, and it can
+change nothing:
+
+- It runs a model only when the work is due: notes awaiting distillation (distill), or a sweep that
+  is due (audit). `--force` drafts anyway. A packet already waiting for the same library and skill
+  is not drafted again.
+- The model is `claude -p` given Read, Grep and Glob and no other tool: no MCP servers, no session
+  persistence, and a dollar cap. It has nothing that writes, runs a command or reaches the network,
+  so it cannot change a library or send what it reads anywhere. That is enforcement, not
+  instruction (documents/tool-scope-matrix.md: a skill's allowed-tools only pre-approves).
+- The packet's header is written here, not by the model: the skill, the library, the commit the
+  library was at, and the date. The model's text is the body, filtered by `check-secrets --redact`,
+  because it quotes notes and sources.
+- The packet is saved outside the library, in kb-apply's packets directory. A person reviews it in a
+  session, where the skill resumes at its own gate (`kb-apply list`).
+
+kb-audit's first step runs the mechanical checks, which the model cannot do without a shell, so
+this runs them and gives the model their results.
+
+Usage: kb-prepare distill|audit <library> [--out DIR] [--budget-usd N] [--claude PATH] [--force]
+  --out DIR       where packets go (default: kb-apply's packets directory); refused inside the library
+  --budget-usd N  the model run's dollar cap (default 1.00)
+  --claude PATH   the claude binary (default: $KB_CLAUDE, then PATH)
+Prints the packet's path, never its text, so it is schedulable (#95). Exit 0 nothing to decide (not
+due, or the run proposed nothing), 1 a packet is waiting for a decision, 2 could not run.
+"""
+import datetime, importlib.machinery, importlib.util, json, os, pathlib, re, shutil, subprocess, sys
+
+ENGINE = pathlib.Path(__file__).resolve().parent.parent
+SCRIPTS = ENGINE / "scripts"
+SKILLS = {"distill": "kb-distill", "audit": "kb-audit"}
+TOOLS = "Read,Grep,Glob"
+
+
+def load_module(name: str, filename: str):
+    path = SCRIPTS / filename
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(name, str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def fail(msg: str) -> int:
+    print(f"kb-prepare: {msg}", file=sys.stderr)
+    return 2
+
+
+def library_name(lib: pathlib.Path) -> str:
+    m = re.search(r"^domain:\s*(\S+)", (lib / "INDEX.md").read_text(errors="replace"), re.M)
+    return m.group(1) if m else lib.name
+
+
+def mechanical_checks(lib: pathlib.Path) -> str:
+    out = []
+    for cmd in (["check-kb", str(lib)], ["check-scope", str(lib)], ["check-golden", str(lib)],
+                ["check-xlinks", "--installed"]):
+        r = subprocess.run([str(SCRIPTS / cmd[0])] + cmd[1:], capture_output=True, text=True)
+        out.append(f"$ {' '.join(cmd)}   (exit {r.returncode})\n{(r.stdout + r.stderr).strip()}")
+    return "\n\n".join(out)
+
+
+def prompt_for(skill: str, lib: pathlib.Path) -> str:
+    name = SKILLS[skill]
+    text = (f"PREPARE MODE for {name}.\n"
+            f"Engine: {ENGINE}\nContract: {ENGINE / 'CONVENTIONS.md'}\nLibrary: {lib}\n"
+            f"Read {ENGINE / 'plugins/knowledge-tools/skills' / name / 'SKILL.md'} and follow its "
+            f"section 'Prepare mode' for this library. You can only read; nothing you produce is "
+            f"applied until a person reviews it. Your whole reply is the review packet's body, or "
+            f"exactly NO ITEMS when there is nothing to propose.\n")
+    if skill == "audit":
+        text += ("\nThe mechanical checks of Step 1 were run for you; their results follow.\n\n"
+                 + mechanical_checks(lib) + "\n")
+    return text
+
+
+def main(argv) -> int:
+    args, opts, i = [], {}, 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--out", "--budget-usd", "--claude"):
+            if i + 1 >= len(argv):
+                return fail(f"{a} needs a value")
+            opts[a] = argv[i + 1]; i += 2; continue
+        if a == "--force":
+            opts[a] = True; i += 1; continue
+        if a.startswith("--"):
+            return fail(f"unknown option {a}")
+        args.append(a); i += 1
+    if len(args) != 2 or args[0] not in SKILLS:
+        print(__doc__.strip().split("\n\n")[-1], file=sys.stderr)
+        return 2
+    skill, lib = args[0], pathlib.Path(args[1]).resolve()
+    if not (lib / "INDEX.md").is_file():
+        return fail(f"{lib} has no INDEX.md: not a library")
+
+    kb_apply = load_module("kb_apply", "kb-apply")
+    out = pathlib.Path(kb_apply.packets_dir(opts.get("--out"))).resolve()
+    if out == lib or lib in out.parents:
+        return fail(f"packets must be kept outside the library, not in {out}")
+    head = kb_apply.head_of(str(lib))
+    if head is None:
+        return fail(f"{lib} is not a git repository with a commit")
+    name, packet = library_name(lib), SKILLS[skill]
+
+    for p, h in kb_apply.pending(str(out)):
+        if h.get("library_path") == str(lib) and h.get("packet") == packet:
+            print(f"kb-prepare: {name}: a {packet} packet is already waiting for a decision: {p}")
+            return 1
+
+    if "--force" not in opts:
+        kb_due = load_module("kb_due", "kb-due")
+        due = kb_due.episodic_count(lib) if skill == "distill" else kb_due.status(lib)["due"]
+        if not due:
+            print(f"kb-prepare: {name}: nothing to prepare for {packet}")
+            return 0
+
+    claude = opts.get("--claude") or os.environ.get("KB_CLAUDE") or shutil.which("claude")
+    if not claude:
+        return fail("claude not found: pass --claude PATH or set KB_CLAUDE")
+    budget = opts.get("--budget-usd", "1.00")
+    cmd = [claude, "-p", prompt_for(skill, lib), "--tools", TOOLS, "--add-dir", str(ENGINE),
+           "--strict-mcp-config", "--no-session-persistence", "--max-budget-usd", budget,
+           "--output-format", "json"]
+    try:
+        r = subprocess.run(cmd, cwd=lib, capture_output=True, text=True, timeout=1800)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return fail(f"the prepare run could not finish ({type(e).__name__})")
+    try:
+        res = json.loads(r.stdout)
+    except ValueError:
+        res = None
+    if r.returncode != 0 or not isinstance(res, dict) or res.get("is_error"):
+        return fail(f"the prepare run failed (exit {r.returncode}); no packet written")
+    body = str(res.get("result") or "")
+    if body.strip() in ("", "NO ITEMS"):
+        print(f"kb-prepare: {name}: the {packet} run found nothing to propose")
+        return 0
+
+    red = subprocess.run([str(SCRIPTS / "check-secrets"), "--redact"], input=body,
+                         capture_output=True, text=True)
+    if red.returncode == 2:
+        return fail("the packet could not be scanned for secrets; no packet written")
+    m = re.search(r"(\d+) line\(s\) redacted", red.stderr)
+    redacted = m.group(1) if m else "0"
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    head_block = "\n".join([
+        "---", f"packet: {packet}", f"library: {name}", f"library_path: {lib}",
+        f"library_head: {head}", f"prepared: {now.strftime('%Y-%m-%dT%H:%M:%SZ')}",
+        f"cost_usd: {res.get('total_cost_usd', '?')}", f"redacted_lines: {redacted}",
+        "status: pending", "---", ""])
+    dest_dir = out / name
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest, n = dest_dir / f"{now.date()}-{packet}.md", 2
+    while dest.exists():
+        dest = dest_dir / f"{now.date()}-{packet}-{n}.md"; n += 1
+    tmp = dest.with_name(f".{dest.name}.tmp")
+    tmp.write_text(head_block + "\n" + red.stdout)
+    os.replace(tmp, dest)
+    print(f"kb-prepare: {name}: {packet} packet written to {dest} "
+          f"(cost ${res.get('total_cost_usd', '?')}, {redacted} line(s) redacted)")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

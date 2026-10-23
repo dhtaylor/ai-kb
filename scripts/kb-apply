@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""kb-apply — the review packets waiting for a person's decision (ADR-0017, #99).
+
+kb-prepare drafts the legwork of kb-distill and kb-audit unattended and saves it as a review packet,
+outside every library. Deciding is attended: in a session, the skill loads a packet, re-checks it
+against the library as it is now, and resumes at its own review gate, where the person approves,
+edits or rejects each item. Only then does the skill write and commit. This script never writes to a
+library. It lists packets, shows one, and closes one once the skill has acted on it.
+
+A packet is STALE when its library has commits since the one the packet was drafted against
+(`library_head:` in its header). A stale packet is still usable; the skill re-validates each item
+against the current files before showing it.
+
+Packets live in $KB_PACKETS, or ${XDG_STATE_HOME:-~/.local/state}/ai-kb/packets, as
+<library>/<date>-<skill>.md. A closed one moves to <library>/done/.
+
+Usage: kb-apply list [--out DIR]
+       kb-apply show <packet>
+       kb-apply done <packet> applied|rejected
+`list` prints paths, libraries and dates only, never a packet's text, so it is schedulable (#95).
+Exit codes for list: 0 nothing pending, 1 packets pending, 2 could not run. show and done: 0 or 2.
+"""
+import os, pathlib, re, subprocess, sys
+
+HEADER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
+
+
+def packets_dir(out=None) -> pathlib.Path:
+    if out:
+        return pathlib.Path(out)
+    if os.environ.get("KB_PACKETS"):
+        return pathlib.Path(os.environ["KB_PACKETS"])
+    state = os.environ.get("XDG_STATE_HOME") or str(pathlib.Path.home() / ".local" / "state")
+    return pathlib.Path(state) / "ai-kb" / "packets"
+
+
+def header(path: pathlib.Path) -> dict:
+    """The packet's own header: written by kb-prepare, never by the model."""
+    m = HEADER.match(path.read_text(errors="replace"))
+    if not m:
+        return {}
+    return dict(line.split(": ", 1) for line in m.group(1).split("\n") if ": " in line)
+
+
+def head_of(library: str):
+    r = subprocess.run(["git", "-C", library, "rev-parse", "HEAD"], capture_output=True, text=True)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def is_stale(h: dict) -> bool:
+    now = head_of(h.get("library_path", ""))
+    return now is not None and now != h.get("library_head")
+
+
+def pending(out=None) -> list:
+    """[(path, header)] for every packet still waiting, oldest first."""
+    root = packets_dir(out)
+    if not root.is_dir():
+        return []
+    found = []
+    for p in sorted(root.glob("*/*.md")):
+        h = header(p)
+        if h.get("status") == "pending":
+            found.append((p, h))
+    return found
+
+
+def cmd_list(out) -> int:
+    waiting = pending(out)
+    if not waiting:
+        print(f"kb-apply: no packets waiting in {packets_dir(out)}")
+        return 0
+    print(f"kb-apply: {len(waiting)} packet(s) waiting for a decision")
+    for p, h in waiting:
+        stale = "  STALE: the library has moved since; the skill re-checks each item" if is_stale(h) else ""
+        print(f"  pending  {h.get('packet', '?'):<10} {h.get('library', '?'):<24} {h.get('prepared', '?')}  {p}{stale}")
+    print("\nIn a session, ask for the packet to be reviewed: the skill named on its line resumes at its "
+          "review gate.")
+    return 1
+
+
+def cmd_show(path: pathlib.Path) -> int:
+    h = header(path)
+    if not h:
+        print(f"kb-apply: {path} is not a review packet", file=sys.stderr)
+        return 2
+    if is_stale(h):
+        print(f"STALE: {h['library']} has commits since {h['library_head'][:12]}, when this was drafted. "
+              f"Re-check each item against the current files before showing it.\n")
+    print(path.read_text(errors="replace"), end="")
+    return 0
+
+
+def cmd_done(path: pathlib.Path, verdict: str) -> int:
+    if verdict not in ("applied", "rejected"):
+        print("kb-apply: done takes applied or rejected", file=sys.stderr)
+        return 2
+    h = header(path)
+    if h.get("status") != "pending":
+        print(f"kb-apply: {path} is not a pending review packet", file=sys.stderr)
+        return 2
+    text = path.read_text(errors="replace").replace("\nstatus: pending\n", f"\nstatus: {verdict}\n", 1)
+    dest = path.parent / "done" / path.name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text)
+    path.unlink()
+    print(f"kb-apply: {path.name} closed as {verdict}, kept at {dest}")
+    return 0
+
+
+def main(argv) -> int:
+    if argv[:1] == ["list"]:
+        rest = argv[1:]
+        if rest and (rest[0] != "--out" or len(rest) != 2):
+            print(__doc__.strip().split("\n\n")[-2], file=sys.stderr); return 2
+        return cmd_list(rest[1] if rest else None)
+    if argv[:1] == ["show"] and len(argv) == 2:
+        return cmd_show(pathlib.Path(argv[1]))
+    if argv[:1] == ["done"] and len(argv) == 3:
+        return cmd_done(pathlib.Path(argv[1]), argv[2])
+    print(__doc__.strip().split("\n\n")[-2], file=sys.stderr)
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

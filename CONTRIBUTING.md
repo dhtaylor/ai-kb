@@ -241,6 +241,8 @@ That means:
 | `kb-watch` | `kb-watch <allowlist.json>` | 0 / 1 / 2 |
 | `check-xlinks` | `check-xlinks --installed` | 0 / 1 / 2 |
 | `check-secrets` | `check-secrets --redact < in > out`, a filter: 0 nothing redacted, 1 redacted (output safe), 2 could not scan (no output) | 0 / 1 / 2 |
+| `kb-prepare` | `kb-prepare distill\|audit <library>`: a capped, read-only model run, only when due (ADR-0017) | 0 nothing to decide / 1 packet waiting / 2 |
+| `kb-apply` | `kb-apply list` | 0 none waiting / 1 waiting / 2 |
 | `kb-due` | `kb-due … --nudge` | always 0: it is a reminder, and the session hook reads any other exit as a failure |
 
 Each row is a regression case in `tests/run-checks`, run from `/` with a stripped environment
