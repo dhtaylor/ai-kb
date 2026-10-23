@@ -3109,6 +3109,94 @@ case_run "kb-due --nudge names this week's report and its decisions" 0 "decision
 unset KB_PACKETS
 
 
+# ------------------------------------------------- kb-schedule: the opt-in weekly job (#103) ----
+# Nothing runs unless the user installs it, and remove leaves no trace (ADR-0017). systemctl and
+# crontab are stubs here that record what they were asked, so no real timer is ever installed by the
+# suite. The generated units are checked with systemd-analyze where it exists.
+KS="$TMP/sched-job"; KSH="$KS/home"; mkdir -p "$KSH" "$KS/bin"
+cat > "$KS/bin/systemctl" <<'STUB'
+#!/bin/sh
+printf '%s\n' "$*" >> "$KS_LOG"
+case "$*" in *list-timers*) echo "Mon 2026-10-26 07:00:00 UTC  ai-kb-schedule.timer";; esac
+exit 0
+STUB
+cat > "$KS/bin/crontab" <<'STUB'
+#!/bin/sh
+printf 'crontab %s\n' "$*" >> "$KS_LOG"
+if [ "$1" = "-l" ]; then [ -f "$KS_CRON" ] && cat "$KS_CRON" || { echo "no crontab for user" >&2; exit 1; }
+elif [ "$1" = "-" ]; then cat > "$KS_CRON"
+fi
+STUB
+chmod +x "$KS/bin/systemctl" "$KS/bin/crontab"
+ksched() { HOME="$KSH" KS_LOG="$KS/log" KS_CRON="$KS/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" \
+  "$ENGINE/scripts/kb-schedule" "$@"; }
+KUNIT="$KSH/.config/systemd/user"
+
+case_run "kb-schedule status: not installed" 1 "not installed" -- ksched status
+case_run "kb-schedule install (systemd): installs a weekly timer" 0 "installed" -- ksched install --backend systemd --claude "$PK/claude"
+case_run "kb-schedule: the timer is weekly and catches up a missed run" 0 "" -- \
+  bash -c 'grep -qx "OnCalendar=Mon \*-\*-\* 07:00:00" "$1" && grep -qx "Persistent=true" "$1"' _ "$KUNIT/ai-kb-schedule.timer"
+case_run "kb-schedule: the service runs kb-schedule run, from the engine" 0 "" -- \
+  grep -qx "ExecStart=$ENGINE/scripts/kb-schedule run" "$KUNIT/ai-kb-schedule.service"
+case_run "kb-schedule: the timer is enabled" 0 "" -- grep -qx -- "--user enable --now ai-kb-schedule.timer" "$KS/log"
+case_run "kb-schedule: preparation is off unless chosen" 0 "" -- grep -qx 'prepare=no' "$KSH/.config/ai-kb/schedule.conf"
+if command -v systemd-analyze >/dev/null 2>&1; then
+  case_run "kb-schedule: the units pass systemd-analyze verify" 0 "" -- \
+    bash -c 'systemd-analyze --user verify "$1/ai-kb-schedule.service" "$1/ai-kb-schedule.timer" 2>&1 | grep -v -i "lingering\|bus\|Failed to connect\|DBus" | grep -q . && exit 1; exit 0' _ "$KUNIT"
+fi
+case_run "kb-schedule status: installed, names the backend and the next run" 0 "systemd" -- ksched status
+case_run "kb-schedule install --prepare records the choice and the cap" 0 "" -- \
+  bash -c 'ks() { HOME="$1" KS_LOG="$2/log" KB_SYSTEMCTL="$2/bin/systemctl" "$3/scripts/kb-schedule" "$@"; }; \
+    HOME="$1" KS_LOG="$2/log" KB_SYSTEMCTL="$2/bin/systemctl" "$3/scripts/kb-schedule" install --backend systemd --prepare --budget-usd 0.50 --claude /bin/true >/dev/null && \
+    grep -qx prepare=yes "$1/.config/ai-kb/schedule.conf" && grep -qx budget_usd=0.50 "$1/.config/ai-kb/schedule.conf"' _ "$KSH" "$KS" "$ENGINE"
+case_run "kb-schedule remove (systemd): disables the timer" 0 "removed" -- ksched remove
+case_run "kb-schedule remove: ...the timer was disabled" 0 "" -- grep -qx -- "--user disable --now ai-kb-schedule.timer" "$KS/log"
+case_run "kb-schedule remove: ...and nothing is left behind" 0 "" -- \
+  bash -c '[ ! -e "$1/ai-kb-schedule.timer" ] && [ ! -e "$1/ai-kb-schedule.service" ] && [ ! -e "$2/.config/ai-kb/schedule.conf" ]' _ "$KUNIT" "$KSH"
+
+printf '0 3 * * * /usr/bin/backup\n' > "$KS/cron"
+case_run "kb-schedule install (cron): adds one line" 0 "installed" -- ksched install --backend cron --claude "$PK/claude"
+ksched install --backend cron --claude "$PK/claude" >/dev/null 2>&1
+case_run "kb-schedule install (cron): installing twice still leaves one line" 0 "" -- \
+  bash -c '[ "$(grep -c "# ai-kb-schedule" "$1")" = 1 ]' _ "$KS/cron"
+case_run "kb-schedule install (cron): the user's own lines survive" 0 "" -- grep -qx '0 3 \* \* \* /usr/bin/backup' "$KS/cron"
+case_run "kb-schedule remove (cron): removes only its own line" 0 "" -- \
+  bash -c 'ks() { :; }; HOME="$1" KS_LOG="$2/log" KS_CRON="$2/cron" KB_CRONTAB="$2/bin/crontab" "$3/scripts/kb-schedule" remove >/dev/null && ! grep -q ai-kb-schedule "$2/cron" && grep -qx "0 3 \* \* \* /usr/bin/backup" "$2/cron"' _ "$KSH" "$KS" "$ENGINE"
+case_run "kb-schedule: an unknown backend is a usage error" 2 "" -- ksched install --backend launchd
+
+# run: every step, every registered library, in order, logged by exit code only; then the report.
+KR="$KS/run"; mkdir -p "$KR/home"
+build_clean "$KR/lib/fx"
+sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$KR/lib/fx/widgets.md"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$KR/lib/fx/widgets.md"
+printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; false\n' >> "$KR/lib/fx/widgets.md"
+mkdir -p "$KR/lib/fx/episodic"; fm 2026-10-01-fx-notes general > "$KR/lib/fx/episodic/2026-10-01-fx-notes.md"
+git -C "$KR/lib/fx" add -A && git -C "$KR/lib/fx" -c user.email=t@t -c user.name=t commit -qm init
+HOME="$KR/home" "$ENGINE/scripts/kb-library" add "$KR/lib/fx" >/dev/null 2>&1
+krun() { HOME="$KR/home" STUB_LOG="$KR/stub-args" STUB_RESULT="$PK/result" KB_SYSTEMCTL="$KS/bin/systemctl" KS_LOG="$KS/log" \
+  "$ENGINE/scripts/kb-schedule" "$@"; }
+krun install --backend systemd --watch none --claude "$PK/claude" >/dev/null 2>&1
+case_run "kb-schedule run: a run with findings still completes, exit 0" 0 "" -- krun run
+KLOG="$KR/home/.local/state/ai-kb/schedule.log"
+for step in "kb-verify fx" "kb-sources fx" "check-xlinks" "kb-report"; do
+  case_run "kb-schedule run: the log records $step" 0 "" -- grep -qF "$step exit=" "$KLOG"
+done
+case_run "kb-schedule run: kb-verify ran unattended and queued the failure" 0 "" -- test -f "$KR/lib/fx/needs-attention.md"
+case_run "kb-schedule run: without --prepare, no model is run" 1 "" -- test -e "$KR/stub-args"
+case_run "kb-schedule run: the weekly report is written" 0 "" -- bash -c 'compgen -G "$1/*-W*.md" >/dev/null' _ "$KR/home/.local/state/ai-kb/reports"
+case_run "kb-schedule run: the log holds no content" 1 "" -- grep -q SCHED-CANARY "$KLOG"
+case_run "kb-schedule status: shows the last run and its result" 0 "last run" -- krun status
+krun install --backend systemd --watch none --prepare --claude "$PK/claude" >/dev/null 2>&1
+krun run >/dev/null 2>&1
+case_run "kb-schedule run --prepare: a note awaiting distillation becomes a packet" 0 "" -- \
+  bash -c 'compgen -G "$1/fx/*-kb-distill.md" >/dev/null' _ "$KR/home/.local/state/ai-kb/packets"
+case_run "kb-schedule run --prepare: the model got the cap the user chose" 0 "" -- grep -qx -- "--max-budget-usd" "$KR/stub-args"
+case_run "kb-schedule run: a second run while one holds the lock exits 0 and does nothing" 0 "already running" -- \
+  bash -c 'mkdir -p "$1/.local/state/ai-kb"; exec 9>"$1/.local/state/ai-kb/schedule.lock"; flock 9; HOME="$1" "$2/scripts/kb-schedule" run' _ "$KR/home" "$ENGINE"
+case_run "schedulable: kb-schedule run from / with a stripped environment" 0 "exit=0" -- \
+  sched env HOME="$KR/home" STUB_LOG="$KR/stub-args" STUB_RESULT="$PK/result" "$ENGINE/scripts/kb-schedule" run
+
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0

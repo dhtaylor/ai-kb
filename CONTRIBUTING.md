@@ -220,6 +220,25 @@ kb-due "$KB_ENGINE_ROOT" knowledge      # the installed libraries, plus this pro
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
 is true, whether its source still says so, or whether it landed where a reader would look.
 
+### Keeping libraries current without remembering
+
+One command turns on a weekly job; nothing runs until you do
+([ADR-0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)):
+
+```bash
+kb-schedule install              # detection and the weekly report only
+kb-schedule install --prepare    # also draft review packets with a capped, read-only model run
+kb-schedule status               # installed?, next run, last run
+kb-schedule remove               # takes it all out again
+```
+
+Every Monday at 07:00 (or at the next start, if the machine was off), it re-runs the rechecks that
+need no person, checks cited URLs and watched sources, and, with `--prepare`, drafts what
+`kb-distill` and `kb-audit` would propose. Then it writes the week's report of decisions to
+`~/.local/state/ai-kb/reports/`. It never edits a fact. When the session-start nudge names the
+report, open it. For a packet, ask a session to review it: the skill re-checks it, asks you to
+decide each item, and only then writes.
+
 ### Commands you can schedule
 
 A command is **schedulable** when it is safe to run unattended, from cron, a systemd timer or
@@ -244,6 +263,7 @@ That means:
 | `kb-prepare` | `kb-prepare distill\|audit <library>`: a capped, read-only model run, only when due (ADR-0017) | 0 nothing to decide / 1 packet waiting / 2 |
 | `kb-apply` | `kb-apply list` | 0 none waiting / 1 waiting / 2 |
 | `kb-report` | `kb-report`: the weekly decisions report, outside every library (ADR-0017) | 0 nothing to decide / 1 decisions / 2 |
+| `kb-schedule` | `kb-schedule run`: the weekly job itself; logs exit codes only | 0 ran (findings included) / 2 a step could not run |
 | `kb-due` | `kb-due … --nudge` | always 0: it is a reminder, and the session hook reads any other exit as a failure |
 
 Each row is a regression case in `tests/run-checks`, run from `/` with a stripped environment
