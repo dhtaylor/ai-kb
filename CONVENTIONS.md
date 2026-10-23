@@ -321,7 +321,7 @@ for them.
   line cites. `documents/` holds **the archived artifacts themselves**, kept verbatim: a schema dump,
   an ERD export, a PDF, a copied document. It is not routed (§3). A raw artifact never goes in
   `sources/`; it goes in `documents/`, and a stub in `sources/` points at it. `check-kb` fails a
-  non-`.md` file under `sources/`.
+  non-`.md` file under `sources/` from contract 2.1, and warns about one below it (§14).
 
 **Citing an artifact — three cases, and only one is hard.**
 
@@ -711,7 +711,8 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | `check-links` | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
 | slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
 | orphans | every file reachable from the root `INDEX.md` by router links; golden set and `documents/` exempt (§3) | **built** — `check-kb` |
-| raw artifacts in `sources/` | `sources/` holds only `.md` citation stubs; an artifact is archived under `documents/` (§6) | **built** — `check-kb` |
+| raw artifacts in `sources/` | `sources/` holds only `.md` citation stubs; an artifact is archived under `documents/` (§6). Fails from contract 2.1, warns below it (§14) | **built** — `check-kb` |
+| contract version | `kb_contract` is a quoted `MAJOR.MINOR`; rules apply by it; a library behind is told what newer versions add, one ahead by a minor is checked by the newest rules known, and an unsupported major fails and is not served (§14) | **built** — `check-kb`, `kb-libraries`, `kb-due` |
 | stamp placement | no indented `Verified:` / `Recheck:` line outside a code fence (§7) | **built** — `check-kb` |
 | `verified:` floor | a declared floor equals the one derived from the section stamps; no stamp dated in the future (§7) | **built** — `check-kb` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
@@ -750,8 +751,22 @@ must or may hold changes; an editorial change to this file does not change it.
 - A library declares the version it was built to as `kb_contract:` in its root `INDEX.md` (§3).
   Absent, it is read as **2.0**. An engine supports every minor of the current major and the one
   before it.
+- Rules apply by the declared version: a rule from a newer version is a warning, not a failure, so
+  upgrading the engine never fails a library that was valid when it was built. A library **behind**
+  the newest version is told, by `check-kb` and the session-start nudge, what the newer versions
+  add. One **ahead** by a minor is checked by the newest rules the engine knows. One whose major the
+  engine does not support, or whose version cannot be read, is not served.
+- The versions an engine knows are the headings below; what each adds is its first paragraph.
 
 ### 2.0
 
 The baseline: the rules a library met under engine v0.2.0 (2026-10-16). Every library that predates
 `kb_contract:` was built to it.
+
+### 2.1
+
+`sources/` holds only `.md` citation stubs: `check-kb` fails a raw artifact there, which belongs
+under `documents/` (§6).
+
+Migrating from 2.0: move any non-`.md` file under `sources/` to `documents/`, cite it with a stub,
+and declare `kb_contract: "2.1"`.

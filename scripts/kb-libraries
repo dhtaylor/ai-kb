@@ -17,6 +17,10 @@ Each registered library is in exactly one state, and only `ok` is served:
   missing        nothing is at the registered path
   not-a-library  the path exists but has no root INDEX.md
   name-mismatch  the root INDEX.md declares a different name
+  unsupported-contract
+                 its kb_contract names a major this engine does not support, or cannot be read
+                 (ADR-0016): its markers may mean something this engine cannot read, and serving
+                 it could present a disputed fact as settled
 Every other state is reported by whoever reads this, never dropped: a library that silently
 vanishes makes retrieval answer `fact not found`, which looks exactly like a correct refusal.
 
@@ -48,12 +52,34 @@ def declared_name(lib: pathlib.Path):
     return None
 
 
+def contract_supported(path: pathlib.Path) -> bool:
+    """False if the library's kb_contract is an unsupported major or unreadable, by check-kb's
+    own rule (one copy). True if this engine cannot load check-kb or read its own contract
+    versions: that is an engine defect check-kb reports, not grounds to withhold every library."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    try:
+        loader = importlib.machinery.SourceFileLoader(
+            "check_kb", str(pathlib.Path(__file__).resolve().parent / "check-kb"))
+        check_kb = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+        loader.exec_module(check_kb)
+        check_kb.known_contracts()
+    except (OSError, RuntimeError):
+        return True
+    try:
+        return check_kb.contract_status(check_kb.declared_contract(path))[0] != "unsupported"
+    except ValueError:
+        return False
+
+
 def state_of(name: str, path: pathlib.Path) -> str:
     if not path.exists():
         return "missing"
     if not (path / "INDEX.md").is_file():
         return "not-a-library"
-    return "ok" if declared_name(path) == name else "name-mismatch"
+    if declared_name(path) != name:
+        return "name-mismatch"
+    return "ok" if contract_supported(path) else "unsupported-contract"
 
 
 def entries():

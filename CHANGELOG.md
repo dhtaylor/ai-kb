@@ -24,8 +24,15 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   to be gated to contract 2.1.
 - Contract version 2.0 (ADR-0016, step 1): CONVENTIONS states its version and gains §14, the
   contract's own changelog. A root `INDEX.md` may declare `kb_contract: "MAJOR.MINOR"`; absent is read
-  as 2.0, and `check-kb` fails a malformed value. `kb-init` and `kb-create-domain` write the field into
-  new trees.
+  as 2.0, and `check-kb` fails a malformed or unquoted value (a YAML reader turns a bare 2.10 into
+  2.1). `kb-init` and `kb-create-domain` write the field into new trees.
+- Contract 2.1 and version gating (ADR-0016, step 2). Rules apply by a library's declared
+  `kb_contract`: #71's rejection of a raw file under `sources/` is contract 2.1, and only a warning
+  for a library on 2.0. `check-kb` notes a library behind the newest version (with what the newer
+  versions add, read from CONVENTIONS §14) and one ahead by a minor (checked by the newest rules
+  known). A library on an unsupported major, or with an unreadable version, fails `check-kb` and is
+  not served: `kb-libraries` gives it the state `unsupported-contract`. The session-start nudge names
+  libraries behind or ahead. `kb-init` writes 2.1.
 - `kb-sources` retries with GET when HEAD answers any HTTP error except 429, and GET's answer
   decides. A server that answers HEAD with 400 (or 404, or 500) but serves GET is no longer queued as
   `source-unreachable`, and a source is `dead` only when GET also answers 404 or 410 (#74).

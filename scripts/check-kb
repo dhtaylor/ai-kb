@@ -12,6 +12,10 @@ Covers, within a single root:
   * agent_ttl         — if the root INDEX.md declares one, it is <N>d and shorter than
                         freshness_horizon (§7)
   * kb_contract       — if the root INDEX.md declares one, it is a quoted MAJOR.MINOR (§3, ADR-0016)
+  * contract gating   — rules apply by the declared contract version (§14): a rule newer than it
+                        is a WARN, not a failure; a library behind the newest version gets a NOTE
+                        of what the newer versions add; one ahead by a minor is checked by the
+                        newest rules known; an unsupported major fails
 
 ORPHANS are the defect nothing else catches at commit time: an unrouted file
 passes every other check and is invisible to retrieval, which descends routers
@@ -173,6 +177,74 @@ def contract_version(declared) -> tuple:
     return (int(m.group(1)), int(m.group(2)))
 
 
+ENGINE = pathlib.Path(__file__).resolve().parent.parent
+CONTRACT_SECTION = re.compile(r"^## \d+\. Contract versions\n(.*?)(?=^## |\Z)", re.M | re.S)
+CONTRACT_HEADING = re.compile(r"^### (0|[1-9]\d*)\.(0|[1-9]\d*)\s*$")
+
+
+def known_contracts() -> dict:
+    """{(major, minor): what it adds} for every contract version this engine knows: the `### X.Y`
+    headings of CONVENTIONS §14, each with the first paragraph under it. The spec is the one
+    copy, so publishing a version is writing its §14 entry (ADR-0016). Raises RuntimeError if
+    §14 lists nothing: an engine that cannot name its versions cannot gate by them."""
+    m = CONTRACT_SECTION.search((ENGINE / "CONVENTIONS.md").read_text(errors="replace"))
+    known, cur, para = {}, None, []
+    for line in (m.group(1) if m else "").split("\n"):
+        if h := CONTRACT_HEADING.match(line):
+            cur, para = (int(h.group(1)), int(h.group(2))), []
+            known[cur] = ""
+        elif cur and not known[cur]:
+            if line.strip():
+                para.append(line.strip())
+            elif para:
+                known[cur] = " ".join(para)
+    if cur and not known[cur]:
+        known[cur] = " ".join(para)
+    if not known:
+        raise RuntimeError(f"{ENGINE / 'CONVENTIONS.md'} lists no contract versions (§14)")
+    return known
+
+
+def declared_contract(root: pathlib.Path):
+    """The raw text after `kb_contract:` in a root INDEX.md's frontmatter, or None."""
+    try:
+        text = (root / "INDEX.md").read_text(errors="replace")
+    except OSError:
+        return None
+    block = text.split("---\n", 2)
+    if not text.startswith("---\n") or len(block) < 3:
+        return None
+    m = re.search(r"^kb_contract:[ \t]*(.*?)[ \t]*$", block[1], re.M)
+    return m.group(1) if m else None
+
+
+def fmt(v: tuple) -> str:
+    return f"{v[0]}.{v[1]}"
+
+
+def contract_status(declared) -> tuple:
+    """(state, version, newest, newer) for a declared kb_contract (ADR-0016). state is current,
+    behind (older than the newest known: `newer` lists (version, what it adds) above it), ahead
+    (a newer minor of a supported major: checked by the newest rules known) or unsupported (a
+    major outside the last two this engine has published). Raises ValueError if malformed."""
+    v = contract_version(declared)
+    known = known_contracts()
+    newest = max(known)
+    supported = {newest[0], newest[0] - 1} & {k[0] for k in known}
+    if v[0] not in supported:
+        return "unsupported", v, newest, []
+    if v > newest:
+        return "ahead", v, newest, []
+    newer = [(k, known[k]) for k in sorted(known) if k > v]
+    return ("behind" if newer else "current"), v, newest, newer
+
+
+def supported_majors() -> str:
+    known = known_contracts()
+    newest = max(known)
+    return " and ".join(f"{m}.x" for m in sorted({newest[0], newest[0] - 1} & {k[0] for k in known}))
+
+
 def kb_files(root: pathlib.Path) -> list:
     """The markdown files that are part of the knowledge base (everything but NON_KB_DIRS)."""
     return sorted(f for f in root.rglob("*.md")
@@ -244,14 +316,43 @@ def main(root: pathlib.Path) -> int:
         print(f"no markdown files under {root}")
         return 1
     slugs = {f.stem for f in files}
-    defects = []
+    defects, warnings, notes = [], [], []
+
+    # Rules apply by the contract version the library declares (§14, ADR-0016). A malformed
+    # version is a defect below; until it is fixed, the newest rules apply.
+    index = root / "INDEX.md"
+    try:
+        state, version, newest, newer = contract_status(declared_contract(root))
+    except ValueError:
+        state, version, newest, newer = "malformed", None, max(known_contracts()), []
+    rules = newest if state in ("ahead", "unsupported", "malformed") else version
+    if state == "behind":
+        notes.append(f"{index}: built to contract {fmt(version)}; this engine knows {fmt(newest)}. "
+                     f"Raise kb_contract to adopt what is newer — "
+                     + "; ".join(f"{fmt(k)}: {what}" for k, what in newer))
+    elif state == "ahead":
+        notes.append(f"{index}: declares contract {fmt(version)}, newer than this engine knows "
+                     f"({fmt(newest)}); checked by {fmt(newest)}'s rules — upgrade the engine to "
+                     f"check the rest")
+    elif state == "unsupported":
+        defects.append(f"{index}: declares contract {fmt(version)}, which is not supported by this "
+                       f"engine (it supports {supported_majors()}) — it is not served; see the "
+                       f"migration notes in CONVENTIONS §14, or upgrade the engine")
+
+    def rule(since: tuple, message: str):
+        """A defect if the library's rules include `since`, else a warning naming it."""
+        if rules >= since:
+            defects.append(message)
+        else:
+            warnings.append(f"{message} — fails from contract {fmt(since)} (this library declares "
+                            f"{fmt(version)})")
 
     # sources/ holds only .md citation stubs (§6); the artifacts they cite are archived under
     # documents/. Only .md files are read below, so a raw file here would pass unseen (issue #71).
     for p in sorted((root / "sources").rglob("*")) if (root / "sources").is_dir() else []:
         if p.is_file() and p.suffix != ".md" and not p.name.startswith("."):
-            defects.append(f"{p}: raw artifact in sources/, which holds only .md citation stubs — "
-                           f"archive it under documents/ and cite it with a stub here (§6)")
+            rule((2, 1), f"{p}: raw artifact in sources/, which holds only .md citation stubs — "
+                         f"archive it under documents/ and cite it with a stub here (§6)")
 
     for f in files:
         text = f.read_text()
@@ -339,6 +440,10 @@ def main(root: pathlib.Path) -> int:
 
     defects += orphans(root, files)
 
+    for n in notes:
+        print(f"NOTE {n}")
+    for w in warnings:
+        print(f"WARN {w}")
     for d in defects:
         print(f"FAIL {d}")
     print(f"\n{len(files)} files checked — " + ("clean" if not defects else f"{len(defects)} defect(s)"))
