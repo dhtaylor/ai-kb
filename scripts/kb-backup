@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""kb-backup — bundle the engine and every registered library, verified by restore (#96).
+
+Each library is its own repository (ADR-0014), and one with no permitted remote has no second copy.
+This makes one: a run directory under DEST holding a git bundle of the engine checkout and of every
+registered library (`git bundle create --all`), the refs each one held, and SHA256SUMS.
+
+`git bundle verify` reads only a bundle's header, so a truncated bundle passes it. Here a bundle is
+verified by restoring it: unbundled into a scratch repository, whose refs must equal the ones recorded
+when the bundle was made. `--restore-test` also clones each bundle and runs `git fsck --full`.
+`verify <run>` re-checks a run made earlier, the same way.
+
+A library with no commits yet is skipped with a note: git cannot bundle an empty repository, and
+that is not a backup fault. Nothing is written into the engine or any library, and a destination
+inside one of them is refused. The destination holds everything the libraries hold, so it is as
+sensitive as they are. Destination and schedule are the user's choice.
+
+Usage: kb-backup DEST [--keep N] [--restore-test]
+       kb-backup verify RUN
+  --keep N   after a run, keep the newest N runs under DEST and delete older ones. Only directories
+             this script wrote (named for their time, holding SHA256SUMS) are ever deleted.
+One line per repository: ok, skip or FAIL, and no file content, so it is schedulable (#95). Exit 0
+all ok, 1 any FAIL, 2 could not run.
+"""
+import datetime, hashlib, pathlib, re, shutil, subprocess, sys, tempfile
+
+SCRIPTS = pathlib.Path(__file__).resolve().parent
+ENGINE = SCRIPTS.parent
+RUN_NAME = re.compile(r"^\d{8}T\d{6}Z$")
+
+
+def git(*args, cwd=None):
+    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
+
+
+def refs_of(repo) -> str:
+    r = git("for-each-ref", "--format=%(objectname) %(refname)", cwd=repo)
+    return r.stdout if r.returncode == 0 else ""
+
+
+def restore_check(bundle: pathlib.Path, recorded: str, fsck: bool) -> str:
+    """'' when the bundle restores to exactly the recorded refs, else what went wrong."""
+    with tempfile.TemporaryDirectory(prefix="kb-backup-") as scratch:
+        mirror = pathlib.Path(scratch) / "mirror"
+        if git("init", "-q", "--bare", str(mirror)).returncode != 0:
+            return "could not make a scratch repository"
+        if git("fetch", "-q", str(bundle), "refs/*:refs/*", cwd=mirror).returncode != 0:
+            return "the bundle does not restore"
+        if refs_of(mirror) != recorded:
+            return "restored refs differ from the ones recorded"
+        if fsck:
+            clone = pathlib.Path(scratch) / "clone"
+            if git("clone", "-q", str(bundle), str(clone)).returncode != 0:
+                return "restore-test: the bundle does not clone"
+            if git("fsck", "--full", cwd=clone).returncode != 0:
+                return "restore-test: git fsck --full failed"
+    return ""
+
+
+def repositories():
+    """[(label, path)]: the engine, then every registered library."""
+    out = [("engine", ENGINE)]
+    r = subprocess.run([str(SCRIPTS / "kb-libraries")], capture_output=True, text=True)
+    for line in r.stdout.splitlines():
+        parts = line.split("\t")
+        if len(parts) >= 3:
+            out.append((parts[1], pathlib.Path(parts[2])))
+    return out
+
+
+def report(status: str, label: str, note: str = ""):
+    print(f"{status:<7} {label}" + (f"  ({note})" if note else ""))
+
+
+def backup(dest: pathlib.Path, keep, fsck: bool) -> int:
+    repos = repositories()
+    dest = dest.resolve()
+    for label, path in repos:
+        p = path.resolve()
+        if dest == p or p in dest.parents:
+            print(f"kb-backup: the destination must be outside every repository it backs up, not in {label}",
+                  file=sys.stderr)
+            return 2
+    run = dest / datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    try:
+        (run / "libraries").mkdir(parents=True)
+    except OSError as e:
+        print(f"kb-backup: cannot write {run} ({e.strerror})", file=sys.stderr)
+        return 2
+    sums, failed = [], 0
+    for label, path in repos:
+        rel = "engine.bundle" if label == "engine" else f"libraries/{label}.bundle"
+        bundle = run / rel
+        if git("rev-parse", "-q", "--verify", "HEAD", cwd=path).returncode != 0 and not refs_of(path):
+            report("skip", label, "no commits yet")
+            continue
+        recorded = refs_of(path)
+        if git("bundle", "create", "-q", str(bundle), "--all", cwd=path).returncode != 0:
+            report("FAIL", label, "git bundle create failed"); failed += 1
+            continue
+        bundle.with_suffix(".refs").write_text(recorded)
+        problem = restore_check(bundle, recorded, fsck)
+        if problem:
+            report("FAIL", label, problem); failed += 1
+            continue
+        sums.append(f"{hashlib.sha256(bundle.read_bytes()).hexdigest()}  {rel}")
+        report("ok", label, "restore-test ok" if fsck else "")
+    (run / "SHA256SUMS").write_text("".join(s + "\n" for s in sums))
+    print(f"kb-backup: run written to {run}")
+    if keep:
+        runs = sorted(d for d in dest.iterdir()
+                      if d.is_dir() and RUN_NAME.match(d.name) and (d / "SHA256SUMS").is_file())
+        for old in runs[:-keep]:
+            shutil.rmtree(old)
+            print(f"kb-backup: pruned {old.name}")
+    return 1 if failed else 0
+
+
+def verify(run: pathlib.Path) -> int:
+    if not (run / "SHA256SUMS").is_file():
+        print(f"kb-backup: {run} is not a kb-backup run", file=sys.stderr)
+        return 2
+    failed = 0
+    for bundle in sorted([run / "engine.bundle"] + list((run / "libraries").glob("*.bundle"))):
+        if not bundle.is_file():
+            continue
+        label = "engine" if bundle.name == "engine.bundle" else bundle.stem
+        refs = bundle.with_suffix(".refs")
+        problem = restore_check(bundle, refs.read_text(), False) if refs.is_file() else "no recorded refs"
+        if problem:
+            report("FAIL", label, problem); failed += 1
+        else:
+            report("ok", label)
+    return 1 if failed else 0
+
+
+def main(argv) -> int:
+    if argv[:1] == ["verify"]:
+        if len(argv) != 2:
+            print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+        return verify(pathlib.Path(argv[1]))
+    args, keep, fsck, i = [], None, False, 0
+    while i < len(argv):
+        if argv[i] == "--keep" and i + 1 < len(argv) and argv[i + 1].isdigit() and int(argv[i + 1]) > 0:
+            keep = int(argv[i + 1]); i += 2
+        elif argv[i] == "--restore-test":
+            fsck = True; i += 1
+        elif argv[i].startswith("--"):
+            print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+        else:
+            args.append(argv[i]); i += 1
+    if len(args) != 1:
+        print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+    return backup(pathlib.Path(args[0]), keep, fsck)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
