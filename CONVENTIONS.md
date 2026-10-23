@@ -374,7 +374,7 @@ a substitute for it; it deliberately leaves names to the human gate.
 
 ## 7. Currency — stamped per section, with evidence
 
-*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). The re-check (`kb-verify`), the offline Watcher (`kb-watch`) and the due-reminder (`kb-due`) are built and run, each reporting rather than repairing; nothing runs unattended.*
+*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). The re-check (`kb-verify`), the offline Watcher (`kb-watch`) and the due-reminder (`kb-due`) are built and run, each reporting rather than repairing. Detection and the preparation of review packets may run on an opt-in schedule; no fact is edited unattended ([0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)).*
 
 Provenance says where a fact came from. Currency says whether it is still true. They are different
 questions and they attach at the same granularity (§4).

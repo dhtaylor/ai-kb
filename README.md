@@ -24,7 +24,7 @@ facts**:
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating. |
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills and the `kb-retrieve` agent. |
 | `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`) and the checks that guard the contract. |
-| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0016). Each one explains why a rule exists. |
+| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0017). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
 The facts live elsewhere, in two kinds of home:
@@ -105,8 +105,10 @@ the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-li
   §9.14–9.16 records which.
 - **Next:** rolling out further domains. No orchestrator across domain agents will be built until
   `kb-retrieve`'s own routing is shown to fall short ([ADR-0011](documents/decisions/0011-no-orchestrator-until-routing-fails.md)),
-  and steady-state upkeep is surfaced when due rather than run unattended
-  ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)). The full plan, including what building it proved and disproved, is in
+  and steady-state upkeep is surfaced when due
+  ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)). An opt-in weekly
+  schedule may prepare the work and report the decisions waiting, but never edits a fact
+  ([ADR-0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)). The full plan, including what building it proved and disproved, is in
   [`documents/knowledge-agent-architecture-combination-plan.md`](documents/knowledge-agent-architecture-combination-plan.md).
 
 Known gaps are recorded, not hidden. CI checks are required on `main`, but pull-request and
