@@ -64,7 +64,7 @@ NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
 URL_LINE = re.compile(r"^\s*-\s*\*\*(?:URL[^:*]*|Artifact location):\*\*\s*(https?://[^\s<>`]+)")
 HEADING = re.compile(r"^#{1,6}\s+(.*)$")
 SOURCE_LINE = re.compile(r"^Source:")
-STOP = re.compile(r"^(Source:|Verified:|Recheck:|#{1,6}\s)")
+STOP = re.compile(r"^(Source:|Verified:|Recheck(?:\s*\(attended\))?:|#{1,6}\s)")
 LINK = re.compile(r"\[\[([^\]|#]+)")
 TODAY = __import__("datetime").date.today().isoformat()
 

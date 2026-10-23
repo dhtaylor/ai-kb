@@ -419,6 +419,13 @@ Verified: 2026-09-19 · by: agent · method: query
   holds only in the default layout and elsewhere fails as though the fact were stale. `kb-verify`
   reports such a path on every run.
 
+  An assertion that needs a person (a login, a credential, or a live system the library's owner
+  can reach and a stranger cannot) is written `Recheck (attended):`. An attended `kb-verify --yes`
+  runs it like any other. A scheduled run (`kb-verify --yes --unattended`) skips it and counts it,
+  and runs every other assertion with an empty `HOME` and only `PATH`, `KB_ENGINE_ROOT` and proxy
+  settings, so an unmarked assertion that needs a credential fails rather than reaching one
+  ([ADR-0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)).
+
   A `doc-review` assertion that fetches a page must grep **the sentence that states this section's
   claim** — not the page's title, its subject or an identifier (`DENY` on the DENY page passes
   while the page exists, which a source-liveness check already covers), and not one landing-page
@@ -770,3 +777,12 @@ under `documents/` (§6).
 
 Migrating from 2.0: move any non-`.md` file under `sources/` to `documents/`, cite it with a stub,
 and declare `kb_contract: "2.1"`.
+
+### 2.2
+
+`Recheck (attended):` marks an assertion that needs a login, a credential or a live system, so a
+scheduled `kb-verify --unattended` skips it, and runs every other assertion with no inherited
+credentials (§7).
+
+Migrating from 2.1: mark any assertion that needs a person `Recheck (attended):`, and declare
+`kb_contract: "2.2"`. A library with no such assertion changes only the declaration.

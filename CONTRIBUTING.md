@@ -236,7 +236,7 @@ That means:
 
 | Command | Schedulable form | Exit codes |
 |---|---|---|
-| `kb-verify` | `kb-verify <library> --yes`, never `--apply` | 0 / 1 / 2 |
+| `kb-verify` | `kb-verify <library> --yes --unattended`: skips `Recheck (attended):`, runs the rest with no inherited credentials, refuses `--apply` | 0 / 1 / 2 |
 | `kb-sources` | `kb-sources <library-or-kb> --yes` | 0 / 1 / 2 |
 | `kb-watch` | `kb-watch <allowlist.json>` | 0 / 1 / 2 |
 | `check-xlinks` | `check-xlinks --installed` | 0 / 1 / 2 |

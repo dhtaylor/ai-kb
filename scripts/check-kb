@@ -58,7 +58,7 @@ TODAY = datetime.date.today().isoformat()
 ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
 # kb-verify reads a stamp or an assertion only at column 0. Indented, it looks stamped and
 # certifies nothing, and its Recheck never runs (§7). Inside a code fence it is an example.
-INDENTED_STAMP = re.compile(r"^\s+(Verified|Recheck):")
+INDENTED_STAMP = re.compile(r"^\s+(Verified|Recheck)(?:\s*\(attended\))?:")
 FENCE = re.compile(r"^\s*(```|~~~)")
 HEADING = re.compile(r"^#{1,6}\s")
 SOURCE = re.compile(r"^Source:")
