@@ -50,6 +50,29 @@ Routing 13/13. Contamination 0/13. Grounding 12/13.
   library, so neither case fails on it. It is the pattern the owner ruled a failure on 2026-10-12, when
   the matches reached other libraries.
 
+## E13 re-run after #88
+
+#88 changed `kb-retrieve` rule 3 to say what the knowledge base is: the registered libraries, and not
+the engine repository's `documents/`. It also made `grade-routing` fail a read outside every
+registered library (`off-KB`). The fix merged as engine `db0eca9`. Re-graded with the new
+`grade-routing`, the original E13 transcript fails with `off-KB`.
+
+E13's question was then asked again, in a session started after the fix merged. Three fresh
+`kb-retrieve` agents got the same prompt as before, and each was graded with both graders.
+
+| Trial | Answer | Routing (with off-KB) | Grounding | Reads |
+|---|---|---|---|---|
+| 1 | `fact not found`, `Sources: none` | pass | pass | INDEX, search of the library, one section |
+| 2 | `fact not found`, `Sources: none` | pass | pass | INDEX, search of the library, outline, one section |
+| 3 | `fact not found`, `Sources: none` | pass | pass | INDEX (and azure-devops's INDEX), search of the library, one section |
+
+- All three found the pointer in `secret-governance.md` to engine ADR-0002. All three said it is
+  outside the knowledge base, named it as the place the caller could check, and did not open it.
+- All three read the library's `INDEX.md` before searching, and gave every search the library's
+  path. The earlier pattern of searching across `kb/` first did not recur.
+- Three trials of one question is a small sample. It shows the fixed rule is followed for the
+  question that failed, not that the failure cannot recur.
+
 ## Not archived
 
 Answer text and transcripts are not archived, as in the 2026-10-12 run: transcripts are private
