@@ -544,6 +544,12 @@ case_run "library hook warns, but does not fail, on a link into an absent librar
 case_run "the commit went through the engine's hook" 0 "" -- git -C "$TMP/lhook/solo" rev-parse -q --verify HEAD
 case_run "kb-create-domain no longer writes a hook into a library" 1 "" -- \
   grep -q 'core.hooksPath .githooks' "$ENGINE/plugins/knowledge-tools/skills/kb-create-domain/SKILL.md"
+# Issue #91: check-scope checks a vendors: list's form; only review can ask whether the vendors
+# are alternatives. Both skills that touch a comparative library must ask it.
+for s in kb-create-domain kb-audit; do
+  case_run "$s asks whether a comparative library's vendors are alternatives" 0 "" -- \
+    grep -q 'instead of another, for the same job' "$ENGINE/plugins/knowledge-tools/skills/$s/SKILL.md"
+done
 
 # -------------------------------------------------------- check-exec-bits ----
 mkdir -p "$TMP/bits/.githooks"; git init -q "$TMP/bits"
