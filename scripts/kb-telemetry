@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""kb-telemetry — what kb-retrieve costs in normal use, read from transcripts already on disk (#97).
+
+Claude Code writes every subagent run to ~/.claude/projects/<project>/<session>/subagents/ as
+agent-<id>.jsonl, with agent-<id>.meta.json naming its agentType and description. This reads the
+kb-retrieve runs and measures, per run:
+
+  tokens    new tokens: input + cache-creation + output. One API message is logged in several
+            records, so each message id is counted once. Cache reads are left out: they are
+            the cheap re-reading of what is already cached, not new work.
+  seconds   from the run's first API response (not the spawn, whose queue time would dominate) to
+            the first read of a file the answer cites. Blank when it cites none.
+  steps     tool calls up to and including that read, each tool call counted once.
+  wasted    content files read that the answer does not cite.
+  protocol  reads of INDEX.md, contradictions, open-questions and needs-attention files: the
+            routing overhead the contract asks for, counted apart from waste.
+
+and reports per library the median of each, in contiguous windows, so a reshape of a library can
+be compared before and after. The library of a run is the one holding its first cited file, or
+else the one it read most in. A window with no runs still gets a row: absence is a result.
+
+Eval runs are left out by default: a run whose description starts `kb-eval` (kb-eval-sample), or
+names an eval or trial. `--include-evals` keeps them.
+
+Read-only. It prints paths, counts and medians, never a question, an answer or a file's text.
+
+Usage: kb-telemetry [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--window Nd] [--library NAME]
+                    [--projects DIR] [--include-evals]
+  Defaults: the last 28 days, in 7-day windows; every library; ~/.claude/projects.
+Schedulable (#95): exit 0, or 2 on a usage error.
+"""
+import datetime, importlib.machinery, importlib.util, json, pathlib, re, statistics, sys
+
+SCRIPTS = pathlib.Path(__file__).resolve().parent
+EVAL = re.compile(r"^kb-eval\b|\b(eval|trial)\b", re.I)
+PROTOCOL = re.compile(r"(^INDEX\.md$|contradictions\.md$|open-questions\.md$|^needs-attention\.md$)")
+COLUMNS = ("tokens", "seconds", "steps", "wasted", "protocol")
+
+
+def load(name, filename):
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(name, str(SCRIPTS / filename))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def ts(s):
+    return datetime.datetime.fromisoformat(s.replace("Z", "+00:00")) if s else None
+
+
+def runs(projects: pathlib.Path):
+    """(transcript, meta) for every kb-retrieve subagent run under the projects directory."""
+    for meta in sorted(projects.glob("*/*/subagents/agent-*.meta.json")):
+        try:
+            m = json.loads(meta.read_text())
+        except (OSError, ValueError):
+            continue
+        t = meta.with_name(meta.name.replace(".meta.json", ".jsonl"))
+        if str(m.get("agentType", "")).split(":")[-1] == "kb-retrieve" and t.is_file():
+            yield t, m
+
+
+def measure(transcript: pathlib.Path, ge, libs: dict):
+    """One run's measures, or None when the transcript holds no API response."""
+    usage, calls, seen, first, start = {}, [], set(), None, None
+    for line in transcript.read_text(errors="replace").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        start = start or ts(rec.get("timestamp"))
+        msg = rec.get("message") if isinstance(rec, dict) else None
+        if rec.get("type") != "assistant" or not isinstance(msg, dict):
+            continue
+        first = first or ts(rec.get("timestamp"))
+        if msg.get("id") and isinstance(msg.get("usage"), dict):
+            usage[msg["id"]] = msg["usage"]
+        for b in msg.get("content") or []:
+            if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("id") not in seen:
+                seen.add(b.get("id"))
+                calls.append((ts(rec.get("timestamp")), b.get("name"), b.get("input") or {}))
+    if first is None:
+        return None
+    tokens = sum(u.get("input_tokens", 0) + u.get("cache_creation_input_tokens", 0) + u.get("output_tokens", 0)
+                 for u in usage.values())
+
+    def owner(f: pathlib.Path):
+        return next((n for n, root in libs.items() if root == f or root in f.parents), None)
+
+    answer = ge.transcript_answer(transcript)
+    cited = set()
+    for c in (answer[0].split(",") if answer else []):
+        c = c.strip()
+        for root in libs.values():
+            hit = next((f.resolve() for f in ge.candidates(root, c) if f.is_file()), None) if c else None
+            if hit:
+                cited.add(hit); break
+
+    seconds = steps = None
+    reads, counts = [], {}
+    for i, (when, name, inp) in enumerate(calls, 1):
+        if name != "Read" or not inp.get("file_path"):
+            continue
+        f = pathlib.Path(inp["file_path"]).resolve()
+        reads.append(f)
+        lib = owner(f)
+        if lib:
+            counts[lib] = counts.get(lib, 0) + 1
+        if f in cited and seconds is None:
+            seconds, steps = (when - first).total_seconds() if when else None, i
+    protocol = {f for f in reads if PROTOCOL.search(f.name)}
+    wasted = {f for f in reads if f.suffix == ".md" and owner(f) and f not in cited and f not in protocol}
+    in_lib = sorted(f for f in cited if owner(f))     # a cited file outside every library names none
+    lib = owner(in_lib[0]) if in_lib else (max(counts, key=counts.get) if counts else "(none)")
+    return {"start": start or first, "library": lib, "tokens": tokens, "seconds": seconds, "steps": steps,
+            "wasted": len(wasted), "protocol": len(protocol)}
+
+
+def median(values):
+    values = [v for v in values if v is not None]
+    if not values:
+        return ""
+    m = statistics.median(values)
+    return str(int(m)) if float(m).is_integer() else f"{m:.1f}"
+
+
+def main(argv) -> int:
+    opts, i = {}, 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--since", "--until", "--window", "--library", "--projects") and i + 1 < len(argv):
+            opts[a] = argv[i + 1]; i += 2
+        elif a == "--include-evals":
+            opts[a] = True; i += 1
+        else:
+            print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+    try:
+        until = datetime.date.fromisoformat(opts["--until"]) if "--until" in opts else datetime.date.today()
+        since = datetime.date.fromisoformat(opts["--since"]) if "--since" in opts else until - datetime.timedelta(days=27)
+        m = re.fullmatch(r"([1-9]\d*)d", opts.get("--window", "7d"))
+        if not m or since > until:
+            raise ValueError
+        width = int(m.group(1))
+    except ValueError:
+        print("kb-telemetry: --since/--until take YYYY-MM-DD (since first), --window takes Nd", file=sys.stderr)
+        return 2
+    projects = pathlib.Path(opts.get("--projects") or pathlib.Path.home() / ".claude" / "projects")
+    ge = load("grade_eval", "grade-eval")
+    libs = {n: pathlib.Path(p).resolve() for n, p in ge.installed()[0].items()}
+
+    measured, evals = [], 0
+    for t, meta in runs(projects):
+        r = measure(t, ge, libs)
+        if r is None or not (since <= r["start"].date() <= until):
+            continue
+        if EVAL.search(str(meta.get("description", ""))) and "--include-evals" not in opts:
+            evals += 1; continue
+        if "--library" in opts and r["library"] != opts["--library"]:
+            continue
+        measured.append(r)
+
+    print(f"kb-telemetry: {len(measured)} kb-retrieve run(s) from {since} to {until}"
+          + (f"; {evals} eval run(s) left out" if evals else ""))
+    print("Medians per library. tokens: new tokens; seconds and steps: to the first read of a cited file; "
+          "wasted: uncited content reads; protocol: INDEX, contradictions, open-questions, queue reads.\n")
+    print("| window | library | runs | " + " | ".join(COLUMNS) + " |")
+    print("|---|---|---|" + "---|" * len(COLUMNS))
+    start = since
+    while start <= until:
+        end = min(start + datetime.timedelta(days=width - 1), until)
+        inside = [r for r in measured if start <= r["start"].date() <= end]
+        names = sorted({r["library"] for r in inside})
+        if not names:
+            print(f"| {start} to {end} | (no runs) | 0 |" + " |" * len(COLUMNS))
+        for n in names:
+            rs = [r for r in inside if r["library"] == n]
+            print(f"| {start} to {end} | {n} | {len(rs)} | " + " | ".join(median([r[c] for r in rs]) for c in COLUMNS) + " |")
+        start = end + datetime.timedelta(days=1)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

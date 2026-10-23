@@ -122,6 +122,19 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   `git bundle verify`, which passes a truncated bundle. `--restore-test` also clones and runs
   `git fsck --full`. A library with no commits is skipped with a note. A destination inside a backed-up
   repository is refused. `--keep` prunes only directories this command wrote.
+- Retrieval cost (#97). `kb-telemetry` reads the `kb-retrieve` runs Claude Code already records
+  (`~/.claude/projects/*/*/subagents/agent-*.jsonl` and `.meta.json`). Per library and window it
+  reports medians of five measures:
+  - new tokens, counted once per message id, since one message is logged in several records;
+  - seconds from the first API response to the first read of a cited file;
+  - steps to that read;
+  - uncited content reads (wasted);
+  - INDEX, contradictions, open-questions and queue reads (protocol).
+  Eval runs are left out by description. `kb-eval-sample prepare | grade` draws a seeded (or
+  `--cases`) sample of positive and cross-root cases. `prepare` writes prompts for fresh agents
+  described `kb-eval <sample> Q<n>`. `grade` finds those transcripts, writes the mapping, runs
+  `grade-routing` and `grade-eval --transcripts`, and joins each case with its cost. Both are
+  read-only and print paths and counts only.
 
 ## v0.2.0 — 2026-10-16
 
