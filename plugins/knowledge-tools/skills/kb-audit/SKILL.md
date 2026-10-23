@@ -81,8 +81,13 @@ with no `since:` is the same item, with the defect stated.
 **Scope misfiling.** `check-scope` catches a *label* that disagrees with its library; it cannot
 catch a fact whose label is consistent but whose content is not — a deployment detail in a
 `general` library, or one vendor's behavior filed as `general`. In a comparative product library
-(`vendors:` in its root INDEX.md, §1), also check that each vendor-specific section names its
-vendor: one that does not reads as true of every product in the category. Sample rather than exhaustively audit, and say what you sampled.
+(`vendors:` in its root INDEX.md, §1), first check the category itself, which `check-scope` checks
+only for form: *would a reader pick one of these vendors instead of another, for the same job?*
+Tools used together, such as a version-control tool and the OS layer it runs on, are not
+alternatives, so they are not a category however clean every other check is. If any vendor fails
+the question, file a scope misfiling on the root `INDEX.md` (locus `-`) naming the vendors that are
+not alternatives. Then check that each vendor-specific section names its vendor: one that does
+not reads as true of every product in the category. Sample rather than exhaustively audit, and say what you sampled.
 
 **Golden-set rot.** Every `expected_file:` should name a file that exists, and every
 `expected_excerpt:` should actually appear in it. Grep it; do not assume. Also check the set against

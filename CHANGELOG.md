@@ -59,6 +59,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   that are not the knowledge base, such as `.git/` and `documents/`. A library could not hold
   `hooks.md`, `refs.md` or `info.md`, because its own `.git/` has folders by those names. This is an
   engine fix, not a contract change (#90).
+- `kb-create-domain` and `kb-audit` now ask the question CONVENTIONS §1 leaves to review: would a
+  reader pick one of a comparative library's vendors instead of another, for the same job? Tools
+  used together are not a category, and `check-scope`, which checks only the `vendors:` list's
+  form, passes them. `kb-create-domain` asks it before writing `vendors:`; `kb-audit` files a
+  scope misfiling on the root `INDEX.md` when a vendor fails it (#91).
 
 ## v0.2.0 — 2026-10-16
 
