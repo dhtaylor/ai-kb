@@ -63,16 +63,20 @@ def personal(ident):
     return True
 
 
-def scan(path, allow, prefix=""):
+def scan(path, allow, prefix="", redact=False):
+    """Prints up to 3 hits as LINE:text. With redact (check-secrets --redact, #101): every hit, as
+    its line number only, and lint-allow exempts nothing, because in filtered text it is just input."""
     data = open(path, "rb").read()
     if b"\0" in data:
         return
     shown = 0
     for n, line in enumerate(data.decode("utf-8", "replace").split("\n"), 1):
-        if "lint-allow" in line:
+        if "lint-allow" in line and not redact:
             continue
         if any(personal(i) and not any(fnmatch.fnmatchcase(i.lower(), a) for a in allow)
                for i in identifiers(line)):
+            if redact:
+                print(n); continue
             print(f"{prefix}{n}:{line.strip()[:120]}")
             shown += 1
             if shown == 3:
@@ -80,6 +84,8 @@ def scan(path, allow, prefix=""):
 
 
 def main():
+    if sys.argv[1:2] == ["--redact"]:
+        return scan(sys.argv[2], allowlist(), redact=True)
     target, allow = sys.argv[1], allowlist()
     if not os.path.isdir(target):
         return scan(target, allow)

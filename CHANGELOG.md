@@ -82,6 +82,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   proxy settings, so no cached login or exported credential is reachable. It refuses `--apply`.
   `kb-init` writes 2.2. A library on 2.1 is told it is behind, and moves by changing only its
   declaration unless it holds an assertion that needs a person.
+- `check-secrets --redact` (#101): a filter from stdin to stdout. Every line any of the three passes
+  flags becomes `[redacted: secret]` or `[redacted: personal identifier]`, with a count on stderr and
+  the matched text nowhere. `lint-allow` exempts nothing in filtered text. It exits 2 with no output
+  when the input cannot be scanned (UTF-16, binary, or a pass that failed), so a caller holds the
+  input rather than passing it through unscanned. The gate modes are unchanged.
 
 ## v0.2.0 — 2026-10-16
 
