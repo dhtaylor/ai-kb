@@ -32,6 +32,9 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 # under a throwaway HOME, so none can read or write the real one. Cases that need a HOME of
 # their own (env -i HOME=...) still set it.
 export HOME="$TMP/home"; mkdir -p "$HOME"
+# The same for every variable that moves a per-user location away from HOME: a CI runner sets
+# XDG_CONFIG_HOME, and with it set kb-schedule's test install landed in the runner's own config.
+unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_DATA_HOME XDG_CACHE_HOME KB_PACKETS KB_REPORTS KB_CLAUDE
 
 fm() { # frontmatter: name, scope, [extra]
   printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
