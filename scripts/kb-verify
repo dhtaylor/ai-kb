@@ -214,8 +214,8 @@ def append_queue_records(queue_path: pathlib.Path, records: list, kb_watch):
         domain, scope, err = kb_watch.library_domain_scope(queue_path.parent)
         if err:
             return err
-        queue_path.write_text(
-            kb_watch.new_queue_file(domain, scope)[:-len(kb_watch.FENCE_CLOSE)] + body + kb_watch.FENCE_CLOSE)
+        kb_watch.atomic_write(
+            queue_path, kb_watch.new_queue_file(domain, scope)[:-len(kb_watch.FENCE_CLOSE)] + body + kb_watch.FENCE_CLOSE)
         return kb_watch.ensure_routed(queue_path.parent)   # an unrouted queue fails check-kb (CONVENTIONS §3)
     text = queue_path.read_text(errors="replace")
     spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
@@ -225,7 +225,7 @@ def append_queue_records(queue_path: pathlib.Path, records: list, kb_watch):
         text = text[:insert_at] + body + text[insert_at:]
     else:
         text = text.rstrip("\n") + "\n\n" + kb_watch.FENCE_OPEN + body + kb_watch.FENCE_CLOSE
-    queue_path.write_text(text)
+    kb_watch.atomic_write(queue_path, text)
     return None
 
 
@@ -538,7 +538,9 @@ def main(argv) -> int:
         else:
             failed.append((s, r))
             print(f"  FAIL {where}  (exit {'timeout' if r is None else r.returncode})")
-            if r is not None:
+            # What the assertion printed can be the source's own text. It goes to a person at a
+            # terminal, never into the log of an unattended run (#95).
+            if r is not None and sys.stdout.isatty():
                 for stream in (r.stdout, r.stderr):
                     for line in stream.strip().split("\n")[:3]:
                         if line:

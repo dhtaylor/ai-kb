@@ -90,11 +90,12 @@ Usage: kb-watch <allowlist.json> [--dry-run]
                                                  # status, source_id, field, old, new, source_url,
                                                  # date), tab-separated — the exit criterion for
                                                  # "the queue still parses."
-Exit 0 on a clean run (whether or not anything was queued). Exit 2 on a usage or config error
-(bad JSON, a malformed entry, a library with no INDEX.md) — the run still processes every
-well-formed entry first.
+Exit 0 when no source drifted or was unreachable, 1 when any did (whether newly queued or already
+in the queue), 2 on a usage or config error (bad JSON, a malformed entry, a library with no
+INDEX.md) — the run still processes every well-formed entry first. Old and new values are printed
+only at a terminal or with --dry-run, so an unattended run's log holds no source text (#95).
 """
-import datetime, hashlib, html.parser, json, pathlib, re, sys
+import datetime, hashlib, html.parser, json, os, pathlib, re, sys
 
 TODAY = datetime.date.today().isoformat()
 MAX_LEN = 200
@@ -309,8 +310,20 @@ def ensure_routed(library_root: pathlib.Path):
             j += 1
         lines.insert(j, ROUTER_LINE)
         text = "".join(lines)
-    idx.write_text(text)
+    atomic_write(idx, text)
     return None
+
+
+def atomic_write(path: pathlib.Path, text: str):
+    """Replace `path` with `text` by writing a sibling and renaming it over the original. A session
+    reading or committing the library at the same moment sees the old file or the new one, never a
+    half-written one, so these writers can run on a schedule beside a working session (#95)."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_text(text)
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def append_records(queue_path: pathlib.Path, records: list):
@@ -319,7 +332,7 @@ def append_records(queue_path: pathlib.Path, records: list):
         domain, scope, err = library_domain_scope(queue_path.parent)
         if err:
             return err
-        queue_path.write_text(new_queue_file(domain, scope)[:-len(FENCE_CLOSE)] + body + FENCE_CLOSE)
+        atomic_write(queue_path, new_queue_file(domain, scope)[:-len(FENCE_CLOSE)] + body + FENCE_CLOSE)
         return ensure_routed(queue_path.parent)
     text = queue_path.read_text(errors="replace")
     spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
@@ -329,7 +342,7 @@ def append_records(queue_path: pathlib.Path, records: list):
         text = text[:insert_at] + body + text[insert_at:]
     else:
         text = text.rstrip("\n") + "\n\n" + FENCE_OPEN + body + FENCE_CLOSE
-    queue_path.write_text(text)
+    atomic_write(queue_path, text)
     return None
 
 
@@ -360,7 +373,7 @@ def parse_records(text: str):
 
 # ------------------------------------------------------------------------------------ main ----
 def process_entry(entry: dict, dry_run: bool):
-    """Returns (findings_written_or_would_write, errors) for this one source."""
+    """Returns (findings_written_or_would_write, errors, findings_found) for this one source."""
     source_id, url, library = entry["source_id"], entry["url"], entry["library"]
     findings, errors = [], []
 
@@ -393,16 +406,19 @@ def process_entry(entry: dict, dry_run: bool):
 
     print(f"kb-watch: {source_id}: {len(findings)} finding(s), {skipped} already queued, "
           f"{len(to_write)} new")
+    # The old and new values are the source's own text. They go to a person at a terminal, or to a
+    # --dry-run preview, never into the log of an unattended run (#95); the queue holds them either way.
+    show_values = dry_run or sys.stdout.isatty()
     for f in to_write:
         tag = "WOULD QUEUE" if dry_run else "queued"
-        print(f"  {tag} [{f['category']}] {f['id']}  {f['field']}: "
-              f"{f['old']!r} -> {f['new']!r}  ({queue_path})")
+        values = f": {f['old']!r} -> {f['new']!r}" if show_values else ""
+        print(f"  {tag} [{f['category']}] {f['id']}  {f['field']}{values}  ({queue_path})")
 
     if to_write and not dry_run:
         err = append_records(queue_path, to_write)
         if err:
             errors.append(f"{source_id}: {err}")
-    return to_write, errors
+    return to_write, errors, len(findings)
 
 
 def main(argv):
@@ -436,10 +452,11 @@ def main(argv):
         return 2 if config_errors else 0
 
     run_errors = []
-    total_new = 0
+    total_new = total_found = 0
     for entry in entries:
-        written, errors = process_entry(entry, dry_run)
+        written, errors, found = process_entry(entry, dry_run)
         total_new += len(written)
+        total_found += found
         run_errors += errors
 
     for e in run_errors:
@@ -447,7 +464,9 @@ def main(argv):
 
     print(f"\nkb-watch: {len(entries)} source(s) checked, {total_new} new "
           f"{'would-queue' if dry_run else 'queued'} finding(s)")
-    return 2 if (config_errors or run_errors) else 0
+    if config_errors or run_errors:
+        return 2
+    return 1 if total_found else 0
 
 
 if __name__ == "__main__":
