@@ -97,6 +97,12 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   person decides each item, and only then does the skill write and commit. `kb-due --nudge` names the
   packets waiting. Tested with a stub `claude` that records its arguments. Run once for real on a
   scratch clone: $0.55, an injected instruction in the note not acted on, and the library unchanged.
+- `kb-report` (#102): the weekly report of decisions. One file per ISO week, written outside every
+  library (`${XDG_STATE_HOME:-~/.local/state}/ai-kb/reports/`). It lists, per library, only what needs
+  a person: packets waiting, open queue items (category and location), attended rechecks due, a sweep
+  or notes that no packet covers, and a contract behind or unsupported. A quiet week is one line. It
+  holds paths, counts, headings and ids, never a fact's, source's or packet's text. `kb-due --nudge`
+  names the latest report while it is under eight days old and lists decisions.
 
 ## v0.2.0 — 2026-10-16
 

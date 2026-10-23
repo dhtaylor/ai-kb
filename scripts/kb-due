@@ -198,7 +198,7 @@ def plural(n: int, word: str) -> str:
 
 
 # The --summary categories, in the order they are shown: (key, heading).
-SUMMARY = (("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
+SUMMARY = (("report", "weekly report"), ("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
            ("queue", "queue"), ("distill", "to distill"), ("unstamped", "unstamped"),
            ("contract", "contract"))
 
@@ -344,6 +344,14 @@ def main(argv) -> int:
                 lines.append(line)
             warnings += warn
             counts.append((label(s["tree"]), c))
+        try:   # the weekly report (ADR-0017): named while it is this week's and lists decisions
+            rep = load_module("kb_report", "kb-report").latest()
+        except Exception as e:
+            warnings.append(f"the weekly report is unreadable ({e}) — skipped")
+            rep = None
+        if rep and rep[1] and rep[2] < 8:
+            lines.append(f"Weekly report: {rep[1]} decision(s) waiting in {rep[0]}")
+            counts.append(("report", {"report": rep[1]}))
         for w in warnings:
             print(f"kb-due: {w}", file=sys.stderr)
         if lines:
