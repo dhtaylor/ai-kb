@@ -216,8 +216,8 @@ vendors: [<vendor>, ...]      # a comparative product library only (§1): the ve
 agent_ttl: <N>d               # optional: how long an agent stamp stays fresh. Default a tenth of
                               # the horizon; check-kb fails one not shorter than the horizon (§7).
 kb_contract: "<MAJOR.MINOR>"  # optional: the contract version (§14) this library was built to.
-                              # Absent is read as 2.0. Quote it: a YAML reader turns a bare 2.10
-                              # into the number 2.1. check-kb fails one that is not MAJOR.MINOR.
+                              # Absent is read as 2.0. Quoted, always: a YAML reader turns a bare
+                              # 2.10 into the number 2.1. check-kb fails a bare or malformed one.
 last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `never` until the first.
                               # It lives here, not in needs-attention.md, because a CLEAN sweep
                               # writes no queue file and would erase the evidence that it ran.
