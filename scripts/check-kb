@@ -11,6 +11,7 @@ Covers, within a single root:
                         no stamp is dated in the future
   * agent_ttl         — if the root INDEX.md declares one, it is <N>d and shorter than
                         freshness_horizon (§7)
+  * kb_contract       — if the root INDEX.md declares one, it is MAJOR.MINOR (§3, ADR-0016)
 
 ORPHANS are the defect nothing else catches at commit time: an unrouted file
 passes every other check and is invisible to retrieval, which descends routers
@@ -152,6 +153,20 @@ def agent_ttl(declared, horizon: int) -> int:
     return int(m.group(1))
 
 
+def contract_version(declared) -> tuple:
+    """The contract version a root INDEX.md declares, as (major, minor) (ADR-0016). Absent is
+    2.0: every library that predates the field was built to engine v0.2.0's rules, which are
+    contract 2.0. Raises ValueError unless it is MAJOR.MINOR in plain digits: no leading zero,
+    no patch part, no prefix, so "2.01" and "2.1" cannot both name one version."""
+    if declared is None:
+        return (2, 0)
+    value = declared.split(" #")[0].strip().strip('"').strip("'")
+    m = re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)", value)
+    if not m:
+        raise ValueError(f"kb_contract: {value!r} must be MAJOR.MINOR, e.g. \"2.0\" (ADR-0016)")
+    return (int(m.group(1)), int(m.group(2)))
+
+
 def kb_files(root: pathlib.Path) -> list:
     """The markdown files that are part of the knowledge base (everything but NON_KB_DIRS)."""
     return sorted(f for f in root.rglob("*.md")
@@ -284,6 +299,12 @@ def main(root: pathlib.Path) -> int:
             h = re.match(r"(\d+)d", fm.get("freshness_horizon", ""))
             try:
                 agent_ttl(fm["agent_ttl"], int(h.group(1)) if h else 0)
+            except ValueError as e:
+                defects.append(f"{f}: {e}")
+
+        if f == root / "INDEX.md" and "kb_contract" in fm:
+            try:
+                contract_version(fm["kb_contract"])
             except ValueError as e:
                 defects.append(f"{f}: {e}")
 

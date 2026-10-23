@@ -22,6 +22,10 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   an older library unusable. Pinning becomes the library owner's choice; ADR-0015's pinning section is
   superseded. Decision only: the implementation follows, and this release waits for #71's rejection
   to be gated to contract 2.1.
+- Contract version 2.0 (ADR-0016, step 1): CONVENTIONS states its version and gains §14, the
+  contract's own changelog. A root `INDEX.md` may declare `kb_contract: "MAJOR.MINOR"`; absent is read
+  as 2.0, and `check-kb` fails a malformed value. `kb-init` and `kb-create-domain` write the field into
+  new trees.
 - `kb-sources` retries with GET when HEAD answers any HTTP error except 429, and GET's answer
   decides. A server that answers HEAD with 400 (or 404, or 500) but serves GET is no longer queued as
   `source-unreachable`, and a source is `dead` only when GET also answers 404 or 410 (#74).

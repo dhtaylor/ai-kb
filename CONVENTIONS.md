@@ -8,13 +8,14 @@ metadata:
   type: reference
   node_type: contract
   created: 2026-07-08
-  revised: 2026-10-02
+  revised: 2026-10-22
 tags: [knowledge, conventions, progressive-disclosure, provenance, currency]
 keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, provenance, gestalt]
 ---
 # Knowledge Conventions
 
-**Version 2.** Supersedes [knowledge-conventions-v1](documents/legacy/knowledge-conventions-v1.md) (the inherited work-system contract, preserved at
+**Contract version 2.0** (§14). A library declares the version it was built to in its root `INDEX.md`
+(§3); what each version adds is in §14. Supersedes [knowledge-conventions-v1](documents/legacy/knowledge-conventions-v1.md) (the inherited work-system contract, preserved at
 `documents/legacy/knowledge-conventions-v1.md`). v1 governed a single-root, annotation-only KB; v2 folds in
 the scope tiers, cross-root resolution, currency stamping, and retrieval contract required by the
 knowledge-agent architecture.
@@ -214,6 +215,9 @@ vendors: [<vendor>, ...]      # a comparative product library only (§1): the ve
                               # product:<category> compares. At least two; check-scope checks it.
 agent_ttl: <N>d               # optional: how long an agent stamp stays fresh. Default a tenth of
                               # the horizon; check-kb fails one not shorter than the horizon (§7).
+kb_contract: "<MAJOR.MINOR>"  # optional: the contract version (§14) this library was built to.
+                              # Absent is read as 2.0. Quote it: a YAML reader turns a bare 2.10
+                              # into the number 2.1. check-kb fails one that is not MAJOR.MINOR.
 last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `never` until the first.
                               # It lives here, not in needs-attention.md, because a CLEAN sweep
                               # writes no queue file and would erase the evidence that it ran.
@@ -727,8 +731,27 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | sweep and re-check due | which trees are due for a sweep, and how many facts, open queue items and episodic notes await a librarian; a reminder, exit 0 always | **built** — `kb-due` |
 | external drift | a saved snapshot of an external source still matches its recorded baseline; drift is queued, never applied; offline, fetches nothing | **built** — `kb-watch` |
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
-| external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, GET if refused); a 404/410 is queued as `source-dead` and an undecidable one as `source-unreachable`, each with its dependants; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
+| external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one as `source-unreachable`, each with its dependants; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
 All twenty-one are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
 routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.
+
+## 14. Contract versions
+
+This contract is versioned `MAJOR.MINOR`, independently of the engine
+([ADR-0016](documents/decisions/0016-versioned-library-contract.md)). It changes only when what a library
+must or may hold changes; an editorial change to this file does not change it.
+
+- **Minor:** adds a field, a warning, or a rejection that applies only to a library declaring that
+  version or later. A library valid under an earlier minor of the same major stays valid.
+- **Major:** changes what something a library already holds means. Each major ships with migration
+  notes from the one before it, here.
+- A library declares the version it was built to as `kb_contract:` in its root `INDEX.md` (§3).
+  Absent, it is read as **2.0**. An engine supports every minor of the current major and the one
+  before it.
+
+### 2.0
+
+The baseline: the rules a library met under engine v0.2.0 (2026-10-16). Every library that predates
+`kb_contract:` was built to it.
