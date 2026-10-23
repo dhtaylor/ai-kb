@@ -36,6 +36,23 @@ job.
    one child whose hook fits the question. If that child is itself an index, repeat. Descend one hop
    at a time and load the minimum that answers the question.
 
+   **Inside the file, read the section, not the whole file.** Once the routers have picked the file,
+   find the part that answers before you read it:
+
+   1. Outline it: Grep that one file (its path as the `path`) for `^#{1,6} ` with line numbers, in
+      `content` mode. That lists its headings and where each starts.
+   2. Pick the heading whose title fits the question, and Read from that heading's line (`offset`)
+      up to the next heading at the same level or higher (`limit`). Its subsections come with it.
+   3. Read the whole file instead when no heading fits, when two fit and you cannot tell which, or
+      when the answer needs more than one section. If the section you read does not answer, read
+      the next likeliest or the whole file; never answer from a section that does not hold it.
+
+   A section read carries everything the contract needs: a status marker applies to the heading it
+   sits directly under (CONVENTIONS §8), and a `Verified:` stamp belongs to its own section (§7), so
+   both are inside the range. A `#` line inside a code block is not a heading: if a range ends in
+   the middle of one, or before the section's `Source:` and `Verified:` lines, read on to the next
+   real heading. Cite the file as usual.
+
    **A search is not a router.** Read the routers first, then search only inside the library they
    sent you to: give every Grep a `path` of that library (its path from your context), never a
    folder holding several libraries, or the engine root. A search across every library reads text from libraries the question does not

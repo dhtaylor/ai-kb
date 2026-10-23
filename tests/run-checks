@@ -2398,7 +2398,7 @@ case_run "check-secrets --file passes a clean file" 0 "clean" -- "$ENGINE/script
 # The agent tier of the routing check, graded from a subagent transcript's tool calls. The
 # transcripts are SYNTHETIC: assistant records whose message.content holds tool_use blocks,
 # the shape Claude Code writes, built here and never copied from a real session.
-mk_tr() { # mk_tr <out.jsonl> <Tool:arg[@@result]>...   Read:<file_path>  Glob:<pattern>  Grep:<path>[|<mode>]
+mk_tr() { # mk_tr <out.jsonl> <Tool:arg[@@result]>...   Read:<file_path>[|<offset>|<limit>]  Glob:<pattern>  Grep:<path>[|<mode>]
   # @@NONE leaves the call unanswered; with no @@ the result is "ok"
   local out="$1"; shift
   python3 - "$out" "$@" <<'PY'
@@ -2413,6 +2413,9 @@ for i, c in enumerate(calls):
     if tool == "Grep":
         inp["pattern"] = "x"
         if "|" in arg: inp["path"], inp["output_mode"] = arg.split("|", 1)
+    if tool == "Read" and "|" in arg:
+        path, off, lim = arg.split("|")
+        inp = {"file_path": path, "offset": int(off), "limit": int(lim)}
     recs.append({"type": "assistant", "message": {"role": "assistant", "content": [
         {"type": "text", "text": "looking"}, {"type": "tool_use", "id": f"t{i}", "name": tool, "input": inp}]}})
     if res != "NONE":
@@ -2445,6 +2448,10 @@ grade() { # grade <name> <want-exit> <want-text> <Q-mapping lines...>
 }
 mk_tr "$RT/pass.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
 grade "reads the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|pass.jsonl"
+# Issue #78: kb-retrieve outlines the routed file's headings, then reads only the section that
+# answers. A partial Read (offset/limit) of the expected file is a Read of it.
+mk_tr "$RT/section.jsonl" "Read:$A/INDEX.md" "Grep:$A/widgets.md|content" "Read:$A/widgets.md|5|6"
+grade "an outline Grep, then a section Read of the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|section.jsonl"
 mk_tr "$RT/wrong.jsonl" "Read:$A/INDEX.md" "Read:$A/other.md"
 grade "reads a different file in the right library: fail" 1 "never Read" "Q1|wrong.jsonl"
 mk_tr "$RT/nothing.jsonl" "Glob:$A/*.md"

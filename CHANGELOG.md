@@ -43,6 +43,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
 - Engine CI: the stamp-honesty step checks a pull request's base..head and no longer breaks after a
   force-push, whose `before` commit no longer exists; a push with an unresolvable `before` falls back
   to the merge-base with the default branch. Library CI already handled this.
+- `kb-retrieve` reads the section that answers, not the whole file (#78). After routing picks the
+  file, it outlines the file's headings with Grep and reads from the matching heading to the next one
+  at the same level or higher, falling back to a whole-file read when no heading fits, two do, or the
+  answer spans sections. Status markers and stamps sit inside the section read (CONVENTIONS §7, §8).
+  `grade-routing` already counted a partial read; a regression case now pins it.
 - `__pycache__/` is ignored, so an ad-hoc import of an engine script no longer leaves the engine
   checkout looking modified (#80).
 
