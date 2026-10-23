@@ -83,6 +83,13 @@ job.
    whether the knowledge base holds the fact, and a gap nobody sees is a gap nobody fills. If the
    knowledge base does not have it, say `fact not found` and name where the caller could check.
 
+   **The knowledge base is the libraries your context lists, and a project's `knowledge/` tree.
+   Nothing else is.** The engine repository is not part of it: its `documents/` (decision
+   records, eval records, plans) and its scripts describe how the knowledge base works, not what it
+   knows. Its `CONVENTIONS.md` tells you how to retrieve, never what to answer. A decision record
+   that mentions the topic is not an answer. When the libraries are silent, the answer is
+   `fact not found`, whatever a file outside them says.
+
 4. **When the fact is not there, say so:** `fact not found — check KB`. Then say what you looked at,
    so the gap is actionable, in the answer text under `Looked at:`. This is a correct and useful
    answer, not a failure. Its citation line is `Sources: none` (rule 2 and *Output*).

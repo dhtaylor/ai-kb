@@ -31,6 +31,14 @@ Every case, negative included, fails if nothing in an installed library was Read
 refusal from an agent that searched some other knowledge tree looks exactly like a correct
 one (issue #40).
 
+Every case also fails on an off-KB read (issue #88): a Read of a file in no library
+registered on this machine (nor the graded one), or such a file in a content-mode Grep's
+result (or, with no result, its scope). The knowledge base is the libraries; an engine
+decision record, the engine's scripts or an unregistered library is not, and an answer taken
+from one tells nobody whether the knowledge base holds the fact. The one exception is the
+engine's CONVENTIONS.md, which the session context tells the agent to load. A Grep that only
+lists such a file is not a read.
+
 A positive or cross-root case passes when (a) holds, content was read only from the
 libraries the case needs, and (c) is clean. The case's own library is needed; a cross-root
 case also needs each library its expected_excerpt links to as [[library:slug]], and the library
@@ -65,6 +73,8 @@ AGENT_TIER_CASES = {"positive", "cross-root", "uncorroborated"}
 # (golden sets are named <lib>-golden.md, the convention load_golden relies on)
 CONTAMINATED = re.compile(r"-golden\.md(?!\w)|(^|/)evals?([-_./]|$)", re.I)
 XLINK = re.compile(r"\[\[([\w-]+):[^\]]+\]\]")
+# The contract: outside every library, yet the session context tells the agent to load it.
+CONTRACT = pathlib.Path(__file__).resolve().parent.parent / "CONVENTIONS.md"
 
 
 def die(msg):
@@ -199,7 +209,7 @@ def scope_files(ge, lib: pathlib.Path, inp: dict):
 def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
     """(passed, expected_read, content_libs, contamination, why, notes) for one case."""
     libs = libraries(ge, lib)
-    reads, touched, listed, notes, content = [], [], set(), [], set()
+    reads, touched, listed, notes, content, off_kb = [], [], set(), [], set(), []
     in_kb = False
 
     def owner(f):
@@ -207,6 +217,9 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
 
     def lib_of(f):
         return owner(f) if f is not None and f.name != "INDEX.md" else None
+
+    def outside(f):
+        return f is not None and f.is_file() and owner(f) is None and f.resolve() != CONTRACT
 
     for name, inp, res in tool_calls(transcript):
         if name == "Read" and inp.get("file_path"):
@@ -217,6 +230,8 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
             if lib_of(f):
                 content.add(lib_of(f))
             in_kb |= owner(f) is not None
+            if outside(f):
+                off_kb.append(f"Read {f}")
         elif name in ("Glob", "Grep"):
             if res is None:   # no result: the arguments are all there is. A returned result
                 # is exactly what the agent saw, so it alone is judged (below).
@@ -241,6 +256,8 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
             for f in files:
                 if lib_of(f):
                     (content if mode == "content" else listed).add(lib_of(f))
+                if mode == "content" and outside(f):
+                    off_kb.append(f"Grep {'returned' if res is not None else 'scope holds'} {f}")
     listed -= content
     if listed:
         notes.append("listed by Grep, not read: " + ",".join(sorted(listed)))
@@ -250,6 +267,8 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
     why = []
     if touched:
         why.append("contamination: " + "; ".join(dict.fromkeys(touched)))
+    if off_kb:
+        why.append("off-KB: " + "; ".join(dict.fromkeys(off_kb)))
     if not in_kb:   # it answered from some other corpus, or none: every case is void (issue #40)
         why.append("no installed library was Read")
     if case in AGENT_TIER_CASES:
