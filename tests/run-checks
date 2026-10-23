@@ -44,7 +44,7 @@ build_clean() {
   mkdir -p "$d"
   # Declares the newest contract (CONVENTIONS §14), so a fixture is not "behind" (ADR-0016).
   # Publishing a new contract version means raising this line.
-  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.1"\nlast_swept: never\n' > "$d/INDEX.md"
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.2"\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
   sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
@@ -1822,7 +1822,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.1"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.2"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \
@@ -2805,11 +2805,11 @@ printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; printf "SCHED-%%s\\n" CANARY-
 build_clean "$SCH/kb/quiet"
 
 case_run "schedulable: kb-verify with nothing due exits 0" 0 "exit=0" -- \
-  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/quiet" --yes
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/quiet" --yes --unattended
 case_run "schedulable: kb-verify finding exits 1 and echoes no assertion output" 1 "exit=1" -- \
-  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes --unattended
 case_run "schedulable: kb-verify re-run on a queued finding still exits 1" 1 "exit=1" -- \
-  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes --unattended
 case_run "schedulable: kb-verify usage error exits 2" 2 "exit=2" -- \
   sched "$ENGINE/scripts/kb-verify" "$SCH/kb/missing" --yes
 # Interactive use is unchanged: at a terminal, a failed assertion still shows what it printed.
@@ -2867,6 +2867,49 @@ case_run "schedulable: check-xlinks on a clean tree exits 0" 0 "exit=0" -- \
 # kb-due is a reminder whose findings are its output: it exits 0 whether or not anything is due,
 # because the session-start hook treats any other exit as a failure (ADR-0013).
 case_run "schedulable: kb-due exits 0 and prints no fact text" 0 "exit=0" -- sched "$ENGINE/scripts/kb-due" "$SCH/kb/fx" --nudge
+
+
+# ------------------------------------------- kb-verify --unattended (#100) ----
+# A scheduled recheck runs only what needs no person: `Recheck (attended):` marks an assertion that
+# needs a login, a credential or a live system, and --unattended skips it. Everything else runs with
+# an empty HOME and a stripped environment, so a cached login (~/.netrc, a CLI token, an exported
+# variable) is out of reach by construction rather than by trust (contract 2.2).
+UA="$TMP/unatt"; build_clean "$UA"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$UA/widgets.md"
+printf 'Recheck (attended): false\n' >> "$UA/widgets.md"
+case_run "Recheck (attended): is an assertion an attended run executes" 1 "FAILED" -- \
+  "$ENGINE/scripts/kb-verify" "$UA" --yes
+case_run "--unattended skips an attended assertion and says so" 0 "1 attended assertion(s) skipped" -- \
+  "$ENGINE/scripts/kb-verify" "$UA" --yes --unattended
+case_run "--unattended refuses --apply: a restamp edits a fact file" 2 "--apply" -- \
+  "$ENGINE/scripts/kb-verify" "$UA" --yes --unattended --apply
+
+UE="$TMP/unatt-env"; build_clean "$UE"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$UE/widgets.md"
+printf 'Recheck: [ -z "${UA_TOKEN_PROBE:-}" ] && [ ! -e "$HOME/.netrc" ] && [ -x "$KB_ENGINE_ROOT/scripts/kb-verify" ]\n' >> "$UE/widgets.md"
+touch "$HOME/.netrc"
+case_run "an attended run passes the caller's environment through" 1 "FAILED" -- \
+  env UA_TOKEN_PROBE=x "$ENGINE/scripts/kb-verify" "$UE" --yes
+case_run "--unattended runs with an empty HOME and no inherited variables, KB_ENGINE_ROOT kept" 0 "still hold" -- \
+  env UA_TOKEN_PROBE=x "$ENGINE/scripts/kb-verify" "$UE" --yes --unattended
+rm -f "$HOME/.netrc"
+
+# An attended assertion does not spend the budget of a run that will skip it.
+UB="$TMP/unatt-budget"; build_clean "$UB"
+sed -i 's/^Verified: .*$/Verified: 2025-01-01 · by: agent · method: manual/' "$UB/widgets.md"
+printf 'Recheck (attended): false\n' >> "$UB/widgets.md"
+printf '\n## Newer\n\nAnother claim.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: true\n' >> "$UB/widgets.md"
+case_run "--unattended: the budget goes to assertions it can run" 0 "1 section(s) still hold" -- \
+  "$ENGINE/scripts/kb-verify" "$UB" --yes --unattended --budget 1
+case_run "--unattended without --yes still runs nothing" 0 "NOT run" -- \
+  "$ENGINE/scripts/kb-verify" "$UB" --unattended
+
+build_clean "$TMP/indentattended"
+printf '\n## Debate\n\n- One side.\n  Source: manual\n  Verified: 2026-09-22 · by: agent · method: manual\n  Recheck (attended): false\n' >> "$TMP/indentattended/widgets.md"
+case_run "an indented Recheck (attended): fails check-kb like any indented stamp" 1 "indented Recheck" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/indentattended"
+case_run "contract 2.2 is known, with what it adds" 0 "2.2" -- \
+  bash -c 'sed -i "s/^kb_contract: .*/kb_contract: \"2.1\"/" "$1/INDEX.md" && "$2/scripts/check-kb" "$1"' _ "$UA" "$ENGINE"
 
 
 if [ "$FAIL" -eq 0 ]; then

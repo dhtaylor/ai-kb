@@ -76,6 +76,12 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   shows a failed assertion's output, and `kb-watch` shows old and new values, only at a terminal or
   with `--dry-run`. Queue and router writes replace the file in one rename, so a scheduled run never
   leaves a half-written queue beside a working session.
+- Contract 2.2 and `kb-verify --unattended` (#100). `Recheck (attended):` marks an assertion that
+  needs a login, a credential or a live system. `kb-verify --yes --unattended` skips those with a
+  count, and runs every other assertion with an empty `HOME` and only `PATH`, `KB_ENGINE_ROOT` and
+  proxy settings, so no cached login or exported credential is reachable. It refuses `--apply`.
+  `kb-init` writes 2.2. A library on 2.1 is told it is behind, and moves by changing only its
+  declaration unless it holds an assertion that needs a person.
 
 ## v0.2.0 — 2026-10-16
 

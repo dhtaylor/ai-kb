@@ -95,9 +95,12 @@ is not fixed. A fact that later passes is not auto-resolved and is not re-queued
 (nothing to re-raise — it is no longer failing); an existing open entry for it is left
 for a human, per rule 2.
 
-Usage: kb-verify <library-or-tree> [--yes] [--apply] [--all] [--budget N]
+Usage: kb-verify <library-or-tree> [--yes] [--apply] [--all] [--budget N] [--unattended]
   --yes      run the commands (without it, they are printed and nothing runs, and
              nothing is queued either — the --yes gate covers both)
+  --unattended  for a scheduled run: skip `Recheck (attended):` assertions, and run the rest
+             with an empty HOME and only PATH, KB_ENGINE_ROOT and proxy settings, so no cached
+             login or exported credential is reachable (CONVENTIONS §7). Refuses --apply.
   --apply    restamp sections whose assertion passed (today, by: agent, method: query)
   --all      every section with an assertion, not only the stale ones
   --budget N override the domain's verifier_budget
@@ -108,12 +111,14 @@ output, not a mutation of any fact (documents/state-change-gates.md), so it foll
 exists because there is nothing for it to opt out of that --yes does not already gate.
 Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
-import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys
+import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
 
 NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
           ".claude-plugin", ".claude", ".git"}
 STAMP = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})\s*·\s*by:\s*(\S+)\s*·\s*method:\s*(\S+)\s*$")
-RECHECK = re.compile(r"^Recheck:\s*(.+?)\s*$")
+# `Recheck (attended):` marks an assertion that needs a person: a login, a credential or a live
+# system (contract 2.2). An attended run executes it like any other; --unattended skips it.
+RECHECK = re.compile(r"^Recheck(\s*\(attended\))?:\s*(.+?)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 URL = re.compile(r"https?://[^\s'\"|;)<>]+")
 SHORT_FRAGMENT = 4      # words; 26 of 31 fragments in the #34 sample were 1-4 words long
@@ -293,16 +298,16 @@ def sections(path: pathlib.Path):
         s = STAMP.match(line)
         if not s:
             continue
-        cmd = None
+        cmd, attended = None, False
         for nxt in lines[i + 1:i + 3]:          # the assertion sits directly beneath the stamp
             r = RECHECK.match(nxt)
             if r:
-                cmd = r.group(1); break
+                cmd, attended = r.group(2), bool(r.group(1)); break
             if nxt.strip():
                 break
         out.append({"file": path, "heading": heading, "line": i,
                     "date": datetime.date.fromisoformat(s.group(1)),
-                    "by": s.group(2), "method": s.group(3), "cmd": cmd})
+                    "by": s.group(2), "method": s.group(3), "cmd": cmd, "attended": attended})
     return out
 
 
@@ -452,12 +457,29 @@ def outside_rechecks(root: pathlib.Path, sections: list) -> list:
     return out
 
 
+PROXY_VARS = ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")
+
+
+def assertion_env(empty_home: str) -> dict:
+    """The environment of an unattended assertion: an empty HOME, so no ~/.netrc, ~/.curlrc or CLI
+    login is found; a fixed PATH; the engine root; and the caller's proxy settings, without which a
+    public fetch fails on a network that requires a proxy. Nothing else is inherited (#100)."""
+    env = {"HOME": empty_home, "PATH": "/usr/bin:/bin", "KB_ENGINE_ROOT": str(ENGINE), "LC_ALL": "C.UTF-8"}
+    env.update({k: os.environ[k] for k in PROXY_VARS if k in os.environ})
+    return env
+
+
 def main(argv) -> int:
     args = [a for i, a in enumerate(argv)
             if not a.startswith("--") and (i == 0 or argv[i - 1] != "--budget")]
     flags = {a for a in argv if a.startswith("--")}
-    if len(args) != 1 or flags - {"--yes", "--apply", "--all", "--budget"}:
+    if len(args) != 1 or flags - {"--yes", "--apply", "--all", "--budget", "--unattended"}:
         print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+    unattended = "--unattended" in flags
+    if unattended and "--apply" in flags:
+        print("kb-verify: --unattended refuses --apply: a restamp edits a fact file, and no fact is "
+              "edited unattended (ADR-0017)", file=sys.stderr)
+        return 2
     root = pathlib.Path(args[0])
     if not (root / "INDEX.md").is_file():
         print(f"kb-verify: {root} has no INDEX.md — not a library or project tree", file=sys.stderr)
@@ -481,6 +503,8 @@ def main(argv) -> int:
         print(f"kb-verify: {root}/INDEX.md: {e}", file=sys.stderr); return 2
 
     due, found, with_cmd = due_sections(root, horizon, ttl, "--all" in flags)
+    skipped_attended = [s for s in due if s["attended"]] if unattended else []
+    due = [s for s in due if not (unattended and s["attended"])]
     stamped = len(found)
     over_budget = max(0, len(due) - budget)
     selected = due[:budget]
@@ -489,6 +513,9 @@ def main(argv) -> int:
     print(f"  {stamped} stamped section(s), {len(with_cmd)} with a Recheck assertion, "
           f"{len(selected)} due to run"
           + (f", {over_budget} more past the budget" if over_budget else ""))
+    if skipped_attended:
+        print(f"  {len(skipped_attended)} attended assertion(s) skipped — they need a person; run "
+              f"kb-verify {shlex.quote(str(root))} --yes when you are here")
 
     weak = weak_rechecks(root, with_cmd)
     if weak:
@@ -523,15 +550,18 @@ def main(argv) -> int:
         print("\nRead them before you do. A library's assertions run as you, with your privileges.")
         return 0
 
-    passed, failed = [], []
+    passed, failed, results = [], [], []
     print()
-    for s in selected:
-        try:
-            r = subprocess.run(s["cmd"], shell=True, cwd=s["file"].parent,
-                               env={**os.environ, "KB_ENGINE_ROOT": str(ENGINE)},
-                               capture_output=True, text=True, timeout=120)
-        except subprocess.TimeoutExpired:
-            r = None
+    with tempfile.TemporaryDirectory(prefix="kb-verify-home-") as empty_home:
+        env = assertion_env(empty_home) if unattended else {**os.environ, "KB_ENGINE_ROOT": str(ENGINE)}
+        for s in selected:
+            try:
+                r = subprocess.run(s["cmd"], shell=True, cwd=s["file"].parent, env=env,
+                                   capture_output=True, text=True, timeout=120)
+            except subprocess.TimeoutExpired:
+                r = None
+            results.append((s, r))
+    for s, r in results:
         where = f"{s['file'].relative_to(root)} § {s['heading']}"
         if r is not None and r.returncode == 0:
             passed.append(s); print(f"  PASS {where}")
