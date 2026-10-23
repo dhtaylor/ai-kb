@@ -2093,7 +2093,7 @@ W1="$TMP/watch1"; watch_lib "$W1/kb/fx" fx
 watch_snapshot "$W1/baseline.html" 255 "Home | Docs | Contact" 2026-01-01
 watch_snapshot "$W1/changed.html"  500 "Home | Docs | Support" 2026-02-02
 watch_allowlist "$W1/allowlist.json" "$W1/kb/fx" "$W1/baseline.html" "$W1/changed.html"
-case_run "kb-watch: changed snapshot queues a finding" 0 "1 new queued" -- \
+case_run "kb-watch: changed snapshot queues a finding" 1 "1 new queued" -- \
   "$ENGINE/scripts/kb-watch" "$W1/allowlist.json"
 case_run "kb-watch: exactly one record written" 0 "" -- \
   sh -c "[ \$(grep -c '^- id:' '$W1/kb/fx/needs-attention.md') = 1 ]"
@@ -2126,14 +2126,14 @@ case_run "kb-watch: noise-only leaves no queue file" 1 "" -- \
 W3="$TMP/watch3"; watch_lib "$W3/kb/fx" fx
 watch_snapshot "$W3/baseline.html" 255 "Home | Docs | Contact" 2026-01-01
 watch_allowlist "$W3/allowlist.json" "$W3/kb/fx" "$W3/baseline.html" "$W3/does-not-exist.html"
-case_run "kb-watch: missing snapshot queues a finding" 0 "1 new queued" -- \
+case_run "kb-watch: missing snapshot queues a finding" 1 "1 new queued" -- \
   "$ENGINE/scripts/kb-watch" "$W3/allowlist.json"
 case_run "kb-watch: missing snapshot is 'unreachable', not silence" 0 $'\tunreachable\t' -- \
   "$ENGINE/scripts/kb-watch" --dump "$W3/kb/fx/needs-attention.md"
 
 # Case 4 — re-run on the same change: still exactly one entry (dedupe by the
 # stable id — hash of source id + field + new value).
-case_run "kb-watch: re-run on the same change reports zero new" 0 "0 new queued" -- \
+case_run "kb-watch: re-run on the same change reports zero new" 1 "0 new queued" -- \
   "$ENGINE/scripts/kb-watch" "$W1/allowlist.json"
 case_run "kb-watch: re-run still exactly one record" 0 "" -- \
   sh -c "[ \$(grep -c '^- id:' '$W1/kb/fx/needs-attention.md') = 1 ]"
@@ -2158,7 +2158,7 @@ html = ("<html><body>\n<nav>Home | Docs | Contact</nav>\n"
 open(path, "w").write(html)
 PY
 watch_allowlist "$W5/allowlist.json" "$W5/kb/fx" "$W5/baseline.html" "$W5/changed.html"
-case_run "kb-watch: injection fixture still queues exactly one finding" 0 "1 new queued" -- \
+case_run "kb-watch: injection fixture still queues exactly one finding" 1 "1 new queued" -- \
   "$ENGINE/scripts/kb-watch" "$W5/allowlist.json"
 case_run "kb-watch: injection — exactly one record" 0 "" -- \
   sh -c "[ \$(grep -c '^- id:' '$W5/kb/fx/needs-attention.md') = 1 ]"
@@ -2186,7 +2186,7 @@ W6="$TMP/watch6"; watch_lib "$W6/kb/fx" fx
 watch_snapshot "$W6/baseline.html" 255 "Home | Docs | Contact" 2026-01-01
 watch_snapshot "$W6/changed.html"  500 "Home | Docs | Support" 2026-02-02
 watch_allowlist "$W6/allowlist.json" "$W6/kb/fx" "$W6/baseline.html" "$W6/changed.html"
-case_run "kb-watch: --dry-run reports what it would queue" 0 "WOULD QUEUE" -- \
+case_run "kb-watch: --dry-run reports what it would queue" 1 "WOULD QUEUE" -- \
   "$ENGINE/scripts/kb-watch" "$W6/allowlist.json" --dry-run
 case_run "kb-watch: --dry-run writes nothing" 1 "" -- \
   test -e "$W6/kb/fx/needs-attention.md"
@@ -2781,6 +2781,92 @@ case_run "--worktree does not scan an ignored file" 0 "clean" -- \
 printf '%s = %s\n' "pass""word" "$CAPPW" > "$TMP/wt/untracked.md"
 case_run "--worktree catches a secret in an untracked file" 1 "untracked.md" -- \
   sh -c "cd '$TMP/wt' && '$ENGINE/scripts/check-secrets' --worktree"
+
+
+# ------------------------------------------------- schedulable commands (#95) ----
+# A command a person may run unattended (cron, a systemd timer, kb-schedule) must work from `/`
+# with a stripped environment, tell clean (0) from findings (1) from a tool error (2), and never
+# print a fact's or source's content into a log. An assertion's command text is not content: it is
+# the check's own definition, and the queue records it. Every fixture below carries the canary
+# SCHED-CANARY in the text a careless command would echo; finding it in output is a leak.
+sched() { # sched <cmd...>: run from / with a stripped environment; prints exit=N, or LEAKED
+  local out rc
+  out=$(cd / && env -i HOME="$HOME" PATH=/usr/bin:/bin "$@" 2>&1); rc=$?
+  if printf '%s' "$out" | grep -q 'SCHED-CANARY'; then
+    printf 'LEAKED: %s\n' "$(printf '%s' "$out" | grep -m1 'SCHED-CANARY')"; return 99
+  fi
+  printf 'exit=%s\n' "$rc"; return "$rc"
+}
+
+SCH="$TMP/sched"; build_clean "$SCH/kb/fx"
+sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$SCH/kb/fx/widgets.md"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$SCH/kb/fx/widgets.md"
+printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; printf "SCHED-%%s\\n" CANARY-ERR >&2; false\n' >> "$SCH/kb/fx/widgets.md"
+build_clean "$SCH/kb/quiet"
+
+case_run "schedulable: kb-verify with nothing due exits 0" 0 "exit=0" -- \
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/quiet" --yes
+case_run "schedulable: kb-verify finding exits 1 and echoes no assertion output" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes
+case_run "schedulable: kb-verify re-run on a queued finding still exits 1" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes
+case_run "schedulable: kb-verify usage error exits 2" 2 "exit=2" -- \
+  sched "$ENGINE/scripts/kb-verify" "$SCH/kb/missing" --yes
+# Interactive use is unchanged: at a terminal, a failed assertion still shows what it printed.
+case_run "kb-verify at a terminal still shows a failed assertion's output" 1 "SCHED-CANARY-OUT" -- \
+  script -qec "'$ENGINE/scripts/kb-verify' '$SCH/kb/fx' --yes" /dev/null
+
+# A queue write replaces the file (write a sibling, then rename) rather than rewriting it in
+# place, so a session reading or committing the library never sees a half-written queue.
+printf '\n## Second\n\nAnother claim.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n' >> "$SCH/kb/fx/widgets.md"
+SCH_INODE=$(stat -c %i "$SCH/kb/fx/needs-attention.md" 2>/dev/null)
+"$ENGINE/scripts/kb-verify" "$SCH/kb/fx" --yes >/dev/null 2>&1
+case_run "kb-verify replaces the queue file, never rewrites it in place" 0 "" -- \
+  bash -c '[ -n "$1" ] && [ "$(stat -c %i "$2")" != "$1" ]' _ "$SCH_INODE" "$SCH/kb/fx/needs-attention.md"
+case_run "kb-verify leaves no temporary file behind" 1 "" -- \
+  bash -c 'ls -A "$1" | grep -v -x -E "INDEX.md|widgets.md|fx-golden.md|needs-attention.md|\.git"' _ "$SCH/kb/fx"
+
+SW="$TMP/schedwatch"; watch_lib "$SW/kb/fx" fx
+watch_snapshot "$SW/baseline.html" 255 "Home" 2026-01-01
+watch_snapshot "$SW/changed.html"  SCHED-CANARY-500 "Home" 2026-01-01
+watch_allowlist "$SW/allowlist.json" "$SW/kb/fx" "$SW/baseline.html" "$SW/changed.html"
+watch_allowlist "$SW/same.json" "$SW/kb/fx" "$SW/baseline.html" "$SW/baseline.html"
+case_run "schedulable: kb-watch with no drift exits 0" 0 "exit=0" -- sched "$ENGINE/scripts/kb-watch" "$SW/same.json"
+case_run "schedulable: kb-watch drift exits 1 and prints no source value" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/kb-watch" "$SW/allowlist.json"
+case_run "schedulable: kb-watch drift already queued still exits 1" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/kb-watch" "$SW/allowlist.json"
+SWT="$TMP/schedwatch-tty"; watch_lib "$SWT/kb/fx" fx
+watch_allowlist "$SWT/allowlist.json" "$SWT/kb/fx" "$SW/baseline.html" "$SW/changed.html"
+case_run "kb-watch at a terminal still shows the old and new value" 1 "SCHED-CANARY-500" -- \
+  script -qec "'$ENGINE/scripts/kb-watch' '$SWT/allowlist.json'" /dev/null
+SW_INODE=$(stat -c %i "$SW/kb/fx/needs-attention.md" 2>/dev/null)
+watch_snapshot "$SW/changed.html" 600 "Home" 2026-01-01
+"$ENGINE/scripts/kb-watch" "$SW/allowlist.json" >/dev/null 2>&1
+case_run "kb-watch replaces the queue file, never rewrites it in place" 0 "" -- \
+  bash -c '[ -n "$1" ] && [ "$(stat -c %i "$2")" != "$1" ]' _ "$SW_INODE" "$SW/kb/fx/needs-attention.md"
+
+# kb-sources prints URLs, stub paths and the headings that depend on them, never the text.
+SS="$TMP/schedsrc"; build_clean "$SS"
+sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$SS/widgets.md"
+mkdir -p "$SS/sources"; fm fx-sources general > "$SS/sources/INDEX.md"; printf '# Sources\n- [s-gone](s-gone.md) — stub\n' >> "$SS/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$SS/INDEX.md"
+fm s-gone general > "$SS/sources/s-gone.md"
+printf '# Source: s-gone\n\n- **URL:** http://127.0.0.1:%s/gone\n- **Origin:** SCHED-CANARY-STUB\n' "$SP" >> "$SS/sources/s-gone.md"
+sed -i 's/^Source: manual$/Source: [[s-gone]]/' "$SS/widgets.md"
+case_run "schedulable: kb-sources on a library with no URLs exits 0" 0 "exit=0" -- sched "$ENGINE/scripts/kb-sources" "$SCH/kb/quiet" --yes
+case_run "schedulable: kb-sources dead URL exits 1 and prints no fact text" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/kb-sources" "$SS" --yes
+
+printf '\nSCHED-CANARY-XLINK see [[fx:nothing]].\n' >> "$SCH/kb/quiet/widgets.md"
+case_run "schedulable: check-xlinks dead link exits 1 and prints no fact text" 1 "exit=1" -- \
+  sched "$ENGINE/scripts/check-xlinks" "$SCH/kb" "$SCH/kb/quiet"
+case_run "schedulable: check-xlinks on a clean tree exits 0" 0 "exit=0" -- \
+  sched "$ENGINE/scripts/check-xlinks" "$SW/kb" "$SW/kb/fx"
+
+# kb-due is a reminder whose findings are its output: it exits 0 whether or not anything is due,
+# because the session-start hook treats any other exit as a failure (ADR-0013).
+case_run "schedulable: kb-due exits 0 and prints no fact text" 0 "exit=0" -- sched "$ENGINE/scripts/kb-due" "$SCH/kb/fx" --nudge
 
 
 if [ "$FAIL" -eq 0 ]; then

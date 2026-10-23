@@ -187,8 +187,8 @@ def append_records(queue_path, records, kb_watch):
         domain, scope, err = kb_watch.library_domain_scope(queue_path.parent)
         if err:
             return err
-        queue_path.write_text(
-            kb_watch.new_queue_file(domain, scope)[:-len(kb_watch.FENCE_CLOSE)] + body + kb_watch.FENCE_CLOSE)
+        kb_watch.atomic_write(
+            queue_path, kb_watch.new_queue_file(domain, scope)[:-len(kb_watch.FENCE_CLOSE)] + body + kb_watch.FENCE_CLOSE)
         return kb_watch.ensure_routed(queue_path.parent)
     text = queue_path.read_text(errors="replace")
     spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
@@ -197,7 +197,7 @@ def append_records(queue_path, records, kb_watch):
         text = text[:at] + body + text[at:]
     else:
         text = text.rstrip("\n") + "\n\n" + kb_watch.FENCE_OPEN + body + kb_watch.FENCE_CLOSE
-    queue_path.write_text(text)
+    kb_watch.atomic_write(queue_path, text)
     return None
 
 

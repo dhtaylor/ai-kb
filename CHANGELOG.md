@@ -69,6 +69,13 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   in a headless run that has only read tools. A person decides each packet, and only then is a fact
   edited. A weekly report lists the decisions waiting. Decision only: the implementation is #95, #96,
   #97, #99–#103 (#98).
+- Commands you can schedule (#95): CONTRIBUTING defines the property and lists `kb-verify --yes`,
+  `kb-sources --yes`, `kb-watch`, `check-xlinks` and `kb-due`. Each is tested from `/` with a
+  stripped environment. To meet it, `kb-watch` now exits 1 when a source drifted or was
+  unreachable, where it exited 0 before. A wrapper that read 0 as "ran" should accept 1. `kb-verify`
+  shows a failed assertion's output, and `kb-watch` shows old and new values, only at a terminal or
+  with `--dry-run`. Queue and router writes replace the file in one rename, so a scheduled run never
+  leaves a half-written queue beside a working session.
 
 ## v0.2.0 — 2026-10-16
 

@@ -220,6 +220,31 @@ kb-due "$KB_ENGINE_ROOT" knowledge      # the installed libraries, plus this pro
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
 is true, whether its source still says so, or whether it landed where a reader would look.
 
+### Commands you can schedule
+
+A command is **schedulable** when it is safe to run unattended, from cron, a systemd timer or
+`kb-schedule` ([ADR-0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)).
+That means:
+
+- It never prompts.
+- It works from any directory, with no shell startup files: `env -i HOME=… PATH=/usr/bin:/bin` from `/`.
+- Exit 0 means clean, 1 means findings, 2 means it could not run.
+- It never prints a fact's or a source's text, or a secret-check hit. It prints paths, headings, URLs,
+  counts and ids. Assertion output and drifted values still reach a person at a terminal.
+- It is idempotent, and a queue write replaces the file in one rename, so it can run beside a
+  session working in the same library.
+
+| Command | Schedulable form | Exit codes |
+|---|---|---|
+| `kb-verify` | `kb-verify <library> --yes`, never `--apply` | 0 / 1 / 2 |
+| `kb-sources` | `kb-sources <library-or-kb> --yes` | 0 / 1 / 2 |
+| `kb-watch` | `kb-watch <allowlist.json>` | 0 / 1 / 2 |
+| `check-xlinks` | `check-xlinks --installed` | 0 / 1 / 2 |
+| `kb-due` | `kb-due … --nudge` | always 0: it is a reminder, and the session hook reads any other exit as a failure |
+
+Each row is a regression case in `tests/run-checks`, run from `/` with a stripped environment
+against fixtures that carry a canary in the text a careless command would echo.
+
 ---
 
 ## When something looks wrong
