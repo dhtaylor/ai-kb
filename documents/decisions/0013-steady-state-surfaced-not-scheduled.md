@@ -1,6 +1,6 @@
 # ADR-0013: Steady state is surfaced when due, not run unattended
 
-- **Status:** Accepted, amended 2026-10-16 (see *What changed* below)
+- **Status:** Accepted, amended 2026-10-16 and 2026-10-23 (see *What changed* below)
 - **Date:** 2026-10-01
 - **Deciders:** Dandy Taylor
 
@@ -94,3 +94,16 @@ The nudge's list above had grown without this record. It now reports two more ca
 
 Silence still means nothing is due; it now means it in more cases.
 
+
+## What changed on 2026-10-23
+
+Surfacing only works if a person sees it. The hook put the nudge in `additionalContext`, which reaches
+the model and is not shown to the person, so the owner never saw one
+([#79](https://github.com/dhtaylor/ai-kb/issues/79)). `kb-due --nudge --summary` now also prints the
+nudge condensed to one line, which the hook shows as its `systemMessage`; the full nudge still goes to
+the model. One run gives both, so they cannot disagree. An error message, such as a library that is not
+served, comes first. A subagent still gets no nudge, and a `kb-due` that fails gives neither the line
+nor a partial nudge.
+
+The nudge also names a library behind or ahead of the contract version this engine knows
+([ADR-0016](0016-versioned-library-contract.md)).

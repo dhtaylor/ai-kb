@@ -87,8 +87,16 @@ proj=""
 if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -f "$root/knowledge/INDEX.md" ]; then
   proj="$root/knowledge"
 fi
-due=""
-[ "$event" = SessionStart ] && due=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge 2>/dev/null || true)
+# One kb-due run gives the full nudge (for the model) and, as its last line, the same nudge
+# condensed for the person (issue #79: additionalContext reaches only the model). A kb-due that
+# fails gives neither: a partial nudge is worse than none, and the session must still start.
+due=""; summary=""
+if [ "$event" = SessionStart ] && out=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge --summary 2>/dev/null); then
+  due="$out"
+  case "${out##*$'\n'}" in
+    "KB due — "*) summary="${out##*$'\n'}"; due="${out%$'\n'*}" ;;
+  esac
+fi
 [ -n "$due" ] && due="
 Due for a librarian's attention — nothing printed here means nothing is due:
 ${due}"
@@ -98,6 +106,7 @@ msg=""
   msg="${nbroken} registered knowledge librar$([ "$nbroken" -eq 1 ] && echo y || echo ies) not available — run kb-library list."
 case "$registry" in unreadable*) [ "$event" = SessionStart ] && msg="The knowledge library registry could not be read — run kb-library list." ;; esac
 [ -n "$unmigrated" ] && [ "$event" = SessionStart ] && msg="Knowledge libraries in ${engine}/kb/ are not registered yet — run kb-bootstrap --apply."
+[ -n "$summary" ] && msg="${msg:+$msg · }${summary}"   # an error first, then what is due
 emit "Knowledge engine resolves to: ${engine}
 Contract: ${engine}/CONVENTIONS.md — load it before curating or retrieving. Use these absolute paths directly with the Read tool; it does not expand \$KB_ENGINE_ROOT.
 Domain libraries registered on this machine (${count}):${libs}${broken}${unmigrated}

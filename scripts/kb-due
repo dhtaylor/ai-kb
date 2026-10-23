@@ -55,7 +55,11 @@ reports, per tree, everything a librarian should act on:
   printed as a one-line warning to stderr and that category is skipped for that tree only — every
   other tree and every other category still gets computed. This hook must never crash a session.
 
-Usage: kb-due [tree ...] [--quiet|--nudge]
+--SUMMARY (with --nudge, issue #79): also print, as the LAST line, the same nudge condensed to one
+line beginning "KB due — ", for the session-start hook to show the person (a systemMessage),
+while the full nudge above it goes to the model. One run gives both, so the two cannot disagree.
+
+Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
   Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
   trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
@@ -193,14 +197,33 @@ def plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
+# The --summary categories, in the order they are shown: (key, heading).
+SUMMARY = (("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
+           ("queue", "queue"), ("distill", "to distill"), ("unstamped", "unstamped"),
+           ("contract", "contract"))
+
+
+def summary_line(counts: list) -> str:
+    """One line for the person from [(label, {key: count-or-text})]: each category with the
+    trees in it, at most three named. Empty when nothing is due."""
+    out = []
+    for key, heading in SUMMARY:
+        items = [f"{lbl} {c[key]}".rstrip() for lbl, c in counts if c.get(key)]
+        if items:
+            more = f", +{len(items) - 3} more" if len(items) > 3 else ""
+            out.append(f"{heading}: {', '.join(items[:3])}{more}")
+    return "KB due — " + " · ".join(out) if out else ""
+
+
 def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
-    """(line-or-None, [warning, ...]) for one tree's row from status(). A warning never
-    stops the other categories, this tree's own line, or any other tree — see module
-    docstring: a malformed or uncomputable category is reported once and skipped."""
+    """(line-or-None, [warning, ...], {summary key: count}) for one tree's row from status(). A
+    warning never stops the other categories, this tree's own line, or any other tree — see
+    module docstring: a malformed or uncomputable category is reported once and skipped."""
     tree, lbl = s["tree"], label(s["tree"])
-    parts, warnings = [], []
+    parts, warnings, counts = [], [], {}
 
     if s["due"]:
+        counts["sweep"] = " "     # named, not counted: one sweep per tree
         when = "never swept" if s["age"] is None else f"last swept {s['age']}d ago"
         parts.append(f"sweep due ({when}, every {s['interval']}d)")
 
@@ -210,6 +233,7 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         warnings.append(f"{lbl}: could not compute facts due for recheck ({e}) — skipped")
         due = None
     if due:
+        counts["recheck"] = len(due)
         parts.append(f"{plural(len(due), 'fact')} due for recheck (kb-verify {shlex.quote(str(tree.resolve()))} --yes)")
 
     try:
@@ -218,6 +242,7 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         warnings.append(f"{lbl}: could not compute stale facts with no assertion ({e}) — skipped")
         stale = None
     if stale:
+        counts["stale"] = len(stale)
         parts.append(f"{plural(len(stale), 'stale fact')} with no assertion (re-check by hand, or kb-audit)")
 
     try:
@@ -226,6 +251,7 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         warnings.append(f"{lbl}: could not read needs-attention.md ({e}) — skipped")
         qn, cats = 0, {}
     if qn:
+        counts["queue"] = qn
         by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
         parts.append(f"{plural(qn, 'open queue item')} ({by_cat})")
 
@@ -235,6 +261,7 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         warnings.append(f"{lbl}: could not count episodic notes ({e}) — skipped")
         en = 0
     if en:
+        counts["distill"] = en
         parts.append(f"{plural(en, 'episodic note')} awaiting distillation")
 
     try:
@@ -245,6 +272,7 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         warnings.append(f"{lbl}: could not count unstamped sections ({e}) — skipped")
         un = 0
     if un:
+        counts["unstamped"] = un
         parts.append(f"{plural(un, 'unstamped source')} (never verified)")
 
     try:   # ADR-0016: a library behind the contract is told; never a failure
@@ -256,6 +284,10 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
     except Exception as e:
         warnings.append(f"{lbl}: could not read the contract version ({e}) — skipped")
         st = None
+    if st in ("behind", "ahead", "unsupported", "malformed"):
+        counts["contract"] = {"behind": f"{check_kb.fmt(v)} (behind)", "ahead": f"{check_kb.fmt(v)} (ahead)",
+                              "unsupported": f"{check_kb.fmt(v)} (unsupported)",
+                              "malformed": "(unreadable)"}[st]
     if st == "behind":
         parts.append(f"built to contract {check_kb.fmt(v)}; this engine knows {check_kb.fmt(newest)} "
                      f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
@@ -268,13 +300,14 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb):
         parts.append("kb_contract cannot be read — not served (check-kb says why)")
 
     line = f"{lbl}: " + "; ".join(parts) if parts else None
-    return line, warnings
+    return line, warnings, counts
 
 
 def main(argv) -> int:
     nudge = "--nudge" in argv
     quiet = "--quiet" in argv
-    args = [a for a in argv if a not in ("--quiet", "--nudge")]
+    summary = "--summary" in argv
+    args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary")]
 
     trees = []
     try:   # the registry's one reader; an unreadable registry must not crash a session
@@ -293,12 +326,13 @@ def main(argv) -> int:
             check_kb = load_module("check_kb", "check-kb")
         except Exception:
             check_kb = None
-        lines, warnings = [], []
+        lines, warnings, counts = [], [], []
         for s in rows:
-            line, warn = nudge_for(s, kb_verify, kb_watch, check_kb)
+            line, warn, c = nudge_for(s, kb_verify, kb_watch, check_kb)
             if line:
                 lines.append(line)
             warnings += warn
+            counts.append((label(s["tree"]), c))
         for w in warnings:
             print(f"kb-due: {w}", file=sys.stderr)
         if lines:
@@ -306,6 +340,8 @@ def main(argv) -> int:
             print("Commands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
                   "the rechecks above; kb-distill for the episodic notes above; kb-audit "
                   "<library> queues unstamped sources and stale facts with no assertion.")
+            if summary:
+                print(summary_line(counts))
         return 0
 
     if quiet:
