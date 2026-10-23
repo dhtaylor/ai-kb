@@ -655,8 +655,8 @@ Two tiers test it, and they are not interchangeable:
 - **Routing check**, in two tiers. The deterministic tier (`check-golden`, every commit, no LLM): the
   expected file exists, holds the excerpt, and is reachable from the root `INDEX.md` through the
   routers. The agent tier (`grade-routing`, sampled and started by a person): the agent's tool calls
-  show it Read the expected file, read content from no library the case does not need, and never
-  touch the golden set. It is graded from the transcript, not from what the agent says it did.
+  show it Read the expected file, read content from no library the case does not need, read nothing
+  outside the registered libraries but this contract, and never touch the golden set. It is graded from the transcript, not from what the agent says it did.
 - **Answer-grounding eval** (scheduled, sampled): the agent runs; its answer must contain the
   `expected_excerpt`, **verified by grep against the expected file** — not by an LLM judge. This is what
   catches answering from memory. `grade-eval --transcripts` grades the agents' transcripts directly,
@@ -721,7 +721,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
 | `check-xlinks` | `[[library:slug]]` resolution from any tree — the registered libraries (`--installed`) and each project tree passed to it — into the registered libraries; dead links fail, absent libraries warn. A link in a code fence is an example and is skipped; one in an inline code span is resolved but never warns of an absent library | **built** |
-| routing check | golden-set questions actually route to `expected_file`. Deterministic tier: the file exists, holds the excerpt and is reachable from the root `INDEX.md` through the routers. Agent tier: an agent's tool calls Read the expected file, read content from no library the case does not need, and never touch the golden set or an eval folder. The agent tier is sampled and started by a person, never per commit ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)) | **built** — `check-golden` (every commit) and `grade-routing` (graded from a subagent's tool calls, not its self-report) |
+| routing check | golden-set questions actually route to `expected_file`. Deterministic tier: the file exists, holds the excerpt and is reachable from the root `INDEX.md` through the routers. Agent tier: an agent's tool calls Read the expected file, read content from no library the case does not need, read nothing outside the registered libraries but this contract, and never touch the golden set or an eval folder. The agent tier is sampled and started by a person, never per commit ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)) | **built** — `check-golden` (every commit) and `grade-routing` (graded from a subagent's tool calls, not its self-report) |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` or an `alt_excerpt` AND the expected file is among those it cited (a cited path is resolved to a file, not string-matched); quote characters and trailing punctuation are normalised, wording is not; grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | assertions that cannot fail | a fetched fragment of ≤4 words, or one (url, fragment) backing >2 sections or several files; reported every run, never a failure (§7) | **built** — `kb-verify` |

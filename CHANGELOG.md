@@ -50,6 +50,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   `grade-routing` already counted a partial read; a regression case now pins it.
 - `__pycache__/` is ignored, so an ad-hoc import of an engine script no longer leaves the engine
   checkout looking modified (#80).
+- `kb-retrieve` rule 3 says what the knowledge base is: the registered libraries and a project's
+  `knowledge/` tree, and not the engine repository, its decision records included. `grade-routing`
+  fails a case with an off-KB read, meaning a Read, or a content-mode Grep result, of a file in no
+  registered library. The engine's `CONVENTIONS.md` is exempt. A read in an unregistered library is
+  now off-KB too, where before it was only "not in the KB" (#88).
 
 ## v0.2.0 — 2026-10-16
 

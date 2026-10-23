@@ -2458,6 +2458,20 @@ mk_tr "$RT/nothing.jsonl" "Glob:$A/*.md"
 grade "reads nothing: fail" 1 "never Read" "Q1|nothing.jsonl"
 mk_tr "$RT/unneeded.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
 grade "content read from an unneeded library: fail" 1 "unneeded beta" "Q1|unneeded.jsonl"
+# Issue #88: the knowledge base is the registered libraries. A read of anything else, such as
+# an engine decision record, is off-KB and fails the case, negative cases included.
+ADR="$ENGINE/documents/decisions/0002-governance-without-enforcement.md"
+mk_tr "$RT/offkb-neg.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md|1|5" "Read:$ADR"
+grade "a negative case that reads an engine ADR: off-KB fails" 1 "off-KB: Read $ADR" "Q2|offkb-neg.jsonl"
+mk_tr "$RT/offkb-pos.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$ADR|10|20"
+grade "a positive case that also reads an engine ADR: off-KB fails" 1 "off-KB" "Q1|offkb-pos.jsonl"
+HIT="$ADR:12:push protection"   # one content-mode match line
+mk_tr "$RT/offkb-grep.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Grep:$ENGINE/documents|content@@$HIT"
+grade "a content-mode Grep showing an engine document: off-KB fails" 1 "off-KB: Grep returned $ADR" "Q1|offkb-grep.jsonl"
+mk_tr "$RT/offkb-list.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Grep:$ENGINE/documents|files_with_matches@@$ADR"
+grade "a Grep that only lists an engine document is not a read" 0 "1/1 graded" "Q1|offkb-list.jsonl"
+mk_tr "$RT/contract.jsonl" "Read:$ENGINE/CONVENTIONS.md" "Read:$A/INDEX.md" "Read:$A/widgets.md"
+grade "reading the contract the session context names is not off-KB" 0 "1/1 graded" "Q1|contract.jsonl"
 mk_tr "$RT/routeronly.jsonl" "Read:$A/INDEX.md" "Read:$B/INDEX.md" "Read:$A/widgets.md"
 grade "reading another library's router only is not content: pass" 0 "1/1 graded" "Q1|routeronly.jsonl"
 mk_tr "$RT/suffix.jsonl" "Read:$B/widgets.md"
@@ -2668,7 +2682,7 @@ mk_tr "$CD/cons.jsonl" "Read:$CA/INDEX.md" "Read:$CA/widgets.md" "Read:$CB/INDEX
 case_run "grade-routing: reads in registered libraries elsewhere are reads in the KB" 0 "1/1 graded" -- \
   cons "$ENGINE/scripts/grade-routing" "$CA" "$CD/map"
 mk_tr "$CD/cons.jsonl" "Read:$CA/INDEX.md" "Read:$CA/widgets.md" "Read:$CD/engine/kb/ghost/widgets.md" "Read:$CB/gadgets.md"
-case_run "grade-routing: a read in an unregistered library is not in the KB, and not needed" 0 "1/1 graded" -- \
+case_run "grade-routing: a read in an unregistered library is off-KB (issue #88)" 1 "off-KB: Read $CD/engine/kb/ghost/widgets.md" -- \
   cons "$ENGINE/scripts/grade-routing" "$CA" "$CD/map"
 mk_tr "$CD/cons.jsonl" "Read:$CD/engine/kb/ghost/widgets.md"
 printf 'Q2|cons.jsonl\n' > "$CD/map"
