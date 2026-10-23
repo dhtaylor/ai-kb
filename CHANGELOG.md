@@ -111,6 +111,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   - with `--prepare`, also runs `kb-prepare distill` and `kb-prepare audit` under a dollar cap;
   - then `check-xlinks --installed`, `kb-watch` on the chosen allowlist, and `kb-report`.
   It holds a lock, so runs never overlap, and logs only each step's exit code. It never edits a fact.
+- Golden-set values are read as YAML scalars (#111). A single-quoted excerpt, the natural way to
+  write one holding `"` or `: `, was searched for with its quotes still on and could never match.
+  Now `'…'` loses its quotes and reads `''` as `'`, `"…"` reads its escapes, and a plain value keeps
+  a closing quote of its own. `grade-eval` imports `check-golden`'s reader instead of keeping a copy.
+  An engine fix, not a contract change: every existing golden set reads the same.
 
 ## v0.2.0 — 2026-10-16
 

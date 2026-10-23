@@ -275,6 +275,40 @@ p.write_text(t[:t.index("- case: negative\n  question: Who owns")] + "```\n")
 PY
 case_run "golden set with fewer than two negatives" 1 "negative case" -- "$ENGINE/scripts/check-golden" "$TMP/goldneg"
 
+# Issue #111: record values are YAML scalars. Single quotes are the natural way to write an
+# excerpt that holds `"` or `: `, and were searched for with the quotes still on, so they could
+# never match. A plain value is kept whole, including a closing `"` of its own.
+gq111() { # gq111 <name> <file line> <excerpt as written in the record>
+  build_clean "$TMP/g111"
+  printf '%s\n' "$2" >> "$TMP/g111/widgets.md"
+  python3 - "$TMP/g111/fx-golden.md" "$3" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(t.replace('expected_excerpt: "up to 12 things"', "expected_excerpt: " + sys.argv[2], 1))
+PY
+  case_run "$1" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/g111"
+  rm -rf "$TMP/g111"
+}
+gq111 "a single-quoted excerpt holding \" and : is unquoted (#111)" '"key": {"type": "command"}' "'\"key\": {\"type\": \"command\"}'"
+gq111 "a single-quoted excerpt reads '' as one quote" "the owner's call" "'the owner''s call'"
+gq111 "a double-quoted excerpt reads its escapes" 'the "on" flag' '"the \"on\" flag"'
+case_run "a plain excerpt keeps a closing quote of its own (#111)" 0 "" -- python3 -c '
+import importlib.machinery, importlib.util, sys
+sys.dont_write_bytecode = True
+l = importlib.machinery.SourceFileLoader("cg", sys.argv[1]); m = importlib.util.module_from_spec(importlib.util.spec_from_loader("cg", l)); l.exec_module(m)
+r = m.parse("- case: positive\n  expected_excerpt: the flag is \"on\"\n")
+assert r[0]["expected_excerpt"] == "the flag is \"on\"", r' "$ENGINE/scripts/check-golden"
+build_clean "$TMP/g111e"
+printf '"key": {"type": "command"}\n' >> "$TMP/g111e/widgets.md"
+python3 - "$TMP/g111e/fx-golden.md" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+p.write_text(t.replace('expected_excerpt: "up to 12 things"', "expected_excerpt: '\"key\": {\"type\": \"command\"}'", 1))
+PY
+printf 'Q1|widgets.md|The hook entry is "key": {"type": "command"} here.\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' > "$TMP/g111e/answers"
+case_run "grade-eval reads a single-quoted excerpt the same way (#111)" 0 "3/3 passed" -- \
+  "$ENGINE/scripts/grade-eval" "$TMP/g111e" "$TMP/g111e/answers"
+
 # Reachability: an expected_file must be reachable from the root INDEX.md by router links,
 # or retrieval (which descends routers and never searches) can never route to it. check-kb's
 # orphan check exempts documents/ and the golden set, so a golden record could name a file
