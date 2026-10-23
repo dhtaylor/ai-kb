@@ -3101,6 +3101,41 @@ case_run "kb-audit describes its prepare mode" 0 "" -- \
   grep -q '^## Prepare mode' "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
 case_run "kb-audit describes resuming from a review packet" 0 "" -- \
   grep -q '^## Resuming from a review packet' "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
+# ------------------------------------------------- kb-backup: verified by restore (#96) ----
+# A library with no permitted remote has no second copy. `git bundle verify` reads only the header,
+# so a truncated bundle passes it; a backup is verified here by restoring each bundle into a scratch
+# repository and comparing its refs to the ones recorded when it was made.
+BK="$TMP/backup"; BKH="$BK/home"; mkdir -p "$BKH" "$BK/eng/scripts"
+cp "$ENGINE/scripts/kb-backup" "$ENGINE/scripts/kb-libraries" "$BK/eng/scripts/"
+git init -q "$BK/eng" && git -C "$BK/eng" add -A && git -C "$BK/eng" -c user.email=t@t -c user.name=t commit -qm engine
+build_clean "$BK/libs/fx"; git -C "$BK/libs/fx" -c user.email=t@t -c user.name=t commit -qm init
+git -C "$BK/libs/fx" tag v1
+build_clean "$BK/libs/empty"
+HOME="$BKH" "$ENGINE/scripts/kb-library" add "$BK/libs/fx" >/dev/null 2>&1
+HOME="$BKH" "$ENGINE/scripts/kb-library" add "$BK/libs/empty" >/dev/null 2>&1
+kbb() { HOME="$BKH" "$BK/eng/scripts/kb-backup" "$@"; }
+BD="$BK/dest"
+case_run "kb-backup: the engine and every registered library are bundled and verified" 0 "ok      engine" -- kbb "$BD"
+BRUN=$(ls -d "$BD"/*/ | head -1)
+case_run "kb-backup: a library is bundled" 0 "" -- test -s "$BRUN/libraries/fx.bundle"
+case_run "kb-backup: SHA256SUMS checks" 0 "" -- bash -c 'cd "$1" && sha256sum -c --quiet SHA256SUMS' _ "$BRUN"
+case_run "kb-backup: a library with no commits is skipped, not failed" 0 "skip    empty" -- kbb "$BK/dest-b"
+case_run "kb-backup: tags travel with the bundle" 0 "refs/tags/v1" -- cat "$BRUN/libraries/fx.refs"
+case_run "kb-backup verify: an intact run verifies" 0 "ok      fx" -- kbb verify "$BRUN"
+cp -r "$BRUN" "$BK/trunc"
+f="$BK/trunc/libraries/fx.bundle"; head -c $(( $(stat -c %s "$f") * 2 / 3 )) "$f" > "$f.cut" && mv "$f.cut" "$f"
+case_run "git bundle verify itself passes a truncated bundle (why this exists)" 0 "" -- git -C "$BK/libs/fx" bundle verify -q "$f"
+case_run "kb-backup verify: a truncated bundle FAILS, by restore" 1 "FAIL    fx" -- kbb verify "$BK/trunc"
+case_run "kb-backup --restore-test: each bundle clones and passes git fsck --full" 0 "restore-test ok" -- kbb "$BK/dest-r" --restore-test
+kbb "$BK/dest-k" >/dev/null 2>&1; sleep 1; kbb "$BK/dest-k" >/dev/null 2>&1; sleep 1
+case_run "kb-backup --keep 2: three runs leave the newest two" 0 "" -- \
+  bash -c '"$1" "$2" --keep 2 >/dev/null 2>&1; [ "$(ls -d "$2"/*/ | wc -l)" = 2 ]' _ "$BK/eng/scripts/kb-backup" "$BK/dest-k"
+mkdir -p "$BK/dest-k/not-a-run"
+case_run "kb-backup --keep: a folder it did not write is never pruned" 0 "" -- \
+  bash -c 'HOME="$3" "$1" "$2" --keep 1 >/dev/null 2>&1; [ -d "$2/not-a-run" ]' _ "$BK/eng/scripts/kb-backup" "$BK/dest-k" "$BKH"
+case_run "kb-backup: a destination inside a repository it backs up is refused" 2 "outside" -- kbb "$BK/libs/fx/backups"
+case_run "schedulable: kb-backup from / with a stripped environment" 0 "exit=0" -- \
+  sched env HOME="$BKH" "$BK/eng/scripts/kb-backup" "$BK/dest-s"
 
 
 # ------------------------------------------------- kb-report: the weekly decisions (#102) ----

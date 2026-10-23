@@ -116,6 +116,12 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   Now `'…'` loses its quotes and reads `''` as `'`, `"…"` reads its escapes, and a plain value keeps
   a closing quote of its own. `grade-eval` imports `check-golden`'s reader instead of keeping a copy.
   An engine fix, not a contract change: every existing golden set reads the same.
+- `kb-backup DEST [--keep N] [--restore-test]` and `kb-backup verify RUN` (#96): a dated run of git
+  bundles of the engine and every registered library, each with its recorded refs, plus SHA256SUMS.
+  A bundle is verified by restoring it into a scratch repository and comparing its refs, not by
+  `git bundle verify`, which passes a truncated bundle. `--restore-test` also clones and runs
+  `git fsck --full`. A library with no commits is skipped with a note. A destination inside a backed-up
+  repository is refused. `--keep` prunes only directories this command wrote.
 
 ## v0.2.0 — 2026-10-16
 
