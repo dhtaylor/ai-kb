@@ -1,0 +1,106 @@
+[
+ {
+  "id": "E01",
+  "library": "agile-requirements",
+  "golden_q": 5,
+  "case": "positive",
+  "question": "What would Bill Wake change about the E in INVEST?",
+  "expected_file": "story-format-and-invest.md"
+ },
+ {
+  "id": "E02",
+  "library": "agile-requirements",
+  "golden_q": 15,
+  "case": "negative",
+  "question": "How many story points should I put on a story with three acceptance criteria like these?",
+  "expected_file": "\"\""
+ },
+ {
+  "id": "E03",
+  "library": "ai-writing-signals",
+  "golden_q": 7,
+  "case": "positive",
+  "question": "Why does AI-generated text tend to sound generic and exaggerated?",
+  "expected_file": "content-signs.md"
+ },
+ {
+  "id": "E04",
+  "library": "ai-writing-signals",
+  "golden_q": 12,
+  "case": "unresolved",
+  "question": "If an AI overuses a word, does it also overuse that word's synonyms?",
+  "expected_file": "language-and-grammar-signs.md"
+ },
+ {
+  "id": "E05",
+  "library": "ai-writing-signals",
+  "golden_q": 21,
+  "case": "negative",
+  "question": "Given these signals, exactly what probability should I assign to this specific email being AI-written?",
+  "expected_file": "\"\""
+ },
+ {
+  "id": "E06",
+  "library": "azure-devops",
+  "golden_q": 6,
+  "case": "positive",
+  "question": "Does Microsoft mandate the Fibonacci sequence for sizing Story Points?",
+  "expected_file": "user-story-work-item.md"
+ },
+ {
+  "id": "E07",
+  "library": "azure-devops",
+  "golden_q": 15,
+  "case": "negative",
+  "question": "What Story Points should I assign to this particular User Story?",
+  "expected_file": "\"\""
+ },
+ {
+  "id": "E08",
+  "library": "claude-code-runtime",
+  "golden_q": 10,
+  "case": "negative",
+  "question": "What CLI flag controls Claude Code's telemetry reporting?",
+  "expected_file": "\"\""
+ },
+ {
+  "id": "E09",
+  "library": "claude-code-runtime",
+  "golden_q": 21,
+  "case": "positive",
+  "question": "Does a commit from a GUI git client or an IDE run a git hook that depends on a variable exported in ~/.bashrc?",
+  "expected_file": "claude-code-runtime-open-questions.md"
+ },
+ {
+  "id": "E10",
+  "library": "intelligence-analysis",
+  "golden_q": 1,
+  "case": "positive",
+  "question": "Which ICD 203 tradecraft standard requires a clear main message up front?",
+  "expected_file": "icd-203-tradecraft-standards.md"
+ },
+ {
+  "id": "E11",
+  "library": "intelligence-analysis",
+  "golden_q": 17,
+  "case": "negative",
+  "question": "What probability does this library assign to dengue transmission returning to baseline in the Andean region this quarter?",
+  "expected_file": "\"\""
+ },
+ {
+  "id": "E12",
+  "library": "knowledge-architecture",
+  "golden_q": 8,
+  "case": "positive",
+  "question": "Why did check-exec-bits not catch kb-bootstrap and kb-session-start being committed non-executable?",
+  "expected_file": "guardrail-verification.md"
+ },
+ {
+  "id": "E13",
+  "library": "knowledge-architecture",
+  "golden_q": 44,
+  "case": "negative",
+  "question": "Is push protection switched on for the library's repository?",
+  "expected_file": "\"\""
+ }
+]
