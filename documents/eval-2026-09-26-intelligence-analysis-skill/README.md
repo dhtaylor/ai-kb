@@ -139,6 +139,37 @@ One genuine weakness in the port survives the amendment. It **missed epi-02's pl
 benchmark flaw in three of four rounds**, crediting a number that looks sourced but isn't as
 characterized sourcing.
 
+## Round 5: the rebuilt library (2026-10-23)
+
+The intelligence-analysis library was rebuilt on primary sources on 2026-10-16 (library commit
+`5097aa0`: ICD 203, the CIA Tradecraft Primer, Heuer, the UK MOD Red Teaming Handbook), and the
+review skill took over the calibration and the rating scale (engine `6f62059`, #73). Round 5 tests
+both, at engine `61c17d0`. The same six cases went to fresh agents under the same separation: each
+saw the skill file, the library and one case file copied outside this folder, and was told to open
+no golden set, eval folder or gold key. The `analysis-tools` plugin was not installed on the machine,
+so each agent read the skill file and followed it, rather than loading it as a plugin.
+
+| Case | Level | Library files read | Original key | Amended key |
+|---|---|---|---|---|
+| fin-01 | Light | 3 | **Pass.** 1 finding, the gold flaw | Pass |
+| epi-01 | Medium | 3 | **Pass.** 3 findings, all three gold flaws; the 68%/86% corpus defect found again | Pass |
+| geo-02 | **Medium** (key: Full) | 5 | **Pass on findings.** 3 findings, all three gold flaws; mirror-imaging named | Pass on findings; level one below the key |
+| biz-02 | Medium | 3 | **Fail.** Control, 3 findings | **Pass.** Both flaws |
+| epi-02 | Full | 3 | **Fail.** Control, 3 findings | **Pass on count**, 2 of 4 flaws. The planted benchmark flaw was caught ("a figure dressed as sourcing"); anchoring on the prior estimate and the carrying-cost premise were missed, both credited as strengths |
+| clim-02 | Full | 3 | **Fail.** Control, 3 findings | **Pass.** Both flaws |
+
+- **No regression from the rebuild.** 3/6 against the original key and 6/6 against the amended key,
+  graded as round 4 was, the same as rounds 3 and 4. Every review cited only library files.
+- **geo-02 was reviewed one level low**, where rounds 1, 3 and 4 all reviewed it at Full. The reviewer read it as a
+  short serialed assessment whose "KEY JUDGMENT" and "CONFIDENCE" headers do not make it a Full
+  product, applying the rule that the product's form sets its level. Its findings still matched the
+  key. One trial cannot say whether this is a shift or noise.
+- **epi-02's flaw coverage keeps moving:** four of four in round 3, three of four in round 4, two of
+  four here. The benchmark flaw, missed in three of the first four rounds, was caught.
+- **A known gap was reported, not filled.** The epi-01 reviewer said the library does not define
+  confidence levels. The library records exactly that as an open question, and the reviewer did not
+  supply the legacy definitions from memory.
+
 ## Files
 
 | Path | What |
@@ -151,3 +182,4 @@ characterized sourcing.
 | `round2/legacy-*.md` | Round 2 reviews by the legacy skill (baseline) |
 | `round3/*.md` | Round 3 reviews at `90979d4` |
 | `round4/*.md` | Round 4 reviews at `56ba045` |
+| `round5/*.md` | Round 5 reviews against the rebuilt library, engine `61c17d0` |
