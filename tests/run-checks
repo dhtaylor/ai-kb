@@ -3136,6 +3136,83 @@ case_run "kb-backup --keep: a folder it did not write is never pruned" 0 "" -- \
 case_run "kb-backup: a destination inside a repository it backs up is refused" 2 "outside" -- kbb "$BK/libs/fx/backups"
 case_run "schedulable: kb-backup from / with a stripped environment" 0 "exit=0" -- \
   sched env HOME="$BKH" "$BK/eng/scripts/kb-backup" "$BK/dest-s"
+# ------------------------------------------- kb-telemetry, kb-eval-sample: retrieval cost (#97) ----
+# What retrieval costs in normal use, read from the transcripts Claude Code already writes for each
+# kb-retrieve run (~/.claude/projects/<project>/<session>/subagents/agent-<id>.jsonl and .meta.json).
+# One API message is logged in several records, so tokens count once per message id. The clock
+# starts at the first API response, not the spawn. Only paths and counts are reported.
+TL="$TMP/telemetry"; TLH="$TL/home"; mkdir -p "$TLH"
+build_clean "$TL/kb/fx"
+fm other general > "$TL/kb/fx/other.md"; printf '# Other\n\nUnrelated.\n' >> "$TL/kb/fx/other.md"
+printf -- '- [other](other.md) — other\n' >> "$TL/kb/fx/INDEX.md"
+git -C "$TL/kb/fx" add -A; git -C "$TL/kb/fx" -c user.email=t@t -c user.name=t commit -qm init
+HOME="$TLH" "$ENGINE/scripts/kb-library" add "$TL/kb/fx" >/dev/null 2>&1
+TLL=$(cd "$TL/kb/fx" && pwd -P)
+SUB="$TLH/.claude/projects/-proj/sess1/subagents"; mkdir -p "$SUB"
+mkrun() { # mkrun <id> <agentType> <description> <answer> -- a kb-retrieve transcript shaped like the real ones
+  python3 - "$SUB" "$1" "$2" "$3" "$4" "$TLL" <<'PY'
+import json, sys
+sub, aid, atype, desc, answer, lib = sys.argv[1:7]
+json.dump({"agentType": atype, "description": desc, "finished": True}, open(f"{sub}/agent-{aid}.meta.json", "w"))
+U = {"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 5000, "output_tokens": 5}
+def asst(mid, ts, block):
+    return {"type": "assistant", "agentId": aid, "timestamp": ts,
+            "message": {"id": mid, "role": "assistant", "usage": U, "content": [block]}}
+def result(tid, ts):
+    return {"type": "user", "timestamp": ts, "message": {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": tid, "content": "SCHED-CANARY-FILE text"}]}}
+rd = lambda tid, f: {"type": "tool_use", "id": tid, "name": "Read", "input": {"file_path": f"{lib}/{f}"}}
+recs = [{"type": "user", "timestamp": "2026-10-20T10:00:00.000Z", "message": {"role": "user", "content": "SCHED-CANARY-QUESTION"}},
+        asst("m1", "2026-10-20T10:00:10.000Z", {"type": "text", "text": "Routing."}),
+        asst("m1", "2026-10-20T10:00:10.100Z", rd("t1", "INDEX.md")),           # the same message, logged again
+        result("t1", "2026-10-20T10:00:11.000Z"),
+        asst("m2", "2026-10-20T10:00:20.000Z", rd("t2", "other.md")),
+        result("t2", "2026-10-20T10:00:21.000Z"),
+        asst("m3", "2026-10-20T10:00:40.000Z", rd("t3", "widgets.md")),
+        result("t3", "2026-10-20T10:00:41.000Z"),
+        asst("m4", "2026-10-20T10:00:50.000Z", {"type": "tool_use", "id": "t4", "name": "SubagentHandback",
+                                                  "input": {"message": answer}})]
+with open(f"{sub}/agent-{aid}.jsonl", "w") as f:
+    for r in recs:
+        f.write(json.dumps(r) + "\n")
+PY
+}
+mkrun a1 knowledge-tools:kb-retrieve "widgets question" $'A widget holds up to 12 things. SCHED-CANARY-ANSWER\nSources: widgets.md'
+mkrun a2 general-purpose "something else" $'irrelevant\nSources: widgets.md'
+mkrun a3 knowledge-tools:kb-retrieve "kb-eval s1 Q1" $'A widget holds up to 12 things.\nSources: widgets.md'
+ktel() { HOME="$TLH" "$ENGINE/scripts/kb-telemetry" "$@"; }
+TEL=$(ktel --since 2026-10-19 --until 2026-10-25 --window 7d 2>&1)
+case_run "kb-telemetry: one kb-retrieve run in normal use, per library" 0 "| fx | 1 |" -- printf '%s\n' "$TEL"
+case_run "kb-telemetry: new tokens count each message once (4 x 115, not 5 x 115)" 0 "| 460 |" -- printf '%s\n' "$TEL"
+case_run "kb-telemetry: seconds from the first API response to reading the answer's file" 0 "| 30 |" -- printf '%s\n' "$TEL"
+case_run "kb-telemetry: steps to that read, counting each tool call once" 0 "" -- \
+  bash -c 'printf "%s\n" "$1" | grep "| fx |" | awk -F"|" "{gsub(/ /,\"\",\$7); print \$7}" | grep -qx 3' _ "$TEL"
+case_run "kb-telemetry: an uncited content read is a wasted read; INDEX is protocol overhead" 0 "| 1 | 1 |" -- printf '%s\n' "$TEL"
+case_run "kb-telemetry: no question, answer or file text is printed" 1 "" -- bash -c 'printf "%s\n" "$1" | grep -q SCHED-CANARY' _ "$TEL"
+case_run "kb-telemetry: eval runs are left out of normal use by default" 0 "1 eval run(s) left out" -- printf '%s\n' "$TEL"
+case_run "kb-telemetry: a window with no runs still gets a row" 0 "2026-10-26" -- ktel --since 2026-10-19 --until 2026-11-01 --window 7d
+case_run "kb-telemetry: a malformed --window is a usage error" 2 "" -- ktel --window week
+case_run "schedulable: kb-telemetry from / with a stripped environment" 0 "exit=0" -- \
+  sched env HOME="$TLH" "$ENGINE/scripts/kb-telemetry" --since 2026-10-19 --until 2026-10-25
+
+printf 'outside\n' > "$TL/outside.md"
+mkrun a5 knowledge-tools:kb-retrieve "cites a file outside the libraries" "$(printf 'An answer.\nSources: %s' "$TL/outside.md")"
+case_run "kb-telemetry: a run citing a file outside every library is still measured, by what it read" 0 "| fx | 2 |" -- \
+  ktel --since 2026-10-19 --until 2026-10-25
+rm -f "$SUB"/agent-a5.*
+KES="$TL/sample"
+case_run "kb-eval-sample prepare: draws positive cases, with prompts for fresh kb-retrieve agents" 0 "kb-eval" -- \
+  env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" prepare "$TLL" --seed 7 --n 1 --out "$KES"
+case_run "kb-eval-sample prepare: each prompt forbids opening golden sets and eval folders" 0 "golden" -- cat "$KES/PROMPTS.md"
+case_run "kb-eval-sample prepare: a negative case is not drawn" 1 "" -- grep -q 'deploy target' "$KES/PROMPTS.md"
+case_run "kb-eval-sample prepare: the same seed draws the same cases" 0 "" -- \
+  bash -c 'HOME="$1" "$2" prepare "$3" --seed 7 --n 1 --out "$4/again" >/dev/null && diff -q "$4/sample.tsv" "$4/again/sample.tsv"' _ "$TLH" "$ENGINE/scripts/kb-eval-sample" "$TLL" "$KES"
+SID=$(sed -n 's/^sample_id: //p' "$KES/sample.tsv" | head -1)
+mkrun a4 knowledge-tools:kb-retrieve "kb-eval $SID Q1" $'A widget holds up to 12 things.\nSources: widgets.md'
+case_run "kb-eval-sample grade: finds each case's transcript by its description and grades it" 0 "routing" -- \
+  env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
+case_run "kb-eval-sample grade: writes the mapping both graders read" 0 "" -- grep -q '^Q1|.*agent-a4.jsonl$' "$KES/mapping"
+case_run "kb-eval-sample grade: joins each case with its cost" 0 "460" -- env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
 
 
 # ------------------------------------------------- kb-report: the weekly decisions (#102) ----

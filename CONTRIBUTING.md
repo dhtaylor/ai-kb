@@ -265,6 +265,7 @@ That means:
 | `kb-report` | `kb-report`: the weekly decisions report, outside every library (ADR-0017) | 0 nothing to decide / 1 decisions / 2 |
 | `kb-schedule` | `kb-schedule run`: the weekly job itself; logs exit codes only | 0 ran (findings included) / 2 a step could not run |
 | `kb-backup` | `kb-backup DEST [--keep N] [--restore-test]`: every repository, verified by restore | 0 ok / 1 a FAIL / 2 |
+| `kb-telemetry` | `kb-telemetry [--since --until --window Nd]`: retrieval cost per library, from transcripts | 0 / 2 |
 | `kb-due` | `kb-due … --nudge` | always 0: it is a reminder, and the session hook reads any other exit as a failure |
 
 Each row is a regression case in `tests/run-checks`, run from `/` with a stripped environment
