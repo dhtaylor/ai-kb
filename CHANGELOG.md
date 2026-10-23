@@ -40,6 +40,9 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   adds the nudge condensed to one line, which `kb-session-start` shows as its `systemMessage`, after
   any error message; the full nudge still goes to the model. A failing `kb-due` gives neither.
   ADR-0013 amended.
+- Engine CI: the stamp-honesty step checks a pull request's base..head and no longer breaks after a
+  force-push, whose `before` commit no longer exists; a push with an unresolvable `before` falls back
+  to the merge-base with the default branch. Library CI already handled this.
 - `__pycache__/` is ignored, so an ad-hoc import of an engine script no longer leaves the engine
   checkout looking modified (#80).
 
