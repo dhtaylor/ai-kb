@@ -1553,6 +1553,33 @@ case_run "kb-session-start: an unsupported contract major is named as not served
   "libfuture: unsupported-contract" -- \
   sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 
+# Issue #79: additionalContext reaches the model only, so the person never saw the nudge. A
+# condensed one-line systemMessage shows it to them; the full nudge stays in the context, and an
+# error message (here: libfuture is not served) comes first. One kb-due run gives both.
+sjson() { # sjson <home> <engine> <msg|ctx> [--subagent]
+  (cd "$TMP/session-cwd" && env -i HOME="$1" PATH="$PATH" "$2/scripts/kb-session-start" ${4:-}) |
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("systemMessage","<none>") if sys.argv[1]=="msg" else d["hookSpecificOutput"]["additionalContext"])' "$3"
+}
+export -f sjson; export TMP   # the negative cases call it through bash -c; unexported, they pass vacuously
+# The fixture libraries sit in the engine's own kb/; mark the machine migrated (ADR-0014), or the
+# "not registered yet" message takes the place of the error this exercises.
+git config --file "$SHOME/.config/ai-kb/libraries" kb.migrated true
+case_run "kb-due --summary: the last line is the condensed summary" 0 "" -- \
+  bash -c 'HOME="$1" "$2" --nudge --summary | tail -1 | grep -q "^KB due — "' _ "$SHOME" "$SFX/scripts/kb-due"
+case_run "kb-due --summary: names the library and its recheck count" 0 "to recheck: libdue 1" -- \
+  env HOME="$SHOME" "$SFX/scripts/kb-due" --nudge --summary
+case_run "kb-due --nudge without --summary prints no summary" 1 "" -- \
+  bash -c 'HOME="$1" "$2" --nudge | grep -q "^KB due — "' _ "$SHOME" "$SFX/scripts/kb-due"
+case_run "kb-session-start: the nudge reaches the user as a systemMessage" 0 "KB due — " -- \
+  sjson "$SHOME" "$SFX" msg
+case_run "kb-session-start: an error message comes first, the nudge after it" 0 "" -- \
+  bash -c 'sjson "$@" | grep -q "^1 registered knowledge library not available.*KB due — "' _ "$SHOME" "$SFX" msg
+case_run "kb-session-start: the summary line is not added to the model's context" 1 "" -- \
+  bash -c 'sjson "$@" | grep -q "KB due — "' _ "$SHOME" "$SFX" ctx
+case_run "kb-session-start: the model's context keeps the full nudge" 0 "libdue: 1 fact due for recheck" -- \
+  sjson "$SHOME" "$SFX" ctx
+case_run "kb-session-start --subagent: no systemMessage" 0 "<none>" -- sjson "$SHOME" "$SFX" msg --subagent
+
 # A second fixture engine with nothing due at all: the block must be absent entirely.
 SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
@@ -1566,6 +1593,16 @@ SHOME2="$TMP/session-home2"; HOME="$SHOME2" "$ENGINE/scripts/kb-library" add "$S
 case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
   bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
   "$TMP/session-cwd" "$SHOME2" "$SFX2/scripts/kb-session-start"
+# The fixture library sits in the engine's own kb/, so mark this machine migrated (ADR-0014) or
+# session start rightly says it is unregistered, which is a message of its own.
+git config --file "$SHOME2/.config/ai-kb/libraries" kb.migrated true
+case_run "kb-session-start: nothing due, no systemMessage" 0 "<none>" -- sjson "$SHOME2" "$SFX2" msg
+# A kb-due that crashes yields no message and no partial nudge, never a broken session start.
+SFX3="$TMP/session-fx-crash"; cp -r "$SFX2" "$SFX3"; rm -rf "$SFX3/kb"
+printf '#!/usr/bin/env bash\necho half-written\nexit 1\n' > "$SFX3/scripts/kb-due"
+case_run "kb-session-start: a crashing kb-due gives no systemMessage" 0 "<none>" -- sjson "$SHOME2" "$SFX3" msg
+case_run "kb-session-start: ...and no partial nudge in the context" 1 "" -- \
+  bash -c 'sjson "$@" | grep -q "half-written"' _ "$SHOME2" "$SFX3" ctx
 # Issue #40: --subagent is the same engine context, as a SubagentStart event, without the
 # librarian's nudge (a retrieval subagent has no use for it).
 case_run "kb-session-start --subagent: emits a SubagentStart event" 0 '"hookEventName":"SubagentStart"' -- \
