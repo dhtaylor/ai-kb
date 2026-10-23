@@ -178,6 +178,14 @@ mkdir -p "$TMP/collide/widgets"
 fm inner general > "$TMP/collide/widgets/inner.md"; printf '# Inner\n\ntext\n' >> "$TMP/collide/widgets/inner.md"
 printf -- '- [widgets-folder](widgets/inner.md) — inner\n' >> "$TMP/collide/INDEX.md"
 case_run "file colliding with a folder name" 1 "collides with directory" -- "$ENGINE/scripts/check-kb" "$TMP/collide"
+# Issue #90: folders that are not the knowledge base (NON_KB_DIRS) hold no slugs. Every library
+# is a git repository, so its .git/ holds hooks/, refs/, info/ and the like.
+build_clean "$TMP/collidegit"; git -C "$TMP/collidegit" init -q
+fm hooks general > "$TMP/collidegit/hooks.md"; printf '# Hooks\n\ntext\n' >> "$TMP/collidegit/hooks.md"
+printf -- '- [hooks](hooks.md) — hooks\n' >> "$TMP/collidegit/INDEX.md"
+case_run "a file named like a folder under .git/ does not collide" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/collidegit"
+mkdir -p "$TMP/collidegit/documents/widgets"
+case_run "a file named like a folder under documents/ does not collide" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/collidegit"
 
 build_clean "$TMP/badfm"
 sed -i 's/^domain: fx$/domain fx/' "$TMP/badfm/widgets.md"          # a key with no colon
