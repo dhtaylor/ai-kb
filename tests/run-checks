@@ -841,10 +841,13 @@ case_run "kb_contract: absent passes check-kb (read as 2.0)" 0 "clean" -- \
   "$ENGINE/scripts/check-kb" "$(build_clean "$TMP/kc-none"; echo "$TMP/kc-none")"
 kc_lib "$TMP/kc-quoted" 'kb_contract: "2.0"'
 case_run "kb_contract: a quoted MAJOR.MINOR passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/kc-quoted"
-kc_lib "$TMP/kc-bare" 'kb_contract: 2.0   # built to contract 2.0'
-case_run "kb_contract: a bare MAJOR.MINOR with a comment passes check-kb" 0 "clean" -- \
-  "$ENGINE/scripts/check-kb" "$TMP/kc-bare"
-for bad in 'two' '2' '2.0.1' '2.01' 'v2.0' '""'; do
+kc_lib "$TMP/kc-comment" "kb_contract: '2.0'   # built to contract 2.0"
+case_run "kb_contract: single-quoted with a comment passes check-kb" 0 "clean" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/kc-comment"
+# Quoting is required: a YAML reader turns a bare 2.10 into the number 2.1.
+kc_lib "$TMP/kc-bare" 'kb_contract: 2.0'
+case_run "kb_contract: a bare (unquoted) value fails check-kb" 1 "quote" -- "$ENGINE/scripts/check-kb" "$TMP/kc-bare"
+for bad in '"two"' '"2"' '"2.0.1"' '"2.01"' '"v2.0"' '""' '"2.0'; do
   kc_lib "$TMP/kc-bad" "kb_contract: $bad"
   case_run "kb_contract: '$bad' fails check-kb" 1 "kb_contract" -- "$ENGINE/scripts/check-kb" "$TMP/kc-bad"
 done
