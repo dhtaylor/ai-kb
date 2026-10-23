@@ -2912,6 +2912,48 @@ case_run "contract 2.2 is known, with what it adds" 0 "2.2" -- \
   bash -c 'sed -i "s/^kb_contract: .*/kb_contract: \"2.1\"/" "$1/INDEX.md" && "$2/scripts/check-kb" "$1"' _ "$UA" "$ENGINE"
 
 
+# ------------------------------------------------- check-secrets --redact (#101) ----
+# A filter, not a gate: stdin to stdout, every flagged line replaced by a marker naming only the
+# finding type, a count on stderr, and never the matched text anywhere. lint-allow is a reviewer's
+# escape in committed text; in text being filtered it is just more input, so it exempts nothing.
+RD="$TMP/redact"; mkdir -p "$RD"
+AK=$(printf '%s%s' AKIA ABCDEFGHIJKLMNOP)
+EM="jane.doe@corp""mail.io"
+printf 'keep this line\n%s = %s\nkey = "%s"\nmail %s please\nkeep this too\n' "pass""word" "$CAPPW" "$AK" "$EM" > "$RD/mixed.txt"
+redact() { "$ENGINE/scripts/check-secrets" --redact < "$1"; }
+case_run "--redact: a line with a finding exits 1" 1 "" -- redact "$RD/mixed.txt"
+case_run "--redact: clean lines pass through verbatim" 0 "" -- \
+  bash -c '"$1" --redact < "$2" 2>/dev/null | sed -n "1p;5p" | diff - <(printf "keep this line\nkeep this too\n")' _ "$ENGINE/scripts/check-secrets" "$RD/mixed.txt"
+case_run "--redact: a credential line becomes a marker naming its type" 0 "" -- \
+  bash -c '[ "$("$1" --redact < "$2" 2>/dev/null | sed -n 2p)" = "[redacted: secret]" ]' _ "$ENGINE/scripts/check-secrets" "$RD/mixed.txt"
+case_run "--redact: a personal identifier line is marked as one" 0 "" -- \
+  bash -c '[ "$("$1" --redact < "$2" 2>/dev/null | sed -n 4p)" = "[redacted: personal identifier]" ]' _ "$ENGINE/scripts/check-secrets" "$RD/mixed.txt"
+case_run "--redact: nothing matched reaches stdout or stderr" 1 "" -- \
+  bash -c '"$1" --redact < "$2" 2>&1 | grep -qF -e "$3" -e "$4" -e "$5"' _ "$ENGINE/scripts/check-secrets" "$RD/mixed.txt" "$CAPPW" "$AK" "$EM"
+case_run "--redact: stderr counts what was redacted" 1 "3 line(s) redacted (2 secret, 1 personal identifier)" -- \
+  bash -c '"$1" --redact < "$2" 2>&1 >/dev/null' _ "$ENGINE/scripts/check-secrets" "$RD/mixed.txt"
+case_run "--redact: line count is preserved" 0 "" -- \
+  bash -c '[ "$("$1" --redact < "$2" 2>/dev/null | wc -l)" = 5 ]' _ "$ENGINE/scripts/check-secrets" "$RD/mixed.txt"
+for i in 1 2 3 4 5 6; do printf 'key%s = "%s"\n' "$i" "$AK"; done > "$RD/many.txt"
+case_run "--redact: every hit is redacted, not only the first three" 0 "" -- \
+  bash -c '[ "$("$1" --redact < "$2" 2>/dev/null | grep -cxF "[redacted: secret]")" = 6 ]' _ "$ENGINE/scripts/check-secrets" "$RD/many.txt"
+printf 'Example: %s = %s  lint-allow: documented example\nmail %s lint-allow: ok\n' "pass""word" "$CAPPW" "$EM" > "$RD/allow.txt"
+case_run "--redact: lint-allow in filtered text exempts nothing" 0 "" -- \
+  bash -c '[ "$("$1" --redact < "$2" 2>/dev/null | grep -c "^\[redacted: ")" = 2 ]' _ "$ENGINE/scripts/check-secrets" "$RD/allow.txt"
+printf 'nothing to see\nhere\n' > "$RD/clean.txt"
+case_run "--redact: clean input exits 0 and is passed through unchanged" 0 "" -- \
+  bash -c '"$1" --redact < "$2" 2>/dev/null | cmp -s - "$2"' _ "$ENGINE/scripts/check-secrets" "$RD/clean.txt"
+printf '\xff\xfek\x00e\x00y\x00\n\x00' > "$RD/utf16.txt"
+case_run "--redact: UTF-16 input cannot be scanned: exit 2" 2 "" -- redact "$RD/utf16.txt"
+case_run "--redact: ...and nothing is passed through" 0 "" -- \
+  bash -c '[ -z "$("$1" --redact < "$2" 2>/dev/null)" ]' _ "$ENGINE/scripts/check-secrets" "$RD/utf16.txt"
+printf 'text\0with a NUL\n' > "$RD/binary.txt"
+case_run "--redact: binary input cannot be scanned: exit 2, nothing passed through" 0 "" -- \
+  bash -c '"$1" --redact < "$2" >"$3" 2>/dev/null; [ $? = 2 ] && [ ! -s "$3" ]' _ "$ENGINE/scripts/check-secrets" "$RD/binary.txt" "$RD/out"
+case_run "--redact: a scanner that cannot run is exit 2, not a pass-through" 2 "" -- \
+  bash -c 'd=$(mktemp -d); cp "$1/scripts/check-secrets" "$1/scripts/secret-patterns.txt" "$1/scripts/pii-scan" "$d/"; printf "#!/bin/sh\nexit 3\n" > "$d/secret-entropy"; chmod +x "$d/secret-entropy"; "$d/check-secrets" --redact < "$2" > "$d/out"; rc=$?; [ -s "$d/out" ] && rc=98; exit $rc' _ "$ENGINE" "$RD/mixed.txt"
+
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0
