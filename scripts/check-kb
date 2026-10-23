@@ -429,7 +429,8 @@ def main(root: pathlib.Path) -> int:
             defects.append(f"filename '{name}' appears {count}x — slugs must be unique within a root")
 
     # A folder name is a slug too (CONVENTIONS §5), so a file may not share a directory's name.
-    dir_slugs = {d.name: d for d in root.rglob("*") if d.is_dir()}
+    dir_slugs = {d.name: d for d in root.rglob("*")
+                 if d.is_dir() and not NON_KB_DIRS & set(d.relative_to(root).parts)}
     for f in files:
         if f.name in PATH_ADDRESSED:
             continue

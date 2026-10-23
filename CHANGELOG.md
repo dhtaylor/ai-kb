@@ -55,6 +55,10 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   fails a case with an off-KB read, meaning a Read, or a content-mode Grep result, of a file in no
   registered library. The engine's `CONVENTIONS.md` is exempt. A read in an unregistered library is
   now off-KB too, where before it was only "not in the KB" (#88).
+- `check-kb`'s slug check, which stops a file sharing a folder's name, no longer looks in folders
+  that are not the knowledge base, such as `.git/` and `documents/`. A library could not hold
+  `hooks.md`, `refs.md` or `info.md`, because its own `.git/` has folders by those names. This is an
+  engine fix, not a contract change (#90).
 
 ## v0.2.0 — 2026-10-16
 
