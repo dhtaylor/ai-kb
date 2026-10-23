@@ -50,11 +50,24 @@ jobs:
       # nothing to run against here: the engine holds no knowledge, and kb/ is not in
       # this repository (ADR-0007). What CI can prove is that they still CATCH what
       # they were written to catch — each case below breaks one thing on purpose.
+      # The range is every commit the change brings. On a pull request that is base..head, never
+      # event.before: after a force-push (a rebase), before is a commit that no longer exists, and
+      # the range would not resolve. On a push, an unresolvable or empty before (a force-push, a
+      # new branch) falls back to the merge-base with the default branch, so every new commit is
+      # still checked rather than only the last one.
       - name: Stamp honesty
         run: |
-          before="${{ github.event.before }}"
-          case "$before" in ''|0000000000000000000000000000000000000000) before="${{ github.sha }}~1" ;; esac
-          ./scripts/check-stamps "$before..${{ github.sha }}" || exit 1
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          else
+            before="${{ github.event.before }}"
+            if ! git cat-file -e "${before}^{commit}" 2>/dev/null; then
+              before=$(git merge-base "origin/${{ github.event.repository.default_branch }}" "${{ github.sha }}" 2>/dev/null || true)
+              [ -z "$before" ] || [ "$before" = "${{ github.sha }}" ] && before="${{ github.sha }}~1"
+            fi
+            range="$before..${{ github.sha }}"
+          fi
+          ./scripts/check-stamps "$range" || exit 1
 
       # Phase 4 step 6 (§5A "Never automated"): a PR that deletes/renames-away a
       # fact file, removes a CONFLICTED marker, promotes a scope, or touches
