@@ -47,11 +47,21 @@ def load_golden(lib: pathlib.Path):
             if cur: recs.append(cur)
             cur = {"case": m.group(1)}
         elif cur is not None:
-            kv = re.match(r'^(question|expected_file|expected_excerpt|alt_excerpt):\s*"?(.*?)"?\s*$', s)
-            if kv and kv.group(1) == "alt_excerpt": cur.setdefault("alt_excerpt", []).append(kv.group(2))
-            elif kv: cur[kv.group(1)] = kv.group(2)
+            kv = check_golden().FIELD.match(s)
+            if kv and kv.group(1) == "alt_excerpt": cur.setdefault("alt_excerpt", []).append(check_golden().unquote(kv.group(2)))
+            elif kv: cur[kv.group(1)] = check_golden().unquote(kv.group(2))
     if cur: recs.append(cur)
     return recs
+
+
+@functools.lru_cache(maxsize=None)
+def check_golden():
+    """check-golden, imported: its unquote() is the one reading of a record value (#111)."""
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader("check_golden", str(pathlib.Path(__file__).resolve().parent / "check-golden"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(mod)
+    return mod
 
 
 @functools.lru_cache(maxsize=None)

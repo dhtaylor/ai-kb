@@ -22,7 +22,7 @@ fire alarm.
 Usage: check-golden <library-root>
 Exit 0 clean, 1 on any defect.
 """
-import importlib.machinery, importlib.util, pathlib, re, sys
+import importlib.machinery, importlib.util, json, pathlib, re, sys
 
 VALID_CASES = {"positive", "negative", "unresolved", "cross-root", "uncorroborated"}
 DISPUTED = "disputed — not served"   # the refusal of a CONFLICTED fact (CONVENTIONS §10)
@@ -42,6 +42,23 @@ def load_script(name):
     return mod
 
 
+FIELD = re.compile(r"^(question|expected_file|expected_excerpt|alt_excerpt):\s*(.*?)\s*$")
+
+
+def unquote(v: str) -> str:
+    """A record value read the way YAML reads a scalar (#111). '...' loses its quotes and turns ''
+    into '; "..." loses its quotes and reads its escapes; a plain value is kept whole, a quote of
+    its own included. grade-eval imports this, so the two readers cannot drift apart again."""
+    if len(v) >= 2 and v[0] == v[-1] == "'":
+        return v[1:-1].replace("''", "'")
+    if len(v) >= 2 and v[0] == v[-1] == '"':
+        try:
+            return json.loads(v)
+        except ValueError:      # a YAML escape JSON lacks: keep the text between the quotes
+            return v[1:-1]
+    return v
+
+
 def parse(text):
     """Records are '- case: x' blocks with key: value lines under them."""
     records, cur = [], None
@@ -54,11 +71,11 @@ def parse(text):
             cur = {"case": m.group(1), "_line": raw}
             continue
         if cur is not None:
-            kv = re.match(r'^(question|expected_file|expected_excerpt|alt_excerpt):\s*"?(.*?)"?\s*$', line)
+            kv = FIELD.match(line)
             if kv and kv.group(1) == "alt_excerpt":     # repeatable: a second sentence stating the same fact
-                cur.setdefault("alt_excerpt", []).append(kv.group(2))
+                cur.setdefault("alt_excerpt", []).append(unquote(kv.group(2)))
             elif kv:
-                cur[kv.group(1)] = kv.group(2)
+                cur[kv.group(1)] = unquote(kv.group(2))
     if cur:
         records.append(cur)
     return records
