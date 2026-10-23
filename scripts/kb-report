@@ -1,0 +1,174 @@
+#!/usr/bin/env python3
+"""kb-report — the weekly report of what needs a person's decision, and nothing else (ADR-0017, #102).
+
+Keeping libraries current leaves its results in several places: review packets (kb-prepare), each
+library's needs-attention.md (kb-verify, kb-sources, kb-watch, kb-audit), and the contract version.
+Reading all of them is a chore. This reads them and writes one file a week, outside every library,
+listing per library only what a person has to decide:
+
+- a review packet waiting, and how to act on it;
+- each open queue item: its category, and where (file § section, source stub or watched source);
+- rechecks that are due but marked `Recheck (attended):`, which only a person can run;
+- a sweep due, or notes awaiting distillation, that no packet covers yet;
+- a library behind the contract, or on one this engine cannot serve.
+
+A library with nothing to decide gets no section. When no library has anything, the report says so
+in one line. Either way the file is written, so a quiet week can be told from a week the job did not
+run. It never holds a fact's, a source's or a packet's text: paths, counts, headings and ids only.
+
+The report is <out>/<ISO year>-W<ISO week>.md; a rerun in the same week replaces it. The default
+<out> is $KB_REPORTS, or ${XDG_STATE_HOME:-~/.local/state}/ai-kb/reports. `kb-due --nudge` names the
+latest report while it is under eight days old and lists decisions.
+
+Usage: kb-report [tree ...] [--out DIR]
+  With no tree, every registered library. Schedulable (#95): exit 0 nothing to decide, 1 decisions
+  written, 2 could not run.
+"""
+import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
+
+SCRIPTS = pathlib.Path(__file__).resolve().parent
+
+
+def load_module(name: str, filename: str):
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(name, str(SCRIPTS / filename))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def reports_dir(out=None) -> pathlib.Path:
+    if out:
+        return pathlib.Path(out)
+    if os.environ.get("KB_REPORTS"):
+        return pathlib.Path(os.environ["KB_REPORTS"])
+    state = os.environ.get("XDG_STATE_HOME") or str(pathlib.Path.home() / ".local" / "state")
+    return pathlib.Path(state) / "ai-kb" / "reports"
+
+
+def latest(out=None):
+    """(path, decisions, age in days) of the newest report, or None."""
+    root = reports_dir(out)
+    found = sorted(root.glob("*-W*.md")) if root.is_dir() else []
+    if not found:
+        return None
+    path = found[-1]
+    m = re.search(r"^decisions: (\d+)$", path.read_text(errors="replace"), re.M)
+    age = (datetime.datetime.now().timestamp() - path.stat().st_mtime) / 86400
+    return path, int(m.group(1)) if m else 0, age
+
+
+def where(rec: dict) -> str:
+    """A queue record's location, from its structural fields only, never its values."""
+    if rec.get("file"):
+        return rec["file"] + (f" § {rec['section']}" if rec.get("section") else "")
+    for key in ("stub", "source_id"):
+        if rec.get(key):
+            return rec[key] + (f" ({rec['field']})" if rec.get("field") not in (None, "", "-") else "")
+    return "(no location recorded)"
+
+
+def decisions_for(tree: pathlib.Path, mods: dict, packets: list) -> list:
+    kb_due, kb_verify, kb_watch, check_kb = mods["kb_due"], mods["kb_verify"], mods["kb_watch"], mods["check_kb"]
+    root, out = tree.resolve(), []
+    mine = [(p, h) for p, h in packets if h.get("library_path") == str(root)]
+    for p, h in mine:
+        out.append(f"Review packet: {h.get('packet', '?')}, prepared {h.get('prepared', '?')[:10]}. "
+                   f"Ask a session to review it (`kb-apply show {p}`).")
+    covered = {h.get("packet") for _, h in mine}
+
+    qpath = root / "needs-attention.md"
+    if qpath.is_file():
+        for r in kb_watch.parse_records(qpath.read_text(errors="replace")):
+            if r.get("status") == "open":
+                out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
+                           f"Triage it in needs-attention.md.")
+
+    horizon, _budget = kb_verify.horizon_and_budget(root)
+    if horizon is not None:
+        due, _found, _cmd = kb_verify.due_sections(root, horizon, kb_verify.agent_ttl(root, horizon))
+        attended = [s for s in due if s.get("attended")]
+        if attended:
+            out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
+                       f"`kb-verify {root} --yes`.")
+
+    st = kb_due.status(root)
+    if st and st["due"] and "kb-audit" not in covered:
+        out.append("Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule.")
+    notes = kb_due.episodic_count(root)
+    if notes and "kb-distill" not in covered:
+        out.append(f"{notes} note(s) awaiting distillation and no packet drafted: run kb-distill.")
+
+    try:
+        state, v, newest, _newer = check_kb.contract_status(check_kb.declared_contract(root))
+    except ValueError:
+        state = "malformed"
+    if state == "behind":
+        out.append(f"Built to contract {check_kb.fmt(v)}; this engine knows {check_kb.fmt(newest)}. "
+                   f"Decide whether to adopt it (CONVENTIONS §14).")
+    elif state in ("unsupported", "malformed"):
+        out.append("Its contract version cannot be served by this engine; check-kb says why.")
+    return out
+
+
+def main(argv) -> int:
+    trees, out, i = [], None, 0
+    while i < len(argv):
+        if argv[i] == "--out":
+            if i + 1 >= len(argv):
+                print("kb-report: --out needs a directory", file=sys.stderr); return 2
+            out = argv[i + 1]; i += 2; continue
+        if argv[i].startswith("--"):
+            print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
+        trees.append(pathlib.Path(argv[i])); i += 1
+    try:
+        if not trees:
+            trees = list(load_module("kb_libraries", "kb-libraries").installed().values())
+        mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
+                "kb_watch": load_module("kb_watch", "kb-watch"), "check_kb": load_module("check_kb", "check-kb")}
+        packets = load_module("kb_apply", "kb-apply").pending()
+    except Exception as e:
+        print(f"kb-report: could not load the engine's readers ({type(e).__name__})", file=sys.stderr)
+        return 2
+
+    dest_dir = reports_dir(out).resolve()
+    for t in trees:
+        if dest_dir == t.resolve() or t.resolve() in dest_dir.parents:
+            print(f"kb-report: the report must be kept outside every library, not in {dest_dir}", file=sys.stderr)
+            return 2
+
+    sections, total = [], 0
+    for t in trees:
+        if not (t / "INDEX.md").is_file():
+            continue
+        try:
+            items = decisions_for(t, mods, packets)
+        except Exception as e:
+            print(f"kb-report: {t}: could not be read ({type(e).__name__})", file=sys.stderr)
+            return 2
+        if items:
+            total += len(items)
+            sections.append(f"## {mods['kb_due'].label(t)}\n\n" + "\n".join(f"- {x}" for x in items) + "\n")
+
+    now = datetime.datetime.now(datetime.timezone.utc)
+    year, week, _ = now.date().isocalendar()
+    name = f"{year}-W{week:02d}"
+    text = (f"---\nreport: kb-decisions\nweek: {name}\ngenerated: {now.strftime('%Y-%m-%dT%H:%M:%SZ')}\n"
+            f"decisions: {total}\n---\n\n# Knowledge base decisions, {name}\n\n")
+    if total:
+        text += (f"{total} decision(s) waiting across {len(sections)} library(ies). Paths, counts and "
+                 f"headings only: open the file or packet named to see the text.\n\n" + "\n".join(sections))
+    else:
+        text += "Nothing needs a decision this week.\n"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{name}.md"
+    tmp = dest.with_name(f".{dest.name}.tmp")
+    tmp.write_text(text)
+    os.replace(tmp, dest)
+    print(f"kb-report: {total} decision(s) waiting; report written to {dest}")
+    return 1 if total else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

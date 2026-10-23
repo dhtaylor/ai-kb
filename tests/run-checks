@@ -3066,6 +3066,49 @@ case_run "kb-audit describes resuming from a review packet" 0 "" -- \
   grep -q '^## Resuming from a review packet' "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
 
 
+# ------------------------------------------------- kb-report: the weekly decisions (#102) ----
+# Done means a weekly report of decisions (ADR-0017): one dated file outside every library, listing
+# only what needs a person, per library. Never a fact's or source's text: paths, counts, headings, ids.
+RR="$TMP/report"; RL="$RR/kb/fx"; RC="$RR/kb/calm"
+build_clean "$RL"; build_clean "$RC"
+sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$RL/widgets.md"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$RL/widgets.md"
+printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; false\n' >> "$RL/widgets.md"
+printf '\n## Live\n\nA live claim.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck (attended): true\n' >> "$RL/widgets.md"
+sed -i 's/^kb_contract: .*$/kb_contract: "2.1"/' "$RL/INDEX.md"
+for d in "$RL" "$RC"; do sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$d/INDEX.md"; done
+sed -i "s/^Verified: .*\$/Verified: $(date +%F) · by: agent · method: manual/" "$RC/widgets.md"
+"$ENGINE/scripts/kb-verify" "$RL" --yes --unattended >/dev/null 2>&1
+for d in "$RL" "$RC"; do git -C "$d" add -A && git -C "$d" -c user.email=t@t -c user.name=t commit -qm init; done
+export KB_PACKETS="$RR/packets"; mkdir -p "$KB_PACKETS/fx"
+printf -- '---\npacket: kb-distill\nlibrary: fx\nlibrary_path: %s\nlibrary_head: %s\nprepared: 2026-10-20T00:00:00Z\nstatus: pending\n---\n\nSCHED-CANARY-PACKET\n' \
+  "$(cd "$RL" && pwd -P)" "$(git -C "$RL" rev-parse HEAD)" > "$KB_PACKETS/fx/2026-10-20-kb-distill.md"
+RO="$RR/reports"; WEEK=$(date +%G-W%V)
+case_run "kb-report: decisions waiting exits 1 and names the report" 1 "$RO/$WEEK.md" -- \
+  "$ENGINE/scripts/kb-report" "$RL" "$RC" --out "$RO"
+case_run "kb-report: one file, named for the ISO week" 0 "" -- test -f "$RO/$WEEK.md"
+for want in "## fx" "Review packet: kb-distill" "kb-apply" "stale-recheck" "widgets.md § Limits" \
+            "1 attended recheck" "kb-verify" "contract 2.1"; do
+  case_run "kb-report: the report holds '$want'" 0 "$want" -- cat "$RO/$WEEK.md"
+done
+case_run "kb-report: a library with nothing to decide gets no section" 1 "" -- grep -q '^## calm' "$RO/$WEEK.md"
+case_run "kb-report: no fact, source or packet text, in the report or its output" 1 "" -- \
+  bash -c 'grep -q SCHED-CANARY "$1" || "$2" "$3" --out "$4" 2>&1 | grep -q SCHED-CANARY' _ "$RO/$WEEK.md" "$ENGINE/scripts/kb-report" "$RL" "$RR/r2"
+case_run "kb-report: a rerun in the same week replaces the file" 0 "" -- \
+  bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; [ "$(ls "$3" | wc -l)" = 1 ]' _ "$ENGINE/scripts/kb-report" "$RL" "$RO"
+case_run "kb-report: nothing to decide exits 0" 0 "" -- "$ENGINE/scripts/kb-report" "$RC" --out "$RR/calm-out"
+case_run "kb-report: ...and says so in one line" 0 "Nothing needs a decision" -- cat "$RR/calm-out/$WEEK.md"
+case_run "kb-report: a report directory inside a library is refused" 2 "outside" -- \
+  "$ENGINE/scripts/kb-report" "$RL" --out "$RL/reports"
+case_run "schedulable: kb-report prints no content" 1 "exit=1" -- \
+  sched env KB_PACKETS="$KB_PACKETS" "$ENGINE/scripts/kb-report" "$RL" --out "$RR/r3"
+
+"$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
+case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
+  "$ENGINE/scripts/kb-due" "$RC" --nudge
+unset KB_PACKETS
+
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0
