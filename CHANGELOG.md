@@ -103,6 +103,14 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   or notes that no packet covers, and a contract behind or unsupported. A quiet week is one line. It
   holds paths, counts, headings and ids, never a fact's, source's or packet's text. `kb-due --nudge`
   names the latest report while it is under eight days old and lists decisions.
+- `kb-schedule install | status | remove | run` (#103): the opt-in weekly job. `install` writes a
+  systemd user timer (Mondays 07:00, `Persistent=true` so a missed week runs at the next start), or a
+  crontab line where there is no systemd. `remove` leaves no trace. `run`, for every registered
+  library:
+  - runs `kb-verify --yes --unattended` and `kb-sources --yes`;
+  - with `--prepare`, also runs `kb-prepare distill` and `kb-prepare audit` under a dollar cap;
+  - then `check-xlinks --installed`, `kb-watch` on the chosen allowlist, and `kb-report`.
+  It holds a lock, so runs never overlap, and logs only each step's exit code. It never edits a fact.
 
 ## v0.2.0 — 2026-10-16
 
