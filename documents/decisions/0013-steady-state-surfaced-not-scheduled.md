@@ -1,6 +1,12 @@
 # ADR-0013: Steady state is surfaced when due, not run unattended
 
 - **Status:** Accepted, amended 2026-10-16 and 2026-10-23 (see *What changed* below)
+
+> **Amended 2026-10-23 by [ADR-0017](0017-unattended-preparation-attended-decisions.md).** Declining
+> every unattended run is superseded. An opt-in weekly schedule may run detection and the preparation
+> half of `kb-distill` and `kb-audit`, producing review packets that a person decides on, and a weekly
+> report of the decisions waiting. Fact edits stay attended. The nudge, the queue routing, the offline
+> Watcher and the capture guide below stand.
 - **Date:** 2026-10-01
 - **Deciders:** Dandy Taylor
 

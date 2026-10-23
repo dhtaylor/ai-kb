@@ -64,6 +64,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   used together are not a category, and `check-scope`, which checks only the `vendors:` list's
   form, passes them. `kb-create-domain` asks it before writing `vendors:`; `kb-audit` files a
   scope misfiling on the root `INDEX.md` when a vendor fails it (#91).
+- ADR-0017 amends ADR-0013: libraries may be kept current on an opt-in weekly schedule. The schedule
+  runs detection and the preparation half of `kb-distill` and `kb-audit`, which drafts review packets
+  in a headless run that has only read tools. A person decides each packet, and only then is a fact
+  edited. A weekly report lists the decisions waiting. Decision only: the implementation is #95, #96,
+  #97, #99–#103 (#98).
 
 ## v0.2.0 — 2026-10-16
 
