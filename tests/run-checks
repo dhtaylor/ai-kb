@@ -1159,6 +1159,9 @@ class H(http.server.BaseHTTPRequestHandler):
         mishead = {"/head400": 400, "/head404": 404, "/head500": 500, "/busy": 429}
         if self.path in mishead:
             st = mishead[self.path] if method == "HEAD" else 200
+        # A site that refuses the tool's own User-Agent but serves any other client (issue #117).
+        if self.path == "/uablock":
+            st = 403 if self.headers.get("User-Agent", "").startswith("kb-sources") else 200
         self.send_response(st); self.send_header("Content-Length", "0"); self.end_headers()
     def do_HEAD(self): self._do("HEAD")
     def do_GET(self): self._do("GET")
@@ -1310,7 +1313,7 @@ mkdir -p "$TMP/ksrc-head/sources"
 fm fx-sources general > "$TMP/ksrc-head/sources/INDEX.md"
 printf '# Sources\n' >> "$TMP/ksrc-head/sources/INDEX.md"
 printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc-head/INDEX.md"
-for s in head400 head404 head500 busy; do
+for s in head400 head404 head500 busy uablock; do
   fm "s-$s" general > "$TMP/ksrc-head/sources/s-$s.md"
   printf '# Source: s-%s\n\n- **URL:** http://127.0.0.1:%s/%s\n' "$s" "$SP" "$s" >> "$TMP/ksrc-head/sources/s-$s.md"
   printf -- '- [s-%s](s-%s.md) — stub\n' "$s" "$s" >> "$TMP/ksrc-head/sources/INDEX.md"
@@ -1327,6 +1330,15 @@ case_run "kb-sources: HEAD 429 queued as source-unreachable" 0 "" -- \
   bash -c 'grep -B2 -A8 "stub: \"sources/s-busy.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$KHQ"
 case_run "kb-sources: HEAD 429 sends no GET" 1 "" -- grep -qxF 'GET /busy' "$SRV/access.log"
 case_run "kb-sources: HEAD 400 was retried with GET" 0 "" -- grep -qxF 'GET /head400' "$SRV/access.log"
+# Issue #117: dni.gov answered 403 to kb-sources' own User-Agent and 200 to every other client, so
+# a live source was queued every week. A 403 to the tool's User-Agent is retried once as a plain
+# client, and that answer decides. A server that refuses every client is still unreachable.
+case_run "kb-sources: a 403 only to the tool's User-Agent is alive, not queued (#117)" 1 "" -- \
+  grep -qF 'sources/s-uablock.md' "$KHQ"
+case_run "kb-sources: ...after exactly one retry without that User-Agent" 0 "" -- \
+  bash -c '[ "$(grep -cxF "GET /uablock" "$1")" = 2 ]' _ "$SRV/access.log"
+case_run "kb-sources: a 404 is not retried as a plain client" 0 "" -- \
+  bash -c '[ "$(grep -cxF "GET /gone" "$1")" -le 1 ]' _ "$SRV/access.log"
 
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"

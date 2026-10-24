@@ -28,7 +28,9 @@ THREE RULES, and they are the design:
 
 CLASSIFICATION (one HEAD per unique URL; GET if HEAD answers any HTTP error but 429, and
 GET's answer decides, since some servers mishandle HEAD (issue #74); redirects followed;
-10s timeout; User-Agent names the tool):
+10s timeout; User-Agent names the tool, and a 403 to it is retried once with Python's
+default User-Agent, whose answer decides, because some servers refuse a client that names
+itself (issue #117)):
 
     alive         2xx after redirects. A redirect to a different final URL is printed as a
                   note: the source moved, and the stub may want a new address. Not a failure.
@@ -145,8 +147,8 @@ def fetch(url):
     """(class, detail, final_url). The network module is imported here and nowhere else, so a
     run without --yes cannot reach it."""
     import urllib.request, urllib.error
-    def attempt(method):
-        req = urllib.request.Request(url, method=method, headers={"User-Agent": UA})
+    def attempt(method, ua=UA):
+        req = urllib.request.Request(url, method=method, headers={"User-Agent": ua} if ua else {})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             return r.status, r.geturl()
     try:
@@ -155,7 +157,15 @@ def fetch(url):
         except urllib.error.HTTPError as e:
             if e.code == 429:       # asked to back off: a second request would be rude
                 raise
-            code, final = attempt("GET")
+            try:
+                code, final = attempt("GET")
+            except urllib.error.HTTPError as e2:
+                # Some servers refuse a client that names itself, and serve any other (issue #117:
+                # dni.gov). One more GET with Python's own User-Agent decides; nothing impersonates
+                # a browser, and a server that refuses every client stays unreachable.
+                if e2.code != 403:
+                    raise
+                code, final = attempt("GET", ua=None)
     except urllib.error.HTTPError as e:
         code, final = e.code, url
         if code in (404, 410):
