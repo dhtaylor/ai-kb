@@ -146,8 +146,10 @@ def install(opts: dict) -> int:
         r = subprocess.run(["loginctl", "show-user", os.environ.get("USER", ""), "-p", "Linger"],
                            capture_output=True, text=True)
         if "Linger=yes" not in r.stdout:
-            say("note: without lingering, the timer runs only while you are logged in, and a missed "
-                "week runs at your next login. `loginctl enable-linger` lets it run while you are not.")
+            say('note: without lingering, the timer runs only while you are logged in, and a missed '
+                'week runs at your next login. `loginctl enable-linger "$USER"` lets it run while you '
+                'are not. (Under WSL the distribution itself still stops when idle; a missed week then '
+                'runs at its next start.)')
     return 0
 
 
