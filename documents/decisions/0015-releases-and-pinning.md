@@ -10,6 +10,9 @@
 > contract instead of coordinating pins. "Library CI pins the engine to a release tag" is superseded:
 > pinning is the library owner's choice. A library release names the contract version it conforms to,
 > not an engine version. The engine's semantic versioning below stands.
+>
+> **Amended 2026-10-23 by the owner:** a release has a code freeze two days before it. See *A release
+> is preceded by a two-day freeze* below.
 
 ## Context and problem statement
 
@@ -38,6 +41,16 @@ called it moot while there was no second consumer. A public release creates one.
 - The first release is **v0.2.0**, not v0.1.0: `0.1.0` has been in the manifests and the README all
   along, naming every unreleased state of the engine since the first commit. Tagging a release with the
   same number would give two different things one name.
+
+### A release is preceded by a two-day freeze
+
+- From two days before a release date, `main` takes release work only: the CHANGELOG's release
+  section, version numbers, the fresh-clone check and the tag. No code, check or contract change
+  merges in that window. For a release on the 31st, the freeze begins on the 29th.
+- A defect the release work finds in that window is the owner's call: fix it and move the release
+  date, or release without the fix and fix it in the next release.
+- The freeze exists so that what is tagged is what was checked: the fresh-clone check and the notes
+  describe a `main` that no longer moves under them.
 
 ### A library release records the engine it was verified against
 

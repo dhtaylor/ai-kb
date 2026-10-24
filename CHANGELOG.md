@@ -9,6 +9,10 @@ engine release it was last verified against in its own release notes.
 Changes on `main` since v0.2.0. A contract or check change, so the next release is a minor bump
 (ADR-0015).
 
+- ADR-0015 amended: a release has a two-day code freeze. From two days before the release date,
+  `main` takes release work only (the release section here, version numbers, the fresh-clone check
+  and the tag). A defect found in that window is the owner's call: move the date, or ship and fix it
+  in the next release.
 - `sources/` holds only `.md` citation stubs, and raw artifacts are archived under `documents/`: now
   stated in CONVENTIONS §6, with the missing case for a local file or export, and in CONTRIBUTING.
   `check-kb` fails a non-`.md` file under `sources/` (#71).
