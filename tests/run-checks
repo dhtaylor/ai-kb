@@ -3312,6 +3312,9 @@ case_run "kb-schedule install (cron): the user's own lines survive" 0 "" -- grep
 case_run "kb-schedule remove (cron): removes only its own line" 0 "" -- \
   bash -c 'ks() { :; }; HOME="$1" KS_LOG="$2/log" KS_CRON="$2/cron" KB_CRONTAB="$2/bin/crontab" "$3/scripts/kb-schedule" remove >/dev/null && ! grep -q ai-kb-schedule "$2/cron" && grep -qx "0 3 \* \* \* /usr/bin/backup" "$2/cron"' _ "$KSH" "$KS" "$ENGINE"
 case_run "kb-schedule: an unknown backend is a usage error" 2 "" -- ksched install --backend launchd
+# The bare `loginctl enable-linger` fails where the shell has no login session (WSL: "No such
+# device or address"); naming the user works there and everywhere else.
+case_run "kb-schedule: the lingering hint names the user" 0 "" -- grep -qF 'loginctl enable-linger "$USER"' "$ENGINE/scripts/kb-schedule"
 
 # run: every step, every registered library, in order, logged by exit code only; then the report.
 KR="$KS/run"; mkdir -p "$KR/home"
