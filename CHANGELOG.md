@@ -139,6 +139,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   described `kb-eval <sample> Q<n>`. `grade` finds those transcripts, writes the mapping, runs
   `grade-routing` and `grade-eval --transcripts`, and joins each case with its cost. Both are
   read-only and print paths and counts only.
+- `kb-sources` retries a 403 to its own User-Agent once with Python's default User-Agent, and that
+  answer decides (#117). dni.gov served ICD-203 and ICD-206 to every client but refused one that
+  named itself `kb-sources`, so two live sources were queued as unreachable on the first scheduled
+  run. Nothing impersonates a browser, and a server that refuses every client (science.org behind
+  a DOI) is still unreachable.
 
 ## v0.2.0 — 2026-10-16
 
