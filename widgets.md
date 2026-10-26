@@ -3,7 +3,7 @@ name: widgets
 description: a test fixture.
 memory_type: reference
 domain: fx
-scope: product:acme
+scope: general  # promoted
 metadata:
   type: topic
   node_type: memory
