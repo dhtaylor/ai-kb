@@ -409,6 +409,14 @@ def main(root: pathlib.Path) -> int:
             except ValueError as e:
                 defects.append(f"{f}: {e}")
 
+        if f == root / "INDEX.md":
+            # "Not covered here:" (§3, contract 2.3) is optional; when present it must say something.
+            for line in block[2].split("\n"):
+                if re.match(r"^[\s*_>-]*Not covered here\b", line, re.I) and \
+                        not re.match(r"^[\s*_>-]*Not covered here[\s*_]*:[\s*_]*[^\s*_]", line, re.I):
+                    rule((2, 3), f"{f}: 'Not covered here' line names nothing — write "
+                                 f"'Not covered here: <topics> — <library>' or remove it (§3)")
+
         if f == root / "INDEX.md" and "kb_contract" in fm:
             try:
                 raw = re.search(r"^kb_contract:[ \t]*(.*?)[ \t]*$", block[1], re.M)

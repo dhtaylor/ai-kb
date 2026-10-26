@@ -32,7 +32,13 @@ job.
 
 ## The contract
 
-1. **Start at a router, never at a guess.** Load the library's `INDEX.md`. Read the hooks. Pick the
+1. **Start at a router, never at a guess.** Choose the library first. When two or more listed
+   libraries could plausibly hold the answer, load each one's root `INDEX.md` and read its
+   `Not covered here:` line (CONVENTIONS §3), if it has one. Do not descend into a library whose
+   line excludes the question's topic; go to the library it names instead, if that one is in your
+   list. A library with no such line is not excluded by that: judge it by its hooks, as before.
+   This only picks among libraries; it does not widen the search to every library the line names.
+   Then load the chosen library's `INDEX.md`. Read the hooks. Pick the
    one child whose hook fits the question. If that child is itself an index, repeat. Descend one hop
    at a time and load the minimum that answers the question.
 

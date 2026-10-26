@@ -69,7 +69,7 @@ scope: repo:${name}
 freshness_horizon: 14d
 verifier_budget: 5
 sweep_interval: 14d
-kb_contract: "2.2"
+kb_contract: "2.3"
 last_swept: never
 metadata:
   type: index

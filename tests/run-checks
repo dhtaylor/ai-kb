@@ -52,7 +52,7 @@ build_clean() {
   mkdir -p "$d"
   # Declares the newest contract (CONVENTIONS §14), so a fixture is not "behind" (ADR-0016).
   # Publishing a new contract version means raising this line.
-  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.2"\nlast_swept: never\n' > "$d/INDEX.md"
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.3"\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
   sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
@@ -1907,7 +1907,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.2"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.3"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \
@@ -3025,6 +3025,34 @@ case_run "an indented Recheck (attended): fails check-kb like any indented stamp
   "$ENGINE/scripts/check-kb" "$TMP/indentattended"
 case_run "contract 2.2 is known, with what it adds" 0 "2.2" -- \
   bash -c 'sed -i "s/^kb_contract: .*/kb_contract: \"2.1\"/" "$1/INDEX.md" && "$2/scripts/check-kb" "$1"' _ "$UA" "$ENGINE"
+
+# "Not covered here:" (#123, contract 2.3): an optional root INDEX.md line naming what a library
+# does not hold. Absent is valid; present it must say something; its [[lib:slug]] resolves as any
+# cross-root link does.
+NC="$TMP/notcovered"; build_clean "$NC"
+printf 'Not covered here: gadgets — held by [[nc-peer:widgets]]\n' >> "$NC/INDEX.md"
+case_run "Not covered here: a line with content passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$NC"
+NE="$TMP/notcovered-empty"; build_clean "$NE"
+printf '**Not covered here:**\n' >> "$NE/INDEX.md"
+case_run "Not covered here: an empty line fails check-kb from contract 2.3" 1 "names nothing" -- \
+  "$ENGINE/scripts/check-kb" "$NE"
+NO="$TMP/notcovered-old"; build_clean "$NO"; sed -i 's/^kb_contract: .*/kb_contract: "2.2"/' "$NO/INDEX.md"
+printf 'Not covered here:\n' >> "$NO/INDEX.md"
+case_run "Not covered here: an empty line is only a warning below 2.3" 0 "fails from contract 2.3" -- \
+  "$ENGINE/scripts/check-kb" "$NO"
+mkdir -p "$TMP/kbnc"; build_clean "$TMP/kbnc/alpha"; build_clean "$TMP/kbnc/nc-peer"
+printf 'Not covered here: gadgets — held by [[nc-peer:widgets]]\n' >> "$TMP/kbnc/alpha/INDEX.md"
+case_run "Not covered here: a live [[library:slug]] resolves under check-xlinks" 0 "0 dead" -- \
+  "$ENGINE/scripts/check-xlinks" "$TMP/kbnc"
+printf 'Not covered here: gadgets — held by [[nc-peer:no-such-thing]]\n' >> "$TMP/kbnc/alpha/INDEX.md"
+case_run "Not covered here: a dead [[library:slug]] fails check-xlinks" 1 "has no slug" -- \
+  "$ENGINE/scripts/check-xlinks" "$TMP/kbnc"
+
+# kb-retrieve reads the line when choosing a library, without fanning out (#123; fan-out is #125).
+case_run "kb-retrieve reads each candidate's Not covered here line" 0 "" -- \
+  grep -q 'Not covered here' "$ENGINE/plugins/knowledge-tools/agents/kb-retrieve.md"
+case_run "kb-create-domain prompts for the Not covered here line" 0 "" -- \
+  grep -q 'Not covered here' "$ENGINE/plugins/knowledge-tools/skills/kb-create-domain/SKILL.md"
 
 
 # ------------------------------------------------- check-secrets --redact (#101) ----

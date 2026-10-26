@@ -14,7 +14,7 @@ keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, proven
 ---
 # Knowledge Conventions
 
-**Contract version 2.0** (§14). A library declares the version it was built to in its root `INDEX.md`
+**Contract version 2.3** (§14). A library declares the version it was built to in its root `INDEX.md`
 (§3); what each version adds is in §14. Supersedes [knowledge-conventions-v1](documents/legacy/knowledge-conventions-v1.md) (the inherited work-system contract, preserved at
 `documents/legacy/knowledge-conventions-v1.md`). v1 governed a single-root, annotation-only KB; v2 folds in
 the scope tiers, cross-root resolution, currency stamping, and retrieval contract required by the
@@ -222,6 +222,18 @@ last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `neve
                               # It lives here, not in needs-attention.md, because a CLEAN sweep
                               # writes no queue file and would erase the evidence that it ran.
 ```
+
+A library's root `INDEX.md` may also carry one body line saying what the library does **not** hold,
+so a reader choosing between neighbouring libraries can rule one out (contract 2.3):
+
+```
+Not covered here: <neighbouring topics>, <more> — held by [[other-lib:slug]] or <library name>
+```
+
+It is routing signal, not a stored fact: name topics, never state facts about them. Name the library
+that holds a topic where one is registered; a topic no library holds is named without one. It is
+optional, and `check-kb` checks only that the line has content after the colon. The `[[library:slug]]`
+form resolves like any cross-root link (§5, `check-xlinks`).
 
 Cross-cutting material that isn't a routing decision lives in its own child doc, listed like any other
 record: unresolved items in `<domain>-open-questions.md`, the contradiction register in
@@ -786,3 +798,13 @@ credentials (§7).
 
 Migrating from 2.1: mark any assertion that needs a person `Recheck (attended):`, and declare
 `kb_contract: "2.2"`. A library with no such assertion changes only the declaration.
+
+### 2.3
+
+A root `INDEX.md` may carry a `Not covered here:` body line naming the neighbouring topics the
+library does not hold and, where known, the library that does (§3). `kb-retrieve` reads it to rule
+out a library whose line excludes the question. `check-kb` fails a line with nothing after the
+colon, from this version.
+
+Migrating from 2.2: nothing is required. To adopt it, add the line to the root `INDEX.md` and declare
+`kb_contract: "2.3"`.
