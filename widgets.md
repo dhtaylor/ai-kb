@@ -3,7 +3,7 @@ name: widgets
 description: a test fixture.
 memory_type: reference
 domain: fx
-scope: general
+scope: product:acme
 metadata:
   type: topic
   node_type: memory
@@ -19,8 +19,3 @@ A widget holds up to 12 things.
 
 Source: manual
 Verified: 2026-09-22 · by: agent · method: manual
-
-## Calibration
-
-
-A widget is calibrated to 3 mm.

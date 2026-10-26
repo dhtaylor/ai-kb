@@ -3,7 +3,7 @@ name: fx-golden
 description: a test fixture.
 memory_type: reference
 domain: fx
-scope: general
+scope: product:acme
 metadata:
   type: topic
   node_type: memory
