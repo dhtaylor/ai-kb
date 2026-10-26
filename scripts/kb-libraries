@@ -52,6 +52,40 @@ def declared_name(lib: pathlib.Path):
     return None
 
 
+TERMS_KEY = re.compile(r"^(keywords|tags):\s*(.*?)\s*$")
+
+
+def declared_terms(lib: pathlib.Path) -> set:
+    """The `keywords:` and `tags:` of a library's root INDEX.md frontmatter, normalized: lowercase,
+    runs of space, `_` and `-` read as one `-`, a trailing plural `s` dropped. Reads the inline form
+    (`[a, b]`) and the block form (`- a` lines). Empty if there is none. Standard library only."""
+    try:
+        lines = (lib / "INDEX.md").read_text(errors="replace").splitlines()
+    except OSError:
+        return set()
+    if not lines or lines[0].strip() != "---":
+        return set()
+    raw, in_list = [], False
+    for line in lines[1:]:
+        if line.strip() == "---":
+            break
+        m = TERMS_KEY.match(line)
+        if m:
+            value = re.sub(r"\s+#.*$", "", m.group(2))
+            in_list = not value
+            raw += value.strip("[]").split(",")
+        elif in_list and line.lstrip().startswith("-"):
+            raw.append(re.sub(r"\s+#.*$", "", line.lstrip()[1:]))
+        elif line.strip() and not line.startswith((" ", "\t", "#")):
+            in_list = False
+    return {t for t in map(normalize_term, raw) if t}
+
+
+def normalize_term(t: str) -> str:
+    t = re.sub(r"[\s_-]+", "-", t.strip().strip("\"'").lower()).strip("-")
+    return t[:-1] if len(t) > 3 and t.endswith("s") and not t.endswith("ss") else t
+
+
 def contract_supported(path: pathlib.Path) -> bool:
     """False if the library's kb_contract is an unsupported major or unreadable, by check-kb's
     own rule (one copy). True if this engine cannot load check-kb or read its own contract

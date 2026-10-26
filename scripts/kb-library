@@ -24,6 +24,10 @@ engine's library hook), which git never commits or clones.
                   home (or DIR), and register it. A name registered here with another origin is
                   reported and skipped, never overwritten.
 
+When `add` registers a library, it compares the library's root `keywords:` and `tags:` with every
+other registered library's, and warns when two overlap enough to blur routing (see OVERLAP below).
+The warning is advice: it never refuses, never changes the exit status, and writes nothing.
+
 The registry is read only through kb-libraries; this is the only thing that writes it.
 Exit 0 on success, 1 on a refusal, 2 on a usage error.
 """
@@ -44,6 +48,39 @@ def load_kb_libraries():
 
 
 KL = load_kb_libraries()
+
+
+# OVERLAP. Two libraries are neighbours when they share at least MIN_SHARED terms AND those terms
+# are at least MIN_RATIO of the smaller library's terms. Terms are the normalized root keywords and
+# tags (kb-libraries.declared_terms), minus each library's own domain name (every library lists
+# itself) and GENERIC (words any library may carry). The count stops two short lists matching on
+# one word; the ratio (overlap coefficient, shared / smaller set) is used rather than Jaccard
+# because Jaccard hides a small library sitting inside a big neighbour's vocabulary, which is
+# the pair routing confuses.
+MIN_SHARED = 3
+MIN_RATIO = 0.25
+GENERIC = {"knowledge", "kb", "library", "doc", "documentation", "guide", "reference", "overview",
+           "index", "general", "fact", "note", "topic"}
+
+
+def terms_of(name: str, path: pathlib.Path) -> set:
+    return KL.declared_terms(path) - GENERIC - {KL.normalize_term(name)}
+
+
+def warn_overlap(name: str, path: pathlib.Path, others: dict):
+    """Print a warning for each other registered library (state ok) whose terms overlap."""
+    mine = terms_of(name, path)
+    for other in sorted(others):
+        if other == name or others[other]["state"] != "ok":
+            continue
+        theirs = terms_of(other, others[other]["path"])
+        shared = sorted(mine & theirs)
+        if len(shared) >= MIN_SHARED and len(shared) / min(len(mine), len(theirs)) >= MIN_RATIO:
+            print(f"kb-library: warning: {name} overlaps {other} — {len(shared)} shared "
+                  f"keywords/tags: {', '.join(shared)}")
+            print("  Routing fails at the boundary between neighbouring libraries. Consider a "
+                  "`Not covered here` line in each root INDEX.md naming the other, then re-run "
+                  "the routing sample. Registered anyway.")
 
 
 def git(*args, cwd=None):
@@ -133,6 +170,10 @@ def add(arg: str) -> int:
             reg("--unset", f"library.{name}.origin")
         print(f"kb-library: registered {name} at {path}"
               + (f" (was {old['state']} at {old['path']})" if old else ""))
+        try:
+            warn_overlap(name, path, current)
+        except Exception as e:       # advice only: it must never change registration's outcome
+            print(f"kb-library: overlap check skipped: {e}", file=sys.stderr)
 
     if is_repo(path):
         if git("config", "--get", "core.hooksPath", cwd=path).stdout.strip() != str(HOOKS):
