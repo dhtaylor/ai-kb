@@ -2,7 +2,7 @@
 name: fx-index
 description: a test fixture.
 memory_type: reference
-domain: conflict
+domain: uncorr
 scope: general
 freshness_horizon: 90d
 verifier_budget: 5
