@@ -15,7 +15,7 @@ keywords: [fx]
 
 ## Limits
 
-A widget holds up to 12 things.
+A widget holds up to 12 thing.
 
 Source: manual
 Verified: 2026-09-22 · by: agent · method: manual
