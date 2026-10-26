@@ -2,7 +2,7 @@
 name: fx-index
 description: a test fixture.
 memory_type: reference
-domain: promote
+domain: promote-comment
 scope: product:acme
 freshness_horizon: 90d
 verifier_budget: 5
