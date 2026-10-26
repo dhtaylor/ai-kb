@@ -69,9 +69,10 @@ Exit 0 if every graded case passes, 1 otherwise, 2 on a usage or format error.
 import fnmatch, importlib.machinery, importlib.util, json, pathlib, re, sys
 
 AGENT_TIER_CASES = {"positive", "cross-root", "uncorroborated"}
-# The answer key and the evidence behind it: a golden set, or anything under an eval folder.
-# (golden sets are named <lib>-golden.md, the convention load_golden relies on)
-CONTAMINATED = re.compile(r"-golden\.md(?!\w)|(^|/)evals?([-_./]|$)", re.I)
+# What the retrieval contract forbids (kb-retrieve rule 9, CONVENTIONS §10): a golden set, or
+# anything under a library's documents/eval-* folder. (golden sets are named <lib>-golden.md,
+# the convention load_golden relies on.) A routed sources/eval-*.md stub is a citation, not evidence.
+CONTAMINATED = re.compile(r"-golden\.md(?!\w)|(^|/)documents/eval-[^/]*(/|$)", re.I)
 XLINK = re.compile(r"\[\[([\w-]+):[^\]]+\]\]")
 # The contract: outside every library, yet the session context tells the agent to load it.
 CONTRACT = pathlib.Path(__file__).resolve().parent.parent / "CONVENTIONS.md"
@@ -147,17 +148,23 @@ def needed_libraries(ge, lib: pathlib.Path, rec: dict) -> set:
     return need
 
 
-LINE_PATH = (re.compile(r"^(.+?)[:-]\d+[:-]"),      # content mode: path:line:text, path-line-text
+LINE_PATH = (re.compile(r"^(.+?\.\w+)[:-]\d+[:-]"),  # content mode, path ending in an extension: a -<digits>- directory segment is not a separator
+             re.compile(r"^(.+?)[:-]\d+[:-]"),      # content mode: path:line:text, path-line-text
              re.compile(r"^(.+?):\d+$"),              # count mode: path:N
              re.compile(r"^(.+?):"))                  # content mode without line numbers
 
 
-def result_paths(text: str, mode: str):
-    """File paths appearing in a Grep result, by output mode."""
+def result_paths(text: str, mode: str, only=None):
+    """File paths appearing in a Grep result, by output mode. When the Grep's path was a
+    single file (only), ripgrep omits the file name from content lines (12:text), so every
+    result line is attributed to that file instead (issue #121)."""
     out = []
     for line in text.splitlines():
         line = line.strip()
         if not line or line == "--" or re.match(r"^(Found \d+|No (files|matches))", line):
+            continue
+        if only is not None:
+            out.append(only)
             continue
         if mode == "files_with_matches":
             out.append(line)
@@ -247,7 +254,9 @@ def grade(ge, lib: pathlib.Path, rec: dict, transcript: pathlib.Path):
                 continue
             mode = inp.get("output_mode") or "files_with_matches"
             if res is not None:
-                files = [locate(ge, lib, p) or pathlib.Path(p) for p in result_paths(res, mode)]
+                one = locate(ge, lib, inp["path"]) if inp.get("path") else None
+                one = str(one) if one is not None and one.is_file() else None
+                files = [locate(ge, lib, p) or pathlib.Path(p) for p in result_paths(res, mode, one)]
                 touched += [f"Grep returned {f}" for f in files if CONTAMINATED.search(str(f))]
             else:
                 notes.append("Grep had no tool_result: scope assumed read")
