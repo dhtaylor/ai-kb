@@ -18,4 +18,3 @@ keywords: [fx]
 ---
 # fx
 
-- [widgets](widgets.md) — what widgets do
