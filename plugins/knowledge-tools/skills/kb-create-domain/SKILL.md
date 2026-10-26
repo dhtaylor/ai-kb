@@ -177,6 +177,19 @@ The router body lists **only direct children**, one hooked line each, and nothin
 The hook must disambiguate siblings. Two children must never be distinguishable only by a shared
 prefix.
 
+**Ask what the library does not cover.** Before writing the body, list the libraries registered on
+this machine (`kb-library list`) and ask the user which topics near this domain it will *not* hold,
+and which library, if any, holds each. Write the answer as one line in the root `INDEX.md` body
+(CONVENTIONS §3, contract 2.3):
+
+```
+Not covered here: <neighbouring topics> — held by [[other-lib:slug]] or <library name>
+```
+
+Link a library with `[[library:slug]]` only when that slug exists in a registered library
+(`check-xlinks` checks it); otherwise name the library in words. Topics only, never facts about them.
+The line is optional: a library with no near neighbour omits it, and says so rather than inventing one.
+
 **An empty domain still needs a body.** "Nothing else" forbids stored *facts* in a router, not
 prose. A domain with no children yet carries its title, one line on what it will hold, and one line
 saying it is empty and why — so a reader who routes here learns the shelf is bare rather than

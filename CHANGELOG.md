@@ -9,6 +9,12 @@ engine release it was last verified against in its own release notes.
 Changes on `main` since v0.2.0. A contract or check change, so the next release is a minor bump
 (ADR-0015).
 
+- Contract 2.3 (#123, engine half): a library's root `INDEX.md` may carry a `Not covered here:` line
+  naming the neighbouring topics it does not hold and, where known, the library that does, so routing
+  can tell apart libraries whose topics overlap. Optional; `check-kb` fails an empty one from 2.3 and
+  warns below it. `kb-retrieve` reads each candidate library's line and does not descend into one that
+  excludes the question (no multi-library fan-out, which is #125). `kb-create-domain` asks for the
+  line. `kb-init` writes 2.3. Library PRs follow.
 - ADR-0015 amended: a release has a two-day code freeze. From two days before the release date,
   `main` takes release work only (the release section here, version numbers, the fresh-clone check
   and the tag). A defect found in that window is the owner's call: move the date, or ship and fix it
