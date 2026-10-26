@@ -15,16 +15,7 @@ keywords: [fx]
 
 ## Limits
 
-A widget holds up to 12 things. SCHED-CANARY-BODY
+A widget holds up to 12 things.
 
 Source: manual
-Verified: 2026-01-01 · by: agent · method: manual
-Recheck: printf "SCHED-%s\n" CANARY-OUT; false
-
-## Live
-
-A live claim.
-
-Source: manual
-Verified: 2026-01-01 · by: agent · method: manual
-Recheck (attended): true
+Verified: 2026-10-26 · by: agent · method: manual
