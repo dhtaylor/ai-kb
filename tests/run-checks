@@ -573,6 +573,33 @@ case_run "registry: the registry file is git-config format at the fixed path" 0 
 case_run "registry: XDG_CONFIG_HOME does not move it" 0 "ok	beta	" -- \
   env XDG_CONFIG_HOME="$TMP/xdg-elsewhere" HOME="$REG_HOME" "$ENGINE/scripts/kb-libraries"
 
+# kb-library add warns, never refuses, when the new library's root keywords/tags overlap a
+# registered one's (#124). Its own HOME: the real registry is never read or written.
+OHOME="$TMP/ovl-home"; mkdir -p "$OHOME"; OVD="$TMP/ovl"
+kbo() { HOME="$OHOME" "$ENGINE/scripts/kb-library" "$@"; }
+ovl_lib() { # name tags keywords
+  build_clean "$OVD/$1"
+  sed -i "s/^tags: .*\$/tags: $2/; s/^keywords: .*\$/keywords: $3/" "$OVD/$1/INDEX.md"
+}
+ovl_lib boards "[boards, Work_Items, sprints, backlog]" "[epics, Story Points, pipelines]"
+ovl_lib backlogs "[backlog, work-item, sprint, scrum]" "[epic, story-points, velocity]"
+ovl_lib recipes "[cooking, baking]" "[flour, yeast, oven]"
+case_run "overlap: the first library has no neighbour, so no warning" 0 "registered boards at" -- kbo add "$OVD/boards"
+OVL_BEFORE=$(git -C "$OVD/backlogs" status --porcelain)$(git -C "$OVD/backlogs" write-tree)
+case_run "overlap: an unrelated library is registered, exit 0" 0 "registered recipes at" -- kbo add "$OVD/recipes"
+case_run "overlap: ...and drew no warning" 0 "" -- \
+  sh -c '! HOME="$1" "$2/scripts/kb-library" remove recipes | grep -q warning && ! HOME="$1" "$2/scripts/kb-library" add "$3" | grep -q warning' _ "$OHOME" "$ENGINE" "$OVD/recipes"
+case_run "overlap: an overlapping library is registered with a warning naming the neighbour and terms" 0 "backlogs overlaps boards — 4 shared keywords/tags: epic, sprint, story-point, work-item" -- kbo add "$OVD/backlogs"
+case_run "overlap: ...the warning suggests Not covered here" 0 "Not covered here" -- \
+  sh -c 'HOME="$1" "$2/scripts/kb-library" remove backlogs >/dev/null && HOME="$1" "$2/scripts/kb-library" add "$3"' _ "$OHOME" "$ENGINE" "$OVD/backlogs"
+case_run "overlap: ...and it is registered anyway" 0 "ok             backlogs" -- kbo list
+case_run "overlap: re-adding it is a no-op" 0 "already registered" -- kbo add "$OVD/backlogs"
+case_run "overlap: ...with no warning" 0 "" -- sh -c '! HOME="$1" "$2/scripts/kb-library" add "$3" | grep -q warning' _ "$OHOME" "$ENGINE" "$OVD/backlogs"
+case_run "overlap: the library is untouched" 0 "" -- \
+  sh -c '[ "$(git -C "$1" status --porcelain)$(git -C "$1" write-tree)" = "$2" ]' _ "$OVD/backlogs" "$OVL_BEFORE"
+case_run "overlap: the registry holds only the entries" 0 "library.backlogs.path library.boards.path library.recipes.path" -- \
+  sh -c 'git config --file "$1/.config/ai-kb/libraries" --list | cut -d= -f1 | grep -v origin | sort | tr "\n" " "' _ "$OHOME"
+
 # ---------------------------------------- library pre-commit hook: xlinks ----
 # The library hook is the engine's (library-hooks/pre-commit, ADR-0014): a library is shared
 # by people who do not own it, so it carries no hook of its own. A clone is wired to it by

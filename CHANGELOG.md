@@ -9,6 +9,10 @@ engine release it was last verified against in its own release notes.
 Changes on `main` since v0.2.0. A contract or check change, so the next release is a minor bump
 (ADR-0015).
 
+- `kb-library add` warns when the new library's root `keywords:` and `tags:` overlap a registered
+  library's: at least 3 shared terms that are at least a quarter of the smaller library's terms. The
+  warning names the neighbour and the shared terms and suggests `Not covered here` lines and a rerun
+  of the routing sample. It never refuses and writes nothing (#124).
 - `tests/run-checks` clears git's repository environment (`git rev-parse --local-env-vars`) before
   building fixtures. Run from the pre-commit hook of a linked worktree, it had inherited `GIT_DIR`
   and `GIT_INDEX_FILE`, so fixture commands set the committing repository's `core.bare` and
