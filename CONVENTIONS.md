@@ -1,3 +1,3 @@
 # fixture contract
 
-Section one.
+Section one, revised.
