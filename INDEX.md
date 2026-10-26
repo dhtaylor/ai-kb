@@ -2,8 +2,8 @@
 name: fx-index
 description: a test fixture.
 memory_type: reference
-domain: lateral
-scope: product:acme
+domain: benign
+scope: general
 freshness_horizon: 90d
 verifier_budget: 5
 sweep_interval: 30d
