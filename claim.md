@@ -18,4 +18,4 @@ keywords: [fx]
 x
 
 Source: manual
-Verified: 2026-01-01 · by: agent · method: manual
+Verified: 2026-01-01 · by: human · method: manual
