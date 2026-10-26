@@ -2565,6 +2565,36 @@ grade "library-prefixed relative path still resolves" 0 "1/1 graded" "Q1|librel.
 mk_tr "$RT/refusal.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
 grade "negative case: reads are reported, not required" 0 "1/1 graded" "Q2|refusal.jsonl"
 grade "negative case: contamination still fails" 1 "contamination" "Q2|golden.jsonl"
+# Issue #122: the contract forbids *-golden.md and documents/eval-*/, not a routed
+# sources/eval-*.md citation stub. Only the forbidden shapes are contamination.
+STUB="$A/sources/eval-2026-10-12-routing-run.md"
+mk_tr "$RT/evstub-read.jsonl" "Read:$A/widgets.md" "Read:$STUB"
+grade "reading a sources/eval-* stub is not contamination (issue #122)" 0 "1/1 graded" "Q1|evstub-read.jsonl"
+mk_tr "$RT/evstub-grep.jsonl" "Read:$A/widgets.md" "Grep:$A|files_with_matches@@$STUB"
+grade "a Grep listing a sources/eval-* stub is not contamination (issue #122)" 0 "1/1 graded" "Q1|evstub-grep.jsonl"
+mk_tr "$RT/evdoc-grep.jsonl" "Read:$A/widgets.md" "Grep:$A|files_with_matches@@$A/documents/eval-2026-10-12/README.md"
+grade "a Grep listing documents/eval-*/README.md: contamination fails (issue #122)" 1 "contamination" "Q1|evdoc-grep.jsonl"
+mk_tr "$RT/evdir-grep.jsonl" "Read:$A/widgets.md" "Grep:$A/documents/eval-2026-10-12@@NONE"
+grade "a Grep scoped to a documents/eval-* folder: contamination fails (issue #122)" 1 "contamination" "Q1|evdir-grep.jsonl"
+# Issue #121: ripgrep omits the file name when the Grep's path is one file (12:text). Every
+# result line belongs to that file: content in content mode, a listing otherwise. A Grep is
+# still not a Read of the expected file (owner decision), so criterion (a) is unchanged.
+mk_tr "$RT/one-content.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|content@@5:A widget holds up to 12 things."
+grade "a single-file content Grep is content from that library (issue #121)" 1 "unneeded beta" "Q1|one-content.jsonl"
+mk_tr "$RT/one-list.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|count@@5"
+grade "a single-file count Grep is a listing, not content (issue #121)" 0 "1/1 graded" "Q1|one-list.jsonl"
+mk_tr "$RT/one-nomatch.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|content@@No matches found"
+grade "a single-file Grep with no matches attributes nothing (issue #121)" 0 "1/1 graded" "Q1|one-nomatch.jsonl"
+mk_tr "$RT/one-golden.jsonl" "Read:$A/widgets.md" "Grep:$A/fx-golden.md|content@@3:question: x"
+grade "a single-file content Grep of the golden set: contamination fails (issue #121)" 1 "contamination" "Q1|one-golden.jsonl"
+# A path with a -<digits>- segment (a session UUID in a checkout path) must not be split there
+# when a content-mode line is parsed: path-N-text, path:N:text.
+mk_tr "$RT/dashseg.jsonl" "Read:$A/widgets.md" "Grep:$A|content@@$A/run-4444-x/fx-golden.md-12-context line"
+grade "a content-mode Grep line whose path contains -4444- is not split there" 1 "contamination" "Q1|dashseg.jsonl"
+mk_tr "$RT/one-notread.jsonl" "Read:$A/INDEX.md" "Grep:$A/widgets.md|content@@5:A widget holds up to 12 things."
+grade "a single-file content Grep is not a Read of the expected file (issue #121)" 1 "never Read" "Q1|one-notread.jsonl"
+mk_tr "$RT/one-xroot.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|content@@5:A widget holds up to 12 things."
+grade "a single-file content Grep supplies a cross-root case's sibling content (issue #121)" 0 "1/1 graded" "Q4|one-xroot.jsonl"
 # Issue #40: a subagent that searched some other knowledge tree read nothing under kb/, and
 # its refusal looked like a correct one. Any case, negative included, must read the engine's kb/.
 mkdir -p "$RT/legacy/knowledge"; printf '# legacy

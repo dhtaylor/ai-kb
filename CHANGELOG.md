@@ -14,6 +14,12 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   and `GIT_INDEX_FILE`, so fixture commands set the committing repository's `core.bare` and
   `core.hooksPath` and staged the deletion of every file. A case now fails if any such variable
   survives into the suite (#127).
+- `grade-routing`: contamination is what the retrieval contract forbids, a `*-golden.md` file or a
+  path under `documents/eval-*/`, so a routed `sources/eval-*.md` citation stub no longer fails a
+  case (#122). A content-mode Grep whose `path` is a single file is attributed to that file, since
+  ripgrep omits the file name there (#121); it is content from that library, not a Read of the file.
+  Content-mode lines are split at the first `.ext` followed by a line number, so a `-<digits>-` directory
+  segment in the path (a session UUID in a checkout path) no longer truncates it.
 - ADR-0015 amended: a release has a two-day code freeze. From two days before the release date,
   `main` takes release work only (the release section here, version numbers, the fresh-clone check
   and the tag). A defect found in that window is the owner's call: move the date, or ship and fix it
