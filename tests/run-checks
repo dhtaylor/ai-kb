@@ -35,6 +35,11 @@ export HOME="$TMP/home"; mkdir -p "$HOME"
 # The same for every variable that moves a per-user location away from HOME: a CI runner sets
 # XDG_CONFIG_HOME, and with it set kb-schedule's test install landed in the runner's own config.
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_DATA_HOME XDG_CACHE_HOME KB_PACKETS KB_REPORTS KB_CLAUDE
+# Git sets GIT_DIR, GIT_INDEX_FILE and their kin for a hook, and the engine's pre-commit hook runs
+# this suite. Inherited, they point every fixture's git command at the repository being committed
+# to: a commit from a linked worktree once set that repository's core.bare and core.hooksPath and
+# staged the deletion of every file (#127). Clear each variable git itself calls repository-local.
+unset $(git rev-parse --local-env-vars)
 
 fm() { # frontmatter: name, scope, [extra]
   printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
@@ -98,6 +103,10 @@ case_run() {
 }
 
 echo "run-checks: $ENGINE"
+
+# ------------------------------------------------------ the suite's own environment ----
+case_run "suite clears git's repository environment, so a hook cannot aim fixtures at its repo (#127)" 0 "" -- \
+  bash -c 'for v in $(git rev-parse --local-env-vars); do [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done'
 
 # ---------------------------------------------------------------- check-kb ----
 build_clean "$TMP/clean"
