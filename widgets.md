@@ -22,6 +22,5 @@ Verified: 2026-09-22 · by: agent · method: manual
 
 ## Disputed
 
-status: CONFLICTED · since: 2026-01-01
 
 Claim A: 12. Claim B: 20.
