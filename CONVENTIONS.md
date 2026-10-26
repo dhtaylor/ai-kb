@@ -1,0 +1,3 @@
+# fixture contract
+
+Section one.
