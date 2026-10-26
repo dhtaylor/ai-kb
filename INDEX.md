@@ -7,8 +7,8 @@ scope: general
 freshness_horizon: 90d
 verifier_budget: 5
 sweep_interval: 30d
-kb_contract: "2.3"
-last_swept: never
+kb_contract: "2.1"
+last_swept: 2026-10-26
 metadata:
   type: topic
   node_type: memory
@@ -19,4 +19,4 @@ keywords: [fx]
 # fx
 
 - [widgets](widgets.md) — what widgets do
-- [other](other.md) — other
+- [needs-attention](needs-attention.md) — open findings from automated checks and sweeps; detection only, nothing here was fixed automatically
