@@ -1,5 +1,5 @@
 ---
-name: claim
+name: widgets
 description: a test fixture.
 memory_type: reference
 domain: fx
@@ -11,11 +11,11 @@ metadata:
 tags: [fx]
 keywords: [fx]
 ---
-# Claim
+# Widgets
 
-## A
+## Limits
 
-x
+A widget holds up to 12 things.
 
 Source: manual
-Verified: 2026-01-01 · by: agent · method: manual
+Verified: 2026-09-22 · by: agent · method: manual
