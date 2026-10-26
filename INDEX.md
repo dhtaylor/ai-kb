@@ -2,7 +2,7 @@
 name: fx-index
 description: a test fixture.
 memory_type: reference
-domain: delete
+domain: rename
 scope: general
 freshness_horizon: 90d
 verifier_budget: 5
@@ -18,3 +18,4 @@ keywords: [fx]
 ---
 # fx
 
+- [widgets](widgets.md) — what widgets do
