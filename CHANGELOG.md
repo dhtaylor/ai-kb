@@ -30,6 +30,9 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   warns below it. `kb-retrieve` reads each candidate library's line and does not descend into one that
   excludes the question (no multi-library fan-out, which is #125). `kb-create-domain` asks for the
   line. `kb-init` writes 2.3. Library PRs follow.
+- The library CI template (`documents/library-guardrails.yml`) clones the engine at `v0.2.0` instead
+  of `main`, so a library's CI no longer changes with the engine's `main` (ADR-0015). ADR-0016 later
+  made pinning the library owner's choice; the template keeps its pin.
 - ADR-0015 amended: a release has a two-day code freeze. From two days before the release date,
   `main` takes release work only (the release section here, version numbers, the fresh-clone check
   and the tag). A defect found in that window is the owner's call: move the date, or ship and fix it
@@ -41,12 +44,11 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   Light, Medium and Full) and its five-point rating scale, which had lived in the intelligence-analysis
   library but are review procedure with no primary source. Bias remedies are retrieved from the rebuilt
   library, which states only the remedies its sources give.
-- ADR-0016: the library contract gets its own version (`MAJOR.MINOR`, today 2.0), and a library
+- ADR-0016: the library contract gets its own version (`MAJOR.MINOR`, now 2.3), and a library
   declares the version it was built to (`kb_contract:`, read as 2.0 when absent). Rules apply by that
   version, and an engine supports the last two contract majors, so upgrading the engine does not make
   an older library unusable. Pinning becomes the library owner's choice; ADR-0015's pinning section is
-  superseded. Decision only: the implementation follows, and this release waits for #71's rejection
-  to be gated to contract 2.1.
+  superseded. The next two entries and the contract entries below are the implementation.
 - Contract version 2.0 (ADR-0016, step 1): CONVENTIONS states its version and gains §14, the
   contract's own changelog. A root `INDEX.md` may declare `kb_contract: "MAJOR.MINOR"`; absent is read
   as 2.0, and `check-kb` fails a malformed or unquoted value (a YAML reader turns a bare 2.10 into
@@ -57,7 +59,7 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   versions add, read from CONVENTIONS §14) and one ahead by a minor (checked by the newest rules
   known). A library on an unsupported major, or with an unreadable version, fails `check-kb` and is
   not served: `kb-libraries` gives it the state `unsupported-contract`. The session-start nudge names
-  libraries behind or ahead. `kb-init` writes 2.1.
+  libraries behind or ahead.
 - `kb-sources` retries with GET when HEAD answers any HTTP error except 429, and GET's answer
   decides. A server that answers HEAD with 400 (or 404, or 500) but serves GET is no longer queued as
   `source-unreachable`, and a source is `dead` only when GET also answers 404 or 410 (#74).
@@ -105,7 +107,7 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   needs a login, a credential or a live system. `kb-verify --yes --unattended` skips those with a
   count, and runs every other assertion with an empty `HOME` and only `PATH`, `KB_ENGINE_ROOT` and
   proxy settings, so no cached login or exported credential is reachable. It refuses `--apply`.
-  `kb-init` writes 2.2. A library on 2.1 is told it is behind, and moves by changing only its
+  A library on 2.1 is told it is behind, and moves by changing only its
   declaration unless it holds an assertion that needs a person.
 - `check-secrets --redact` (#101): a filter from stdin to stdout. Every line any of the three passes
   flags becomes `[redacted: secret]` or `[redacted: personal identifier]`, with a count on stderr and
@@ -136,6 +138,8 @@ Changes on `main` since v0.2.0. A contract or check change, so the next release 
   - with `--prepare`, also runs `kb-prepare distill` and `kb-prepare audit` under a dollar cap;
   - then `check-xlinks --installed`, `kb-watch` on the chosen allowlist, and `kb-report`.
   It holds a lock, so runs never overlap, and logs only each step's exit code. It never edits a fact.
+  On a systemd machine where the user is not set to linger, `install` says the timer then runs only
+  while they are logged in, and names the command that changes it.
 - Golden-set values are read as YAML scalars (#111). A single-quoted excerpt, the natural way to
   write one holding `"` or `: `, was searched for with its quotes still on and could never match.
   Now `'…'` loses its quotes and reads `''` as `'`, `"…"` reads its escapes, and a plain value keeps
