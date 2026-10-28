@@ -1,6 +1,6 @@
 # ADR-0001: Knowledge base root resolution
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-22 by [ADR-0008](0008-machine-bootstrap.md)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 0 (guardrails) — this ADR records the Phase 0 acceptance test outcome
