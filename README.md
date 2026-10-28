@@ -123,6 +123,10 @@ the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-li
   of the question passed. Those records are under `documents/eval-*/`.
 - **Next:** rolling out further domains. No orchestrator across domain agents will be built until
   `kb-retrieve`'s own routing is shown to fall short ([ADR-0011](documents/decisions/0011-no-orchestrator-until-routing-fails.md)).
+  Tests on 2026-10-26 put routing at that line with six libraries, and below it once libraries on
+  neighboring topics were added (recorded in the knowledge-architecture library). A successor design, a
+  triage step that hands each question to one library's specialist, is planned for after this release
+  ([#130](https://github.com/dhtaylor/ai-kb/issues/130)).
   Steady-state upkeep is surfaced when due
   ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)), and the opt-in weekly
   schedule prepares the work and reports the decisions waiting, but never edits a fact
