@@ -21,9 +21,10 @@ facts**:
 | Path | What it is |
 |---|---|
 | [`CONVENTIONS.md`](CONVENTIONS.md) | The contract: scope tiers, provenance, currency stamps, slugs and cross-links, contradictions, the retrieval rules. It settles any question this README leaves open. |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating. |
-| `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills and the `kb-retrieve` agent. |
-| `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`) and the checks that guard the contract. |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating, the weekly job, and working on the engine itself. |
+| `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills, the `kb-retrieve` agent, and the `/kb-capture` and `/kb-init` commands. |
+| `plugins/analysis-tools/` | A second plugin: a skill that reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft. It reads its tradecraft from a library and holds none. |
+| `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`), the upkeep commands (`kb-verify`, `kb-sources`, `kb-watch`, `kb-due`), the opt-in weekly job (`kb-schedule`, with `kb-prepare`, `kb-apply` and `kb-report`), `kb-backup`, the retrieval-cost tools (`kb-telemetry`, `kb-eval-sample`), and the checks that guard the contract. |
 | `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0017). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
@@ -74,20 +75,34 @@ covers all of this in full, including what `kb-bootstrap` writes and where.
 
 ## Guardrails
 
-Every rule in the contract that can be checked is checked at commit time by git hooks, and all but
-one again in CI, where a hook can't be skipped:
+Every rule in the contract that can be checked is checked by a script. Git hooks run most of them
+at commit time, and CI runs them again where a hook can't be skipped:
 
 - structure, routing and links within a library (`check-kb`)
 - links between libraries (`check-xlinks`, at commit time only; see ADR-0010)
 - scope tiers (`check-scope`)
 - golden-set integrity and reachability (`check-golden`)
+- scripts recorded as executable, so a clone is not left unguarded (`check-exec-bits`)
 - credential-shaped strings, across full history (`check-secrets`)
-- facts pasted into agent prompts instead of retrieved (`check-embedded-facts`)
-- verification stamps that claim more than the commit supports (`check-stamps`)
+- facts pasted into agent prompts instead of retrieved (`check-embedded-facts`, engine only)
+- a declared tool tier for every agent, skill and command (`check-tool-scope`, engine only)
+- verification stamps that claim more than the commit supports (`check-stamps`, CI only)
+- a pull request that deletes a fact file, drops a `CONFLICTED` or `UNCORROBORATED` marker or
+  widens a scope, or that changes the contract or an ADR in this repository, fails unless it carries
+  the `owner-approved` label (`check-blast`, CI only)
 
 `kb-verify` re-runs the assertions that defend stale facts, and `kb-due` reports which trees are
 due for a sweep. `kb-sources` checks that the external URLs source stubs cite still resolve; it
 fetches only when told `--yes`. All three report rather than repair.
+
+The opt-in weekly job, `kb-schedule install`, runs `kb-verify --unattended` and `kb-sources` on
+every registered library, then `check-xlinks` and `kb-watch`, and writes one report of the
+decisions waiting (`kb-report`). It never edits a fact. With `--prepare`, it also has a headless,
+read-only model run draft review packets for `kb-distill` and `kb-audit` (`kb-prepare`); a person
+reviews each packet in a session (`kb-apply`). `kb-backup` bundles the
+engine and every library, verified by restore. `kb-telemetry` reports what retrieval costs, from
+transcripts Claude Code already keeps. `kb-library add` warns, but never refuses, when a new
+library's keywords overlap a registered one's enough to blur routing.
 
 ## Status
 
@@ -96,18 +111,21 @@ described in [CHANGELOG.md](CHANGELOG.md); what a version number means is
 [ADR-0015](documents/decisions/0015-releases-and-pinning.md), and how a library states which version of
 the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-library-contract.md).
 
-- **Built and tested:** the contract, ADRs 1 to 15, the five skills, the retrieval agent, both
-  halves of the retrieval eval, and the guardrails above.
+- **Built and tested:** the contract (version 2.3), ADRs 1 to 17, the five skills, the retrieval agent, both
+  halves of the retrieval eval, the guardrails above, and the weekly job.
 - **Evidenced, not guaranteed:** that an agent retrieves rather than recalls has been tested on five
   libraries by agents that never saw the answer key. The latest recorded runs scored 15/16, 16/16,
   14/17 and 16/19 on the four newest, each of which keeps its runs' answers and grades as evidence.
   The first library's single run survives only as a note in the plan. The protocol changed between runs as defects in the eval itself were found; the plan's
-  §9.14–9.16 records which.
+  §9.14–9.16 records which. Routing has since been graded from the agents' tool calls, not their own
+  account of them: 12/12 on 2026-10-12, and 13/13 on 2026-10-23, where grounding was 12/13. The one
+  miss was an answer taken from outside the knowledge base; #88 closed that gap, and three re-runs
+  of the question passed. Those records are under `documents/eval-*/`.
 - **Next:** rolling out further domains. No orchestrator across domain agents will be built until
-  `kb-retrieve`'s own routing is shown to fall short ([ADR-0011](documents/decisions/0011-no-orchestrator-until-routing-fails.md)),
-  and steady-state upkeep is surfaced when due
-  ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)). An opt-in weekly
-  schedule may prepare the work and report the decisions waiting, but never edits a fact
+  `kb-retrieve`'s own routing is shown to fall short ([ADR-0011](documents/decisions/0011-no-orchestrator-until-routing-fails.md)).
+  Steady-state upkeep is surfaced when due
+  ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)), and the opt-in weekly
+  schedule prepares the work and reports the decisions waiting, but never edits a fact
   ([ADR-0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)). The full plan, including what building it proved and disproved, is in
   [`documents/knowledge-agent-architecture-combination-plan.md`](documents/knowledge-agent-architecture-combination-plan.md).
 
