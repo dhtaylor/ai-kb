@@ -8,7 +8,7 @@ metadata:
   type: reference
   node_type: contract
   created: 2026-07-08
-  revised: 2026-10-22
+  revised: 2026-10-28
 tags: [knowledge, conventions, progressive-disclosure, provenance, currency]
 keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, provenance, gestalt]
 ---
@@ -355,8 +355,8 @@ for them.
      resolves only while two repositories happen to sit in the expected layout, and fails silently
      everywhere else. The qualified form degrades honestly — without the other repository you still
      know exactly what was cited and where it lives, you simply cannot open it from here.
-- **Provenance rots.** `check-links` covers internal `[[slug]]`s, not external `Source:` URLs. External
-  URLs get cheap **HTTP HEAD liveness checks** (`kb-sources`), run only when the person running it
+- **Provenance rots.** `check-kb` covers internal `[[slug]]`s, not external `Source:` URLs. External
+  URLs get **HTTP liveness checks** (`kb-sources`: HEAD, then GET on any HTTP error but 429), run only when the person running it
   approves the network access; a dead URL is **queued** to the library's `needs-attention.md` with
   its dependants, never edited and never marked `provenance: BROKEN` by the tool. A 404 or 410 is an
   alert, not silence — and "unreachable" (DNS, timeout, 5xx, 403) is neither "dead" nor "unchanged".
@@ -631,7 +631,7 @@ not otherwise: `check-golden` fails a library holding the marker with no such ca
 
 A **`cross-root` case names the file in the other library that answers it**, written
 `<library>:<path>`, for example `agile-requirements:elicitation-techniques.md`, and its excerpt is
-the sentence in that file. The library is a sibling under the same `kb/`. `check-golden` checks the
+the sentence in that file. The library is another registered library. `check-golden` checks the
 excerpt in that file and that the other library's routers reach it. `grade-routing` and `grade-eval`
 then require the agent to read and cite it. The agent also has to read content in the case's own
 library, where the hop starts. Only a `cross-root` case may name another library's file. A library
@@ -676,7 +676,7 @@ Two tiers test it, and they are not interchangeable:
   routers. The agent tier (`grade-routing`, sampled and started by a person): the agent's tool calls
   show it Read the expected file, read content from no library the case does not need, read nothing
   outside the registered libraries but this contract, and never touch the golden set. It is graded from the transcript, not from what the agent says it did.
-- **Answer-grounding eval** (scheduled, sampled): the agent runs; its answer must contain the
+- **Answer-grounding eval** (sampled, started by a person): the agent runs; its answer must contain the
   `expected_excerpt`, **verified by grep against the expected file** — not by an LLM judge. This is what
   catches answering from memory. `grade-eval --transcripts` grades the agents' transcripts directly,
   through the same mapping file as `grade-routing`.
@@ -727,7 +727,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | Check | What it proves | Status |
 |---|---|---|
 | frontmatter lint | required fields present, `name` matches filename | **built** — `check-kb` |
-| `check-links` | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
+| link check | `[[slug]]` and router links resolve **within one library** | **built** — `check-kb` |
 | slug uniqueness | no filename collision, and no file colliding with a folder name | **built** — `check-kb` |
 | orphans | every file reachable from the root `INDEX.md` by router links; golden set and `documents/` exempt (§3) | **built** — `check-kb` |
 | raw artifacts in `sources/` | `sources/` holds only `.md` citation stubs; an artifact is archived under `documents/` (§6). Fails from contract 2.1, warns below it (§14) | **built** — `check-kb` |
@@ -753,7 +753,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one as `source-unreachable`, each with its dependants; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
-All twenty-one are built. A library passing the built checks is **structurally sound within itself**
+All twenty-six are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
 routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.
 
