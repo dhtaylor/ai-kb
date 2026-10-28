@@ -16,7 +16,7 @@ a contradiction with a source that still says the original thing — and the pro
 still look perfectly valid.
 
 **Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
-the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+the skills) and the **libraries** registered on this machine, wherever each one lives. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
@@ -152,7 +152,7 @@ every reference update lands in that same commit.
 
 Stop rather than proceed, if:
 
-- the knowledge root is unconfigured;
+- the engine root is unconfigured;
 - the domain does not exist, or holds no content to organize;
 - you would have to change a fact's meaning to make the structure nicer. **The structure loses**;
 - the reshape would resolve a contradiction, drop a `Source:` link, or delete knowledge. None of

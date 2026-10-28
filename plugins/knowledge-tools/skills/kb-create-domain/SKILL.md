@@ -315,7 +315,7 @@ do not, leave it uncommitted and say so — an uncommitted `git init` costs noth
 
 Stop and say so rather than proceeding, if:
 
-- the knowledge root is unconfigured — never guess a path;
+- the engine root is unconfigured — never guess a path;
 - the domain already exists — that is `kb-update-domain`;
 - a library of that name is already registered on this machine (`kb-library list`);
 - the tier is genuinely ambiguous and the user has not decided;

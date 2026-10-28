@@ -15,7 +15,7 @@ that helpfully tidies as it goes has silently crossed from the cheap side of tha
 expensive one.
 
 **Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
-the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+the skills) and the **libraries** registered on this machine, wherever each one lives. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
