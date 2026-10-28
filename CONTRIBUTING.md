@@ -34,7 +34,12 @@ kb.engineRoot` and a `PATH` block in your shell rc, and points each registered l
 `core.hooksPath` at the engine's library hook — but only with `--apply`. It merges with what is
 already there, backs a file up before changing it, and is safe to run again — run it again whenever
 the engine moves. `kb-library add` registers a library in `~/.config/ai-kb/libraries` and wires its
-hook; it writes nothing into the library itself. `kb-library list` shows what is registered.
+hook; it writes nothing into the library itself. `kb-library list` shows what is registered,
+`kb-library remove <name>` unregisters one without deleting any file, and `kb-library home` prints
+where new clones go. If a new library's root `keywords:` and `tags:` overlap a registered library's
+enough to blur routing, `kb-library add` says so and names the neighbour. It never refuses. Add a
+`Not covered here:` line to each library's root `INDEX.md` (CONVENTIONS §3) and the warning has
+done its job.
 
 **Then restart your terminal and any open Claude Code session.** A shell profile is read at shell
 start, and Claude reads its settings and plugin content once per session.
@@ -188,8 +193,10 @@ meaning:
 | `check-scope` | a scope value that disagrees with its library, a project tree holding general facts, a relative link climbing out of a library |
 | `check-golden` | a golden record whose file is missing, no router reaches, or whose excerpt (or `alt_excerpt`) is not in that file, too few negative cases, an `unresolved` case without the exact refusal phrase or pointing at a file with no `CONFLICTED` section |
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
-| `check-secrets`, `check-exec-bits`, `check-embedded-facts` | committed credentials, scripts git records non-executable, facts inlined into the behaviour layer |
+| `check-secrets`, `check-exec-bits` | committed credentials, scripts git records non-executable |
+| `check-embedded-facts`, `check-tool-scope` (the engine's own hook and CI only) | facts inlined into the behaviour layer; an agent, skill or command with no declared tool tier, or a tier its tools don't fit |
 | `check-stamps` (CI only — the engine's and every library's; it reads commit messages, which a pre-commit hook never sees) | a commit that announces agent co-authorship and also stamps a fact `by: human` — which would buy ten times the re-check interval |
+| `check-blast` (CI only, on a pull request) | a pull request that deletes a fact file, drops a `CONFLICTED` or `UNCORROBORATED` marker or widens a fact's scope, unless it carries the `owner-approved` label. In the engine, the same for a change to `CONVENTIONS.md` or an ADR. A direct push only warns |
 
 `grade-routing` is **not** in the hooks either: it grades a subagent transcript a person ran, to check an agent routed to the expected file ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)).
 
@@ -214,7 +221,7 @@ Session start tells you when something is due, and says nothing when nothing is.
 any time:
 
 ```bash
-kb-due "$KB_ENGINE_ROOT" knowledge      # the installed libraries, plus this project's tree
+kb-due knowledge                        # every registered library, plus this project's tree
 ```
 
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
@@ -233,8 +240,9 @@ kb-schedule remove               # takes it all out again
 ```
 
 Every Monday at 07:00 (or at the next start, if the machine was off), it re-runs the rechecks that
-need no person, checks cited URLs and watched sources, and, with `--prepare`, drafts what
-`kb-distill` and `kb-audit` would propose. Then it writes the week's report of decisions to
+need no person, checks cited URLs, cross-library links and watched sources, and, with `--prepare`,
+drafts what `kb-distill` and `kb-audit` would propose. The watched sources are the allowlist named
+at install (`--watch`; the engine's `watcher/allowlist.json` by default). Then it writes the week's report of decisions to
 `~/.local/state/ai-kb/reports/`. It never edits a fact. When the session-start nudge names the
 report, open it. For a packet, ask a session to review it: the skill re-checks it, asks you to
 decide each item, and only then writes.
@@ -271,6 +279,11 @@ That means:
 Each row is a regression case in `tests/run-checks`, run from `/` with a stripped environment
 against fixtures that carry a canary in the text a careless command would echo.
 
+`kb-eval-sample` is not scheduled, because it needs a person to put each question to a fresh agent.
+`kb-eval-sample prepare <library> --out DIR` draws a seeded sample of golden questions and writes a
+prompt for each, to give to a fresh `kb-retrieve` agent. `kb-eval-sample grade DIR` then grades those
+runs and joins each with its cost. It writes only under `DIR`.
+
 ---
 
 ## When something looks wrong
@@ -295,6 +308,40 @@ find it. Add its line to the right `INDEX.md`. The golden set and `documents/` a
 
 **`scope 'x' disagrees with its library`** — the fact is in the wrong home. Move it, or link to it
 from where it belongs rather than restating it.
+
+---
+
+## Working on the engine
+
+This repository's own hook is `.githooks/pre-commit`, and git does not clone the setting. In each
+clone:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+It runs `check-exec-bits`, `check-secrets`, `check-embedded-facts` and `check-tool-scope`, then
+`check-xlinks --installed` and `check-scope` over the libraries registered on your machine, and
+`tests/run-checks` whenever the commit touches `scripts/` or `tests/`. CI runs `check-exec-bits`,
+`check-secrets --all`, `check-embedded-facts`, `check-tool-scope`, `check-stamps`, `check-blast` and
+`tests/run-checks`.
+
+- **A check or a contract rule changes with a case.** `tests/run-checks [-v]` takes about a minute and
+  must stay green. Its fixtures declare the newest contract version, so publishing one means raising
+  that line too.
+- **A contract version is a heading.** A new `### MAJOR.MINOR` in CONVENTIONS §14 is how an engine
+  learns a version exists. `kb-init`'s scaffold and `kb-create-domain` write the newest, and
+  `CHANGELOG.md` records the change under `## Unreleased`.
+- **The contract and the ADRs need the owner.** A pull request that changes `CONVENTIONS.md` or
+  `documents/decisions/` fails `check-blast` until the repository owner labels it `owner-approved`.
+  Decision records are history: add a dated amendment or a new ADR rather than rewriting one.
+- **A skill, agent or command declares its tools and tier** in its frontmatter. A subagent's `tools:`
+  is a real allowlist. A skill's or command's `allowed-tools:` only pre-approves, so its approval
+  gates are written into its steps (`documents/tool-scope-matrix.md`, `documents/state-change-gates.md`).
+  Evidence for a change in behavior is kept under `documents/eval-<date>-<name>/`.
+- **Releases** follow [ADR-0015](documents/decisions/0015-releases-and-pinning.md): semantic versions,
+  notes from `CHANGELOG.md`, and a code freeze from two days before the release date, when `main`
+  takes release work only.
 
 ---
 
