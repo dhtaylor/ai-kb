@@ -4,10 +4,11 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
-## Unreleased
+## v0.3.0 — 2026-10-31
 
-Changes on `main` since v0.2.0. A contract or check change, so the next release is a minor bump
-(ADR-0015).
+Changes since v0.2.0. A minor release: it changes the contract and the checks (ADR-0015). This engine
+serves libraries that declare `kb_contract` 2.0 to 2.3 (ADR-0016); a library that declares none is
+read as 2.0.
 
 - `kb-library add` warns when the new library's root `keywords:` and `tags:` overlap a registered
   library's: at least 3 shared terms that are at least a quarter of the smaller library's terms. The
