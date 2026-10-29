@@ -1,6 +1,6 @@
 # ADR-0006: The knowledge base is its own repository, and its behaviour travels as a plugin
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-19 (see *Amended 2026-09-19* below) and by [ADR-0007](0007-engine-content-separation.md)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Amends:** [ADR-0003](0003-scoping-topology.md)

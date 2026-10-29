@@ -15,9 +15,9 @@ it does decide where the note lands, and that follows the same test the contract
 
 > Is this true only of this repo/deployment, or true wherever this product/tool/concept appears?
 
-Working inside a project, capturing files into that project's own tree by default — right for
+Inside a project, a capture files into that project's own tree by default — right for
 anything repo-specific. If what you saw is true of a product or tool in general, not just this
-deployment, pass `--into <library>` instead of taking the default. A general observation left to
+deployment, pass `--into <path to the library>` instead of taking the default. A general observation left to
 default into a project tree becomes one of many copies that will drift.
 
 ## How to capture

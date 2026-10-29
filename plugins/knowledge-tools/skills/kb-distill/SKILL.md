@@ -17,7 +17,7 @@ Promote the wrong one and you have installed a guess in the place everything els
 authoritative, wearing a citation that makes it look checked.
 
 **Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
-the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+the skills) and the **libraries** registered on this machine, wherever each one lives. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
@@ -226,7 +226,7 @@ When a person asks you to review a packet, this is the decide half, and it is al
 
 Stop rather than proceed, if:
 
-- the knowledge root is unconfigured;
+- the engine root is unconfigured;
 - the episodic material is not actually available to you — never distil from memory of a session;
 - no domain exists for the facts, and you would have to invent one on the fly;
 - the only way to record a security finding is to include the secret's value or a person's

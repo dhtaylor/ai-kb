@@ -1,6 +1,6 @@
 # ADR-0007: The engine holds no knowledge; content lives in per-domain library repositories
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-10-15 by [ADR-0014](0014-library-registry.md)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Amends:** [0003](0003-scoping-topology.md), [0006](0006-behaviour-distribution.md)

@@ -16,7 +16,7 @@ as trustworthy.
 Every rule below exists because of that. Follow them even when the paraphrase is obviously better.
 
 **Two kinds of repository.** Your session context names the **engine** (the contract, the tooling,
-the skills) and the **libraries** installed under it at `kb/`. Behaviour and content are
+the skills) and the **libraries** registered on this machine, wherever each one lives. Behaviour and content are
 separate repositories: the engine holds no domains, and each library is its own repository
 holding exactly one. Write facts into a library, never into the engine.
 
@@ -245,7 +245,7 @@ diff) and external `Source:` URL liveness. A clean run means structurally sound 
 
 Stop and say so rather than proceeding, if:
 
-- the knowledge root is unconfigured;
+- the engine root is unconfigured;
 - the target domain does not exist — that is `kb-create-domain`;
 - the source material is not actually available to you. **Never fold from memory of what a
   document probably says.** A fold with no source is invention wearing a citation;

@@ -1,6 +1,6 @@
 # ADR-0003: Scoping topology — the three homes
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-09-19 by [ADR-0006](0006-behaviour-distribution.md) and [ADR-0007](0007-engine-content-separation.md)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 1 (inventory, map & decide)
