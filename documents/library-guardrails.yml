@@ -43,7 +43,7 @@ jobs:
 
       - name: Fetch the engine
         run: |
-          git clone --depth 1 --branch v0.2.0 --quiet https://github.com/dhtaylor/ai-kb.git "$RUNNER_TEMP/engine"
+          git clone --depth 1 --branch v0.3.0 --quiet https://github.com/dhtaylor/ai-kb.git "$RUNNER_TEMP/engine"
           echo "ENGINE=$RUNNER_TEMP/engine" >> "$GITHUB_ENV"
 
       - name: Structure

@@ -106,7 +106,7 @@ library's keywords overlap a registered one's enough to blur routing.
 
 ## Status
 
-This is early, working software, version 0.2.0, with one author so far. Releases are tagged and
+This is early, working software, version 0.3.0, with one author so far. Releases are tagged and
 described in [CHANGELOG.md](CHANGELOG.md); what a version number means is
 [ADR-0015](documents/decisions/0015-releases-and-pinning.md), and how a library states which version of
 the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-library-contract.md).
