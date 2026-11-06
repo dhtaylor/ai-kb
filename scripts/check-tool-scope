@@ -42,6 +42,10 @@ THE TIERS (keep this table small — it is the whole contract):
                 WHERE a Write call points, only that the tool
                 is declared; confining it is the procedure's
                 job, not this lint's.
+  triage        the reference desk (kb-ask, #130): runs the       Bash, Agent.
+                engine's kb-catalog and starts kb-retrieve
+                specialists. It reads no library itself, so it
+                declares no Read; Bash is for kb-catalog only.
 
 HONEST LIMIT: this is a client-side, declaration-only check. It has no service account to verify
 against, cannot see what a skill's Bash calls actually run, and cannot stop a skill or command from
@@ -58,6 +62,7 @@ TIERS = {
     "curation":     {"Read", "Grep", "Glob", "Write", "Edit", "Bash"},
     "verification": {"Bash"},
     "analysis":     {"Read", "Grep", "Glob", "Write"},
+    "triage":       {"Bash", "Agent"},
 }
 
 # (glob pattern relative to a scan root, the frontmatter key that carries its tool scope)

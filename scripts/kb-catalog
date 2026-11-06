@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""kb-catalog — one compact catalog of the registered libraries, for triage (#130).
+
+Triage picks the library a question belongs to before any specialist reads it. Reading every
+root INDEX.md to do that costs a router per library on every question, and the cost grows with
+the library count. This prints, for each registered library, only what tells neighbors apart:
+
+    <name>  [<scope>]  <path>
+      covers: <the root INDEX.md's description:>
+      not covered: <its "Not covered here:" line (CONVENTIONS §3), or "(none stated)">
+      topics: <the slugs its root router lists, sources/ left out>
+
+The topics matter: a description summarizes, so a question about one topic (secrets, in the
+2026-11-05 run) can match no description and still be the subject of a router line.
+
+A registered library that is not served (kb-libraries: missing, renamed, unsupported contract)
+is printed as `! <name>: <state> at <path> — not served`, never dropped: a library that silently
+vanishes from the catalog turns everything it holds into a "fact not found" that looks correct.
+
+Read-only. It reads each served library's root INDEX.md and nothing else: the catalog is built
+when it is asked for, so it cannot go stale.
+
+Usage: kb-catalog
+Exit 0, or 2 on a usage error or an unreadable registry.
+"""
+import importlib.machinery, importlib.util, pathlib, re, sys
+
+SCRIPTS = pathlib.Path(__file__).resolve().parent
+KEY = re.compile(r"^(description|scope):\s*(.*?)\s*$")
+NOT_COVERED = "Not covered here:"
+ROUTER_LINE = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\)")
+
+
+def load(name, filename):
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(name, str(SCRIPTS / filename))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def unquote(v: str) -> str:
+    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
+
+
+def describe(index: pathlib.Path):
+    """(scope, description, not-covered, topics) from a root INDEX.md. A Not covered here line is a body
+    line outside a code fence; a line it wraps onto (the next non-blank, non-list line) is joined."""
+    lines = index.read_text(errors="replace").splitlines()
+    fields, body = {}, lines
+    if lines and lines[0].strip() == "---":
+        for i, line in enumerate(lines[1:], 1):
+            if line.strip() == "---":
+                body = lines[i + 1:]
+                break
+            m = KEY.match(line)
+            if m:
+                fields[m.group(1)] = unquote(m.group(2))
+    not_covered, fence, topics = None, False, []
+    for i, line in enumerate(body):
+        if line.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        m = None if fence else ROUTER_LINE.match(line)
+        if m and not m.group(2).startswith("sources/"):
+            topics.append(m.group(1))
+        if not fence and not_covered is None and line.startswith(NOT_COVERED):
+            parts = [line[len(NOT_COVERED):].strip()]
+            for nxt in body[i + 1:]:
+                if not nxt.strip() or nxt.lstrip().startswith(("- ", "#", "```")):
+                    break
+                parts.append(nxt.strip())
+            not_covered = " ".join(p for p in parts if p)
+    return (fields.get("scope", "?"), fields.get("description", "(no description)"), not_covered,
+            topics)
+
+
+def main(argv) -> int:
+    if argv:
+        print("usage: kb-catalog   (takes no arguments)", file=sys.stderr)
+        return 2
+    try:
+        libs = load("kb_libraries", "kb-libraries").entries()
+    except RuntimeError as e:
+        print(f"kb-catalog: {e}", file=sys.stderr)
+        return 2
+    if not libs:
+        print("kb-catalog: no libraries are registered on this machine.")
+        return 0
+    served = [l for l in libs if l["state"] == "ok"]
+    print(f"kb-catalog: {len(libs)} registered, {len(served)} served")
+    for lib in libs:
+        if lib["state"] != "ok":
+            print(f"! {lib['name']}: {lib['state']} at {lib['path']} — not served")
+            continue
+        scope, desc, nc, topics = describe(lib["path"] / "INDEX.md")
+        print(f"{lib['name']}  [{scope}]  {lib['path']}")
+        print(f"  covers: {desc}")
+        print(f"  not covered: {nc if nc else '(none stated)'}")
+        print(f"  topics: {', '.join(topics) if topics else '(none listed)'}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

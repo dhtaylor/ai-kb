@@ -22,7 +22,7 @@ facts**:
 |---|---|
 | [`CONVENTIONS.md`](CONVENTIONS.md) | The contract: scope tiers, provenance, currency stamps, slugs and cross-links, contradictions, the retrieval rules. It settles any question this README leaves open. |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating, the weekly job, and working on the engine itself. |
-| `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills, the `kb-retrieve` agent, and the `/kb-capture` and `/kb-init` commands. |
+| `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills, the `kb-retrieve` agent, the `kb-ask` triage skill, and the `/kb-capture` and `/kb-init` commands. |
 | `plugins/analysis-tools/` | A second plugin: a skill that reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft. It reads its tradecraft from a library and holds none. |
 | `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`), the upkeep commands (`kb-verify`, `kb-sources`, `kb-watch`, `kb-due`), the opt-in weekly job (`kb-schedule`, with `kb-prepare`, `kb-apply` and `kb-report`), `kb-backup`, the retrieval-cost tools (`kb-telemetry`, `kb-eval-sample`), and the checks that guard the contract. |
 | `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0017). Each one explains why a rule exists. |
@@ -70,8 +70,9 @@ covers all of this in full, including what `kb-bootstrap` writes and where.
 3. **Curate.** `kb-update-domain` folds in documents and specs. `kb-create-domain` and
    `kb-organize-domain` build and reshape domains. `kb-audit` sweeps for decay and reports without
    fixing anything.
-4. **Retrieve.** The `kb-retrieve` agent answers questions from the knowledge base, with citations,
-   and refuses to guess or to serve a disputed fact.
+4. **Retrieve.** The `kb-ask` skill picks the library a question belongs to from one compact
+   catalog, and hands it to a `kb-retrieve` specialist for that library. The specialist answers with
+   citations and refuses to guess or to serve a disputed fact.
 
 ## Guardrails
 
@@ -124,9 +125,10 @@ the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-li
 - **Next:** rolling out further domains. No orchestrator across domain agents will be built until
   `kb-retrieve`'s own routing is shown to fall short ([ADR-0011](documents/decisions/0011-no-orchestrator-until-routing-fails.md)).
   Tests on 2026-10-26 put routing at that line with six libraries, and below it once libraries on
-  neighboring topics were added (recorded in the knowledge-architecture library). A successor design, a
-  triage step that hands each question to one library's specialist, is planned for after this release
-  ([#130](https://github.com/dhtaylor/ai-kb/issues/130)).
+  neighboring topics were added (recorded in the knowledge-architecture library). Its successor, a
+  triage step that hands each question to one library's specialist, is built as `kb-ask` and
+  proposed in [ADR-0018](documents/decisions/0018-triage-and-specialists.md). It delivers cited
+  answers far more often, but does not yet meet the 95% routing target at 48 libraries.
   Steady-state upkeep is surfaced when due
   ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)), and the opt-in weekly
   schedule prepares the work and reports the decisions waiting, but never edits a fact
