@@ -26,6 +26,16 @@ engine release it was last verified against in its own release notes.
   never a commit gate. `kb-audit` runs it in Step 1 and queues each hit as `transient content` at
   severity 7. `kb-prepare audit` passes its output to the packet (#136).
 
+- `kb-distill` writes current state, not a changelog (#134, #135):
+  - A reading, such as a count or a list of what is offline, stays in the note. The library keeps
+    the method that produces it.
+  - Behavior seen only on a branch or in an open pull request stays in the note until it merges.
+  - A new supersede outcome rewrites a section that is no longer true to what is true now and
+    removes a dropped row. A first-hand change is a supersede, not a contradiction.
+  - Sections are named after their subject, never an event, date or change. Nothing is added to
+    an existing `## Update <date>` section.
+  - Step 7 runs `check-transient` on the library.
+
 ## v0.3.0 — 2026-10-31
 
 Changes since v0.2.0. A minor release: it changes the contract and the checks (ADR-0015). This engine

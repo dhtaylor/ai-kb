@@ -52,6 +52,19 @@ consequence is…", "so presumably…", "this should mean…" — written beneat
 borrows that fact's `Verified:` stamp and reads as checked. It is speculation. Leave it out of the
 fact section; if it is worth keeping, it goes in `<domain>-open-questions.md` as a question.
 
+**A reading is not a fact, even when it was observed.** A count, a size, a list of what is offline
+today: the command ran and the output is right, and it will be wrong next month. Ask: *would this
+still be true if someone ran the same lookup a month from now?* If not, it stays in the note. What
+the library keeps is the method: the command or query that produces the reading, and where it runs.
+If the library already states the method, the reading adds nothing to it. A reading that changes a
+durable fact (a database that no longer exists, an instance that was retired) is that change, and
+it is placed as one in Step 4.
+
+**Unmerged code is not current state.** Behavior seen on a branch, in an open pull request or merge
+request, or in a review of one, describes a proposal. It stays in the note until it merges. Report
+it as awaiting merge. Do not file it beside what main or the deployed system does, however it is
+labeled: a reader looking for how the system works now will take it as fact.
+
 **A credential is never a candidate fact's evidence.** When a note records a security finding —
 a password, key or token found somewhere it should not be — the fact is the secret's reference
 (vault key or secret name), its location (file, commit) and the required action. The literal value
@@ -106,9 +119,25 @@ Placement follows the same rules as a fold, and the same decision table:
 - the domain already states it identically → **do not duplicate**; add the episodic backlink to the
   existing section, because dedup merges provenance;
 - states it less completely → enrich in place, keep all source links;
+- states what **was** true, and the note records that it changed → **supersede**: rewrite the
+  section to state what is true now, keep both source links, and keep at most one line saying what
+  it replaced and when. Remove what no longer exists: a dropped row leaves the table, rather than
+  staying with a "dropped" note beside it. A change the session made, or a check the session ran
+  that shows the change, is first-hand evidence, so supersede it. It is not a contradiction;
 - **contradicts** it → `status: CONFLICTED`, marked on the **narrowest unit** holding the disputed
-  claim so neighbouring sound facts stay retrievable. Never pick a winner;
+  claim so neighbouring sound facts stay retrievable. Never pick a winner. A contradiction is two
+  sources disagreeing about the same state. A thing that changed is a supersede;
 - does not state it → add it to the file where it belongs.
+
+**A fact file states current state, under subject headings.** Name a section after what it
+describes ("Approval rules", "Replication links"), never after an event, a date, a change or a
+session: no `## Update 2026-10-22`, no `(corrected 2026-10-26)`, no `— dropped 2026-11-02`, no
+`## PR 412`. A heading like that turns the file into a changelog, and a reader has to replay it to
+learn what is true. The date belongs on the `Verified:` stamp, and the history belongs in the note
+and in git. If the fact you are placing sits in an existing event-titled section, write it under a
+subject heading instead, and move into it what that section still holds that is true. Never add to
+an event-titled section, and never open a new one. Report any other event-titled section you notice
+rather than rewrite it (Step 6).
 
 If no domain covers the fact, **stop and say a domain must be created first** — that is
 `kb-create-domain`. Do not improvise a home. An **installed library that simply has no topic files yet is
@@ -154,7 +183,9 @@ Present, before committing:
 - every secret you recorded by reference, with confirmation that no literal value and no personal
   identifier was copied (§6).
 
-Then run the engine's `scripts/check-kb <library>` and report the result and its limits.
+Then run the engine's `scripts/check-kb <library>` and `scripts/check-transient <library>`, and
+report each result and its limits. A `check-transient` hit in a section you wrote is yours to
+rewrite before review. A hit you did not cause is reported.
 
 **Stop here for review. Only after the human approves do you commit.** The facts above are already
 written into the library's working tree, not the library's history — that is the draft, the same
@@ -181,7 +212,7 @@ with the packet body in exactly this shape, and nothing before or after it:
 
 ## Proposed changes
 
-### Item 1: <add | enrich | backlink | conflict>, <target file> § <section heading>
+### Item 1: <add | enrich | backlink | supersede | conflict>, <target file> § <section heading>
 - From: episodic/<note>.md, line <n>: "<the line, word for word>"
 - Category: <Observed | Concluded | Documented | Tried and abandoned>
 - Scope: <tier>, because <the tier test that decided it>
