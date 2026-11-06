@@ -9,8 +9,9 @@
 ## Context and problem statement
 
 Two repositories are released: the engine (`ai-kb`) and the knowledge-architecture library
-(`ai-kb-architecture`). The library is the engine's reference library. It records why the engine is
-built the way it is, and it is folded from the engine before each release.
+(`ai-kb-architecture`). The library is, in essence, the engine's detailed documentation: how the
+engine works and why. It is folded from the engine before each release, so it describes one engine
+version. It is tied to the engine in a way no other library is.
 
 ADR-0015 gave each library its own version number, and ADR-0016 kept that rule for every library,
 because most libraries will belong to people the engine's maintainer never hears from. Following
@@ -38,8 +39,8 @@ v0.4.0 for both, so the library goes from v0.2.0 to v0.4.0, and no library v0.3.
 - **A fix to the library alone, between releases, waits for the next release.** It lands on `main`
   as usual (corrections propagate when they land, ADR-0003), but it gets no tag of its own. An
   engine patch release `vX.Y.Z+1` tags the library too, even if the library has not changed.
-- **No other library is affected.** The five personal libraries have no release cycle. A third-party
-  library versions itself, under ADR-0016.
+- **This is the only exception.** Every other library is released separately and versions itself,
+  under ADR-0015 and ADR-0016. The five personal libraries have no release cycle.
 
 ### Release day
 
