@@ -4,6 +4,22 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
+## Unreleased
+
+- Retrieval by triage and specialists, proposed in ADR-0018 (#130):
+  - `scripts/kb-catalog` prints one compact catalog of the registered libraries: each one's name,
+    scope, description, `Not covered here:` line and router topics. A library that is registered
+    but not served is named.
+  - `kb-retrieve` has a specialist mode. When a prompt begins `SPECIALIST: <library>`, the agent
+    reads only that library. It answers `not mine` after reading the root router if the topic is
+    outside the library, and it reports links into other libraries without following them.
+  - The new `kb-ask` skill is the default way to retrieve. It reads the catalog, sends the
+    question to one specialist (a second only when needed, never more than two), and passes the
+    answer back word for word. `kb-retrieve`'s description now names it as the specialist, to be
+    called directly only when the library is already known.
+  - `check-tool-scope` has a `triage` tier (Bash, Agent) for the desk, which reads no library
+    itself.
+
 ## v0.3.0 — 2026-10-31
 
 Changes since v0.2.0. A minor release: it changes the contract and the checks (ADR-0015). This engine

@@ -1,0 +1,102 @@
+{
+ "seed": 20261026,
+ "note": "The 24-case subsample of the 2026-10-26 routing retest, reused unchanged.",
+ "cases": [
+  {
+   "library": "agile-requirements",
+   "golden": "Q2"
+  },
+  {
+   "library": "agile-requirements",
+   "golden": "Q3"
+  },
+  {
+   "library": "agile-requirements",
+   "golden": "Q4"
+  },
+  {
+   "library": "agile-requirements",
+   "golden": "Q11"
+  },
+  {
+   "library": "ai-writing-signals",
+   "golden": "Q2"
+  },
+  {
+   "library": "ai-writing-signals",
+   "golden": "Q9"
+  },
+  {
+   "library": "ai-writing-signals",
+   "golden": "Q14"
+  },
+  {
+   "library": "ai-writing-signals",
+   "golden": "Q17"
+  },
+  {
+   "library": "azure-devops",
+   "golden": "Q1"
+  },
+  {
+   "library": "azure-devops",
+   "golden": "Q6"
+  },
+  {
+   "library": "azure-devops",
+   "golden": "Q7"
+  },
+  {
+   "library": "azure-devops",
+   "golden": "Q10"
+  },
+  {
+   "library": "claude-code-runtime",
+   "golden": "Q7"
+  },
+  {
+   "library": "claude-code-runtime",
+   "golden": "Q11"
+  },
+  {
+   "library": "claude-code-runtime",
+   "golden": "Q13"
+  },
+  {
+   "library": "claude-code-runtime",
+   "golden": "Q21"
+  },
+  {
+   "library": "intelligence-analysis",
+   "golden": "Q6"
+  },
+  {
+   "library": "intelligence-analysis",
+   "golden": "Q8"
+  },
+  {
+   "library": "intelligence-analysis",
+   "golden": "Q11"
+  },
+  {
+   "library": "intelligence-analysis",
+   "golden": "Q12"
+  },
+  {
+   "library": "knowledge-architecture",
+   "golden": "Q4"
+  },
+  {
+   "library": "knowledge-architecture",
+   "golden": "Q16"
+  },
+  {
+   "library": "knowledge-architecture",
+   "golden": "Q26"
+  },
+  {
+   "library": "knowledge-architecture",
+   "golden": "Q35"
+  }
+ ]
+}

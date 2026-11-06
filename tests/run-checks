@@ -681,6 +681,15 @@ tool_fixture "$TMP/toolscope/badtier/agents/fx.md" tools bogus "Read, Grep, Glob
 case_run "unknown tier fails" 1 "unknown tier" -- \
   "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/badtier"
 
+# The triage desk (kb-ask, #130) starts specialists and runs kb-catalog; it never reads a library.
+mkdir -p "$TMP/toolscope/triage/skills/kb-x" "$TMP/toolscope/triage-reads/skills/kb-x"
+tool_fixture "$TMP/toolscope/triage/skills/kb-x/SKILL.md" allowed-tools triage "Bash, Agent"
+case_run "triage-tier file declaring Bash and Agent passes" 0 "clean" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/triage"
+tool_fixture "$TMP/toolscope/triage-reads/skills/kb-x/SKILL.md" allowed-tools triage "Bash, Agent, Read"
+case_run "triage-tier file declaring Read fails" 1 "outside the 'triage' tier's allowance" -- \
+  "$ENGINE/scripts/check-tool-scope" "$TMP/toolscope/triage-reads"
+
 # ----------------------------------------------------------- kb-bootstrap ----
 # kb-bootstrap writes machine-level config OUTSIDE this repo (a settings file,
 # global git config, a shell rc) — the highest-blast-radius script here — so it
@@ -3453,6 +3462,30 @@ case_run "kb-schedule run: a second run while one holds the lock exits 0 and doe
   bash -c 'mkdir -p "$1/.local/state/ai-kb"; exec 9>"$1/.local/state/ai-kb/schedule.lock"; flock 9; HOME="$1" "$2/scripts/kb-schedule" run' _ "$KR/home" "$ENGINE"
 case_run "schedulable: kb-schedule run from / with a stripped environment" 0 "exit=0" -- \
   sched env HOME="$KR/home" STUB_LOG="$KR/stub-args" STUB_RESULT="$PK/result" "$ENGINE/scripts/kb-schedule" run
+
+# ------------------------------------------------- kb-catalog: the triage catalog (#130) ----
+# Triage reads one catalog, not every root INDEX.md. It must carry what tells neighbors apart
+# (scope, description, the Not covered here line), and a library that is registered but not
+# served must be named, never dropped: a silent gap reads as "fact not found".
+CH="$TMP/cathome"; CD="$TMP/cat"; mkdir -p "$CH" "$CD"
+build_clean "$CD/alpha"; build_clean "$CD/beta" "product:acme"; build_clean "$CD/gamma"
+sed -i 's/^description: a test fixture\.$/description: Router for alpha widget facts./' "$CD/alpha/INDEX.md"
+printf '\nNot covered here: widget pricing — held by [[beta:widgets]]\n' >> "$CD/alpha/INDEX.md"
+for l in alpha beta gamma; do HOME="$CH" "$ENGINE/scripts/kb-library" add "$CD/$l" >/dev/null; done
+mv "$CD/gamma" "$CD/gamma-moved"
+kbcat() { HOME="$CH" "$ENGINE/scripts/kb-catalog" "$@"; }
+case_run "kb-catalog: a served library is listed with its scope and path" 0 "alpha  [general]  $(cd "$CD/alpha" && pwd -P)" -- kbcat
+case_run "kb-catalog: ...with its description" 0 "  covers: Router for alpha widget facts." -- kbcat
+case_run "kb-catalog: ...and its Not covered here line" 0 "  not covered: widget pricing — held by [[beta:widgets]]" -- kbcat
+case_run "kb-catalog: a library with no Not covered here line says none is stated" 0 "  not covered: (none stated)" -- \
+  sh -c 'HOME="$1" "$2/scripts/kb-catalog" | sed -n "/^beta /,/^[^ ]/p"' _ "$CH" "$ENGINE"
+case_run "kb-catalog: ...and the topics its root router lists, by slug" 0 "  topics: widgets" -- kbcat
+case_run "kb-catalog: a scope is read from the library, not assumed" 0 "beta  [product:acme]" -- kbcat
+case_run "kb-catalog: a registered library that is not served is named, not dropped" 0 "! gamma: missing at" -- kbcat
+case_run "kb-catalog: the count says how many are served" 0 "3 registered, 2 served" -- kbcat
+case_run "kb-catalog: no registry is a clean empty catalog" 0 "no libraries are registered" -- \
+  env HOME="$TMP/cat-empty-home" "$ENGINE/scripts/kb-catalog"
+case_run "kb-catalog: it takes no arguments" 2 "usage" -- kbcat --all
 
 
 if [ "$FAIL" -eq 0 ]; then
