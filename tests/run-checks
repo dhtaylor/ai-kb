@@ -1207,6 +1207,14 @@ class H(http.server.BaseHTTPRequestHandler):
         # A site that refuses the tool's own User-Agent but serves any other client (issue #117).
         if self.path == "/uablock":
             st = 403 if self.headers.get("User-Agent", "").startswith("kb-sources") else 200
+        # A page behind a sign-in wall answers with a redirect to its login page, which serves 200
+        # (issue #120: an SSO portal). A page that only has "login" in its name is a real page.
+        hops = {"/walled": "/Special:UserLogin?returntotitle=%40go%2Fpage%2F7",
+                "/oauthwalled": "/oauth2/authorize?client_id=x", "/guide": "/docs/login-guide"}
+        if self.path in hops:
+            self.send_response(302); self.send_header("Location", hops[self.path]); self.end_headers(); return
+        if self.path.split("?")[0] in ("/Special:UserLogin", "/oauth2/authorize", "/docs/login-guide"):
+            st = 200
         self.send_response(st); self.send_header("Content-Length", "0"); self.end_headers()
     def do_HEAD(self): self._do("HEAD")
     def do_GET(self): self._do("GET")
@@ -1349,6 +1357,31 @@ case_run "kb-sources: a library holding the queue still passes check-kb" 0 "clea
   "$ENGINE/scripts/check-kb" "$TMP/ksrc"
 case_run "kb-sources: kb-due counts the open records without a change" 0 "5 open queue item" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ksrc" --nudge
+
+# A redirect to a sign-in page is not the source (issue #120). Its own library, so the counts
+# above are untouched.
+build_clean "$TMP/ksrc-login"
+mkdir -p "$TMP/ksrc-login/sources"
+fm fx-sources general > "$TMP/ksrc-login/sources/INDEX.md"
+printf '# Sources\n' >> "$TMP/ksrc-login/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc-login/INDEX.md"
+for pair in "s-walled walled" "s-oauth oauthwalled" "s-guide guide"; do
+  set -- $pair
+  fm "$1" general > "$TMP/ksrc-login/sources/$1.md"
+  printf '# Source: %s\n\n- **URL:** http://127.0.0.1:%s/%s\n' "$1" "$SP" "$2" >> "$TMP/ksrc-login/sources/$1.md"
+  printf -- '- [%s](%s.md) — stub\n' "$1" "$1" >> "$TMP/ksrc-login/sources/INDEX.md"
+done
+case_run "kb-sources: a redirect to a sign-in page exits 1" 1 "sign-in page" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc-login" --yes
+LQ="$TMP/ksrc-login/needs-attention.md"
+case_run "kb-sources: a redirect to Special:UserLogin is queued source-unreachable" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-walled.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$LQ"
+case_run "kb-sources: a redirect to /oauth2/authorize is queued source-unreachable" 0 "" -- \
+  bash -c 'grep -B2 -A8 "stub: \"sources/s-oauth.md\"" "$1" | grep -qF "category: \"source-unreachable\""' _ "$LQ"
+case_run "kb-sources: the record says it redirected to a sign-in page" 0 "" -- \
+  grep -qF "redirected to a sign-in page" "$LQ"
+case_run "kb-sources: a page with login in its name is not a sign-in page" 1 "" -- \
+  grep -qF "sources/s-guide.md" "$LQ"
 
 # HEAD is a cheap first try, GET the answer (issue #74): a server that answers HEAD with any
 # error but serves GET is alive, and only GET's 404/410 is dead. 429 is the exception: the

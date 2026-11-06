@@ -34,11 +34,16 @@ itself (issue #117)):
 
     alive         2xx after redirects. A redirect to a different final URL is printed as a
                   note: the source moved, and the stub may want a new address. Not a failure.
+                  A redirect that lands on a sign-in page is not alive (below).
     dead          404 or 410 on GET — the server says the source is gone.
                   category: source-dead
     unreachable   DNS failure, timeout, refused connection, TLS error, 5xx, 403, 429, any
-                  other status. We could not decide, and "unreachable" is never conflated
-                  with "dead" or with "unchanged" (§6).
+                  other status, or a redirect that lands on a sign-in page: a path segment
+                  `login`, `signin`, `sso` or `UserLogin` (any case, a `Special:` prefix or a
+                  file extension ignored), or `/oauth2/authorize`. A login page answers 200,
+                  but it is not the source, and a page behind a sign-in wall cannot be checked
+                  by a script (issue #120). We could not decide, and "unreachable" is never
+                  conflated with "dead" or with "unchanged" (§6).
                   category: source-unreachable
 
 THE QUEUE reuses kb-watch's primitives exactly as kb-verify does (imported from
@@ -143,6 +148,20 @@ def libraries(root):
     return sorted(d for d in root.iterdir() if d.is_dir() and (d / "INDEX.md").is_file()) if root.is_dir() else []
 
 
+SIGNIN = {"login", "signin", "sso", "userlogin"}
+
+
+def signin_page(url):
+    """True when a URL's path names a sign-in page (issue #120)."""
+    import urllib.parse
+    segs = [x.lower() for x in urllib.parse.urlsplit(url).path.split("/") if x]
+    for i, seg in enumerate(segs):
+        seg = seg.removeprefix("special:").rsplit(".", 1)[0]
+        if seg in SIGNIN or (seg == "oauth2" and segs[i + 1:i + 2] == ["authorize"]):
+            return True
+    return False
+
+
 def fetch(url):
     """(class, detail, final_url). The network module is imported here and nowhere else, so a
     run without --yes cannot reach it."""
@@ -175,6 +194,8 @@ def fetch(url):
         reason = getattr(e, "reason", e)
         return "unreachable", f"{type(reason).__name__}: {reason}", url
     if 200 <= code < 300:
+        if final != url and signin_page(final):
+            return "unreachable", f"redirected to a sign-in page: HTTP {code} at {final}", final
         return "alive", f"HTTP {code}", final
     return "unreachable", f"HTTP {code}", final
 
