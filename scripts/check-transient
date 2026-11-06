@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check-transient — headings shaped like a changelog or a snapshot, in a library's fact files (#136).
 
-A fact file states current state (CONVENTIONS §5). Field reports (#134, #135) showed what goes
+A fact file states current state (kb-distill, Step 4). Field reports (#134, #135) showed what goes
 wrong instead, and two shapes carry it, both visible in the heading:
 
   dated heading   a date (YYYY-MM or YYYY-MM-DD) in the heading: "## Update 2026-10-22",
