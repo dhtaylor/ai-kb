@@ -52,7 +52,7 @@ build_clean() {
   mkdir -p "$d"
   # Declares the newest contract (CONVENTIONS §14), so a fixture is not "behind" (ADR-0016).
   # Publishing a new contract version means raising this line.
-  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.3"\nlast_swept: never\n' > "$d/INDEX.md"
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.4"\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
   sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
@@ -1383,6 +1383,33 @@ case_run "kb-sources: the record says it redirected to a sign-in page" 0 "" -- \
 case_run "kb-sources: a page with login in its name is not a sign-in page" 1 "" -- \
   grep -qF "sources/s-guide.md" "$LQ"
 
+# Liveness: manual (#120, contract 2.4): a stub only a person can check is never fetched, and is
+# counted, not queued. The weekly report lists it once per sweep interval (kb-report, below).
+build_clean "$TMP/ksrc-manual"
+mkdir -p "$TMP/ksrc-manual/sources"
+fm fx-sources general > "$TMP/ksrc-manual/sources/INDEX.md"
+printf '# Sources\n- [s-man](s-man.md) — stub\n- [s-ok](s-ok.md) — stub\n' >> "$TMP/ksrc-manual/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$TMP/ksrc-manual/INDEX.md"
+fm s-man general > "$TMP/ksrc-manual/sources/s-man.md"
+printf '# Source: s-man\n\n- **URL:** http://127.0.0.1:%s/manualonly\n- **Liveness:** manual\n' "$SP" >> "$TMP/ksrc-manual/sources/s-man.md"
+cp "$TMP/ksrc/sources/s-ok.md" "$TMP/ksrc-manual/sources/s-ok.md"
+case_run "kb-sources: a Liveness: manual stub passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/ksrc-manual"
+case_run "kb-sources: without --yes a manual stub is listed as not fetched" 0 "Liveness: manual" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc-manual"
+: > "$SRV/access.log"
+case_run "kb-sources: a manual stub is counted, and the rest are fetched" 0 "1 stub(s) marked Liveness: manual" -- \
+  "$ENGINE/scripts/kb-sources" "$TMP/ksrc-manual" --yes
+case_run "kb-sources: a manual stub's URL is never requested" 1 "" -- grep -qF '/manualonly' "$SRV/access.log"
+case_run "kb-sources: the other stub was still fetched" 0 "" -- grep -qxF 'HEAD /ok' "$SRV/access.log"
+case_run "kb-sources: a manual stub is not queued" 1 "" -- test -e "$TMP/ksrc-manual/needs-attention.md"
+LB="$TMP/liveness-bad"; build_clean "$LB"; mkdir -p "$LB/sources"
+fm fx-sources general > "$LB/sources/INDEX.md"; printf '# Sources\n- [s-x](s-x.md) — stub\n' >> "$LB/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$LB/INDEX.md"
+fm s-x general > "$LB/sources/s-x.md"; printf '# Source: s-x\n\n- **URL:** https://example.org/x\n- **Liveness:** sometimes\n' >> "$LB/sources/s-x.md"
+case_run "Liveness: a value other than manual fails check-kb from contract 2.4" 1 "Liveness" -- "$ENGINE/scripts/check-kb" "$LB"
+sed -i 's/^kb_contract: .*/kb_contract: "2.3"/' "$LB/INDEX.md"
+case_run "Liveness: a value other than manual is only a warning below 2.4" 0 "fails from contract 2.4" -- "$ENGINE/scripts/check-kb" "$LB"
+
 # HEAD is a cheap first try, GET the answer (issue #74): a server that answers HEAD with any
 # error but serves GET is alive, and only GET's 404/410 is dead. 429 is the exception: the
 # server asked us to back off, so no second request is sent.
@@ -1949,7 +1976,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.3"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.4"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \
@@ -3399,6 +3426,17 @@ case_run "kb-report: a report directory inside a library is refused" 2 "outside"
   "$ENGINE/scripts/kb-report" "$RL" --out "$RL/reports"
 case_run "schedulable: kb-report prints no content" 1 "exit=1" -- \
   sched env KB_PACKETS="$KB_PACKETS" "$ENGINE/scripts/kb-report" "$RL" --out "$RR/r3"
+
+# Liveness: manual stubs are listed once per sweep interval: while the library's sweep is due (#120).
+RM="$RR/kb/manual"; build_clean "$RM"; mkdir -p "$RM/sources"
+fm fx-sources general > "$RM/sources/INDEX.md"; printf '# Sources\n- [s-man](s-man.md) — stub\n' >> "$RM/sources/INDEX.md"
+printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$RM/INDEX.md"
+fm s-man general > "$RM/sources/s-man.md"; printf '# Source: s-man\n\n- **URL:** https://example.org/walled\n- **Liveness:** manual\n' >> "$RM/sources/s-man.md"
+case_run "kb-report: a sweep due lists the Liveness: manual stubs" 0 "" -- \
+  bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md" && grep -qF "sources/s-man.md" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-due" "$WEEK"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$RM/INDEX.md"
+case_run "kb-report: no sweep due, so the manual stubs are not listed" 1 "" -- \
+  bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-calm" "$WEEK"
 
 "$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
 case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
