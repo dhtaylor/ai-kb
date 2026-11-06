@@ -111,6 +111,8 @@ This is early, working software, version 0.3.0, with one author so far. Releases
 described in [CHANGELOG.md](CHANGELOG.md); what a version number means is
 [ADR-0015](documents/decisions/0015-releases-and-pinning.md), and how a library states which version of
 the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-library-contract.md).
+The reference library, ai-kb-architecture, is released with the engine under the same tag
+([ADR-0019](documents/decisions/0019-engine-and-reference-library-release-together.md)).
 
 - **Built and tested:** the contract (version 2.3), ADRs 1 to 17, the five skills, the retrieval agent, both
   halves of the retrieval eval, the guardrails above, and the weekly job.

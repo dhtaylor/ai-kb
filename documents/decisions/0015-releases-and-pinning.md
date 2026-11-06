@@ -1,6 +1,6 @@
 # ADR-0015: What a release is, and how libraries pin the engine
 
-- **Status:** Accepted, amended 2026-10-21 by [ADR-0016](0016-versioned-library-contract.md) and 2026-10-23 by the owner (see the notes under the title)
+- **Status:** Accepted, amended 2026-10-21 by [ADR-0016](0016-versioned-library-contract.md), 2026-10-23 by the owner and 2026-11-06 by [ADR-0019](0019-engine-and-reference-library-release-together.md) (see the notes under the title)
 - **Date:** 2026-10-16
 - **Deciders:** Dandy Taylor
 - **Applies:** [0003](0003-scoping-topology.md) ("Latest-wins for humans; pin for automation")
@@ -13,6 +13,10 @@
 >
 > **Amended 2026-10-23 by the owner:** a release has a code freeze two days before it. See *A release
 > is preceded by a two-day freeze* below.
+>
+> **Amended 2026-11-06 by [ADR-0019](0019-engine-and-reference-library-release-together.md):**
+> ai-kb-architecture, the engine's reference library, takes the engine's release tag from v0.4.0.
+> Every other library keeps its own version.
 
 ## Context and problem statement
 

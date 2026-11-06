@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- ADR-0019: ai-kb-architecture, the engine's reference library, takes the engine's release tag.
+  From v0.4.0 both repositories are tagged `vX.Y.Z` on release day, so the library goes from v0.2.0
+  to v0.4.0. Published tags are not moved. The ADR lists the release-day steps for both repositories.
+
 - Retrieval by triage and specialists, proposed in ADR-0018 (#130):
   - `scripts/kb-catalog` prints one compact catalog of the registered libraries: each one's name,
     scope, description, `Not covered here:` line and router topics. A library that is registered
