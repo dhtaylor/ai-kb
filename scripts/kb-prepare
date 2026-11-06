@@ -58,7 +58,7 @@ def library_name(lib: pathlib.Path) -> str:
 def mechanical_checks(lib: pathlib.Path) -> str:
     out = []
     for cmd in (["check-kb", str(lib)], ["check-scope", str(lib)], ["check-golden", str(lib)],
-                ["check-xlinks", "--installed"]):
+                ["check-xlinks", "--installed"], ["check-transient", str(lib)]):
         r = subprocess.run([str(SCRIPTS / cmd[0])] + cmd[1:], capture_output=True, text=True)
         out.append(f"$ {' '.join(cmd)}   (exit {r.returncode})\n{(r.stdout + r.stderr).strip()}")
     return "\n\n".join(out)

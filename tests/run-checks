@@ -3487,6 +3487,37 @@ case_run "kb-catalog: no registry is a clean empty catalog" 0 "no libraries are 
   env HOME="$TMP/cat-empty-home" "$ENGINE/scripts/kb-catalog"
 case_run "kb-catalog: it takes no arguments" 2 "usage" -- kbcat --all
 
+# ------------------------------------------- check-transient: dated and ticket headings (#136) ----
+# A fact file states current state. A date or a ticket id in a heading is the shape the field
+# reports showed changelogs and snapshots take ("## Update 2026-10-22", "### x — dropped
+# 2026-11-02", "## PR 412 — fix"). Detection only: kb-audit queues it, no commit is refused.
+TR="$TMP/transient"; build_clean "$TR/lib"
+ctr() { "$ENGINE/scripts/check-transient" "$TR/lib"; }
+case_run "check-transient: a clean library has nothing to report" 0 "no dated or ticket-titled headings" -- ctr
+printf '\n## Update 2026-10-22 (pushed)\n\nText.\n' >> "$TR/lib/widgets.md"
+case_run "check-transient: an Update <date> heading is reported" 1 "widgets.md:" -- ctr
+case_run "check-transient: ...as a dated heading, with its text" 1 "dated heading  ## Update 2026-10-22 (pushed)" -- ctr
+build_clean "$TR/lib2"; ctr2() { "$ENGINE/scripts/check-transient" "$TR/lib2"; }
+printf '\n### Links — dropped 2026-11\n\nText.\n' >> "$TR/lib2/widgets.md"
+case_run "check-transient: an event date in a heading, month only, is reported" 1 "dated heading" -- ctr2
+build_clean "$TR/lib3"; ctr3() { "$ENGINE/scripts/check-transient" "$TR/lib3"; }
+printf '\n## PR 412 — limit raised\n\nText.\n## WI #8812 review\n\nText.\n' >> "$TR/lib3/widgets.md"
+case_run "check-transient: a PR id in a heading is reported" 1 "ticket heading  ## PR 412 — limit raised" -- ctr3
+case_run "check-transient: a work-item id with # is reported" 1 "ticket heading  ## WI #8812 review" -- ctr3
+case_run "check-transient: the count names the files" 1 "2 heading(s) in 1 file(s)" -- ctr3
+# Not reported: what is dated by design, a fenced example, and lookalikes.
+build_clean "$TR/lib4"; ctr4() { "$ENGINE/scripts/check-transient" "$TR/lib4"; }
+mkdir -p "$TR/lib4/episodic" "$TR/lib4/documents" "$TR/lib4/sources"
+printf '## What happened 2026-10-22\n' > "$TR/lib4/episodic/2026-10-22-notes.md"
+printf '## Run 2026-10-22\n' > "$TR/lib4/documents/eval.md"
+printf '# Source: changelog 2026-10-22\n' > "$TR/lib4/sources/cl.md"
+printf '\n## kb-audit sweep — 2026-10-22\n' > "$TR/lib4/needs-attention.md"
+printf '\n# Amended 2026-10-28\n' >> "$TR/lib4/fx-golden.md"
+printf '\n## Routed 2026-10-22\n' >> "$TR/lib4/INDEX.md"
+printf '\n## Open question from 2026-10-22\n' > "$TR/lib4/fx-open-questions.md"
+printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n\n## Pricing for 2026\n\n## Contract v2.3\n' >> "$TR/lib4/widgets.md"
+case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
+case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"
 
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
