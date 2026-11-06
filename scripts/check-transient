@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""check-transient — headings shaped like a changelog or a snapshot, in a library's fact files (#136).
+
+A fact file states current state (CONVENTIONS §5). Field reports (#134, #135) showed what goes
+wrong instead, and two shapes carry it, both visible in the heading:
+
+  dated heading   a date (YYYY-MM or YYYY-MM-DD) in the heading: "## Update 2026-10-22",
+                  "### Links — dropped 2026-11-02", "## Callers (corrected 2026-10-26)",
+                  "## Disk usage (one install, 2026-11-05)". A dated heading records an event
+                  or a reading, and the next reader has to replay it to learn what is true now.
+  ticket heading  a change or work-item id in the heading (PR, MR, WI, then a number):
+                  "## PR 412 — limit raised". A section titled after a change usually describes
+                  that change, often before it merged, rather than the subject.
+
+Only headings are read. Body phrases ("as of", "not yet merged") matched too much legitimate text
+in the field, and a heading is where these shapes take hold. A heading inside a code fence is not
+a heading.
+
+Not read, because they are dated by design or are not fact files: episodic/, documents/,
+sources/, every INDEX.md, the golden set (*-golden.md), needs-attention.md, *-open-questions.md
+and *-contradictions.md.
+
+DETECTION ONLY. This is never a commit gate: a dated heading can be right (a dated release, a
+legal effective date), and only a person can say. kb-audit queues each hit as `transient content`,
+and an acknowledged item is not raised again.
+
+Usage: check-transient <library>
+Exit 0 when nothing is found, 1 when anything is, 2 on a usage error.
+"""
+import pathlib, re, sys
+
+SKIP_DIRS = {"episodic", "documents", "sources", ".git", ".github", ".githooks", "plugins", "scripts"}
+SKIP_NAME = re.compile(r"^(INDEX|needs-attention)\.md$|-(golden|open-questions|contradictions)\.md$")
+HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+DATE = re.compile(r"(?<![\d-])(19|20)\d{2}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?(?![\d-])")
+TICKET = re.compile(r"\b(PR|MR|WI)\s?#?\d{1,6}\b")
+
+
+def fact_files(lib: pathlib.Path):
+    for f in sorted(lib.rglob("*.md")):
+        rel = f.relative_to(lib)
+        if SKIP_DIRS & set(rel.parts[:-1]) or SKIP_NAME.search(f.name):
+            continue
+        yield f, rel
+
+
+def hits(path: pathlib.Path):
+    fence = False
+    for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        m = None if fence else HEADING.match(line)
+        if not m:
+            continue
+        text = m.group(2)
+        if DATE.search(text):
+            yield n, "dated heading", line.strip()
+        elif TICKET.search(text):
+            yield n, "ticket heading", line.strip()
+
+
+def main(argv) -> int:
+    if len(argv) != 1 or not pathlib.Path(argv[0]).is_dir():
+        print("usage: check-transient <library>", file=sys.stderr)
+        return 2
+    lib = pathlib.Path(argv[0])
+    found, files = 0, set()
+    for f, rel in fact_files(lib):
+        for n, kind, line in hits(f):
+            print(f"{rel}:{n}  {kind}  {line}")
+            found += 1
+            files.add(rel)
+    if not found:
+        print("check-transient: no dated or ticket-titled headings in fact files")
+        return 0
+    print(f"\ncheck-transient: {found} heading(s) in {len(files)} file(s). Detection only: a fact file "
+          "states current state, so each is a candidate to rewrite under a subject heading. "
+          "kb-audit queues them; nothing was changed.")
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

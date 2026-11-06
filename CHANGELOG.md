@@ -20,6 +20,12 @@ engine release it was last verified against in its own release notes.
   - `check-tool-scope` has a `triage` tier (Bash, Agent) for the desk, which reads no library
     itself.
 
+- `scripts/check-transient` reports fact-file headings that carry a date (`YYYY-MM` or
+  `YYYY-MM-DD`) or a change or work-item id (`PR`, `MR`, `WI` and a number): the shapes a
+  changelog or a snapshot takes in a file that should state current state. It is detection only and
+  never a commit gate. `kb-audit` runs it in Step 1 and queues each hit as `transient content` at
+  severity 7. `kb-prepare audit` passes its output to the packet (#136).
+
 ## v0.3.0 — 2026-10-31
 
 Changes since v0.2.0. A minor release: it changes the contract and the checks (ADR-0015). This engine

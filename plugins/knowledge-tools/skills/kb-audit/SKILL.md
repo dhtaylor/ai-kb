@@ -33,7 +33,11 @@ Run the engine's checks and report each one's output verbatim:
 - `scripts/check-golden <library>` — every golden record well-formed, its file present, its excerpt
   present in that file;
 - `scripts/check-xlinks <kb-root>` — `[[library:slug]]` references into other installed libraries
-  (the `kb/` directory the library sits in; skip it for a project tree, which has no siblings).
+  (the `kb/` directory the library sits in; skip it for a project tree, which has no siblings);
+- `scripts/check-transient <library>` — fact-file headings carrying a date or a ticket id, the
+  shapes a changelog or a snapshot takes in a file that should state current state (#136). Each
+  hit is a `transient content` finding. Judge each one: a dated heading can be right, such as a
+  release date or a legal effective date. Queue it unless the date is the subject.
 
 A failure these report is already a finding — put it in the queue; do not re-derive it by hand.
 
@@ -175,7 +179,8 @@ Each item carries:
   5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval (or the domain's `agent_ttl`);
   6. **orphan** — real knowledge nothing can route to;
   7. **informational contradiction, uncorroborated claim, empty routed leaf, index bloat, scope
-     misfiling**.
+     misfiling, transient content**. Hash a `transient content` finding with the heading text as
+     its locus.
 
   A contradiction is **blocking** only when something names it as needed — a consumer, a golden
   case, a caller in the task. When nothing in front of you establishes that either way, file it at
