@@ -34,8 +34,9 @@ v0.4.0 for both, so the library goes from v0.2.0 to v0.4.0, and no library v0.3.
 - **Published tags stay as they are.** Library v0.1.0 and v0.2.0 are not moved or renamed. Someone
   may have pinned them.
 - **Release notes still name the engine.** The library's notes say "verified against ai-kb vX.Y.Z"
-  and the library contract it declares, as ADR-0015 and ADR-0016 require. A matching number does not
-  replace that proof.
+  and the library contract it declares. ADR-0016 requires a library's notes to name only the
+  contract. Naming the engine too is this library's rule. A matching number does not replace that
+  proof.
 - **A fix to the library alone, between releases, waits for the next release.** It lands on `main`
   as usual (corrections propagate when they land, ADR-0003), but it gets no tag of its own. An
   engine patch release `vX.Y.Z+1` tags the library too, even if the library has not changed.
