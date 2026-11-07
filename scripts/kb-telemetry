@@ -16,16 +16,26 @@ kb-retrieve runs and measures, per run:
             routing overhead the contract asks for, counted apart from waste.
 
 and reports per library the median of each, in contiguous windows, so a reshape of a library can
-be compared before and after. The library of a run is the one holding its first cited file, or
+be compared before and after, with a count of the runs that answered `fact not found`. The library of a run is the one holding its first cited file, or
 else the one it read most in. A window with no runs still gets a row: absence is a result.
 
 Eval runs are left out by default: a run whose description starts `kb-eval` (kb-eval-sample), or
 names an eval or trial. `--include-evals` keeps them.
 
-Read-only. It prints paths, counts and medians, never a question, an answer or a file's text.
+FACT NOT FOUND (#147). A topic a library never holds is cheap to refuse once its root
+`Not covered here:` line names it (CONVENTIONS §3): one field A/B cut such a question from 16-23
+turns to 3. Nothing else tells a librarian which topics those are. `--not-found` lists the runs that
+answered `fact not found`, by library and costliest first, each with the question it was asked and
+whether it hit the search limit. A specialist's `not mine` is a routing miss, not a gap, and is not
+listed. A person decides what each one is: an absent topic for the line, or a fact the library
+should hold.
+
+Read-only. By default it prints paths, counts and medians, never a question, an answer or a file's
+text. `--not-found` prints the question of each such run, on one line, read from transcripts already
+on this machine. It never prints an answer or a file's text.
 
 Usage: kb-telemetry [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--window Nd] [--library NAME]
-                    [--projects DIR] [--include-evals]
+                    [--projects DIR] [--include-evals] [--not-found]
   Defaults: the last 28 days, in 7-day windows; every library; ~/.claude/projects.
 Schedulable (#95): exit 0, or 2 on a usage error.
 """
@@ -35,6 +45,9 @@ SCRIPTS = pathlib.Path(__file__).resolve().parent
 EVAL = re.compile(r"^kb-eval\b|\b(eval|trial)\b", re.I)
 PROTOCOL = re.compile(r"(^INDEX\.md$|contradictions\.md$|open-questions\.md$|^needs-attention\.md$)")
 COLUMNS = ("tokens", "seconds", "steps", "wasted", "protocol")
+NOT_FOUND = re.compile(r"^[\s>*_]*fact not found\b", re.I | re.M)
+LIMIT = "(search limit reached)"
+SPECIALIST = re.compile(r"^\s*SPECIALIST:\s*(\S+)\s*$", re.M)
 
 
 def load(name, filename):
@@ -63,13 +76,17 @@ def runs(projects: pathlib.Path):
 
 def measure(transcript: pathlib.Path, ge, libs: dict):
     """One run's measures, or None when the transcript holds no API response."""
-    usage, calls, seen, first, start = {}, [], set(), None, None
+    usage, calls, seen, first, start, question = {}, [], set(), None, None, None
     for line in transcript.read_text(errors="replace").splitlines():
         try:
             rec = json.loads(line)
         except ValueError:
             continue
         start = start or ts(rec.get("timestamp"))
+        if question is None and rec.get("type") == "user" and isinstance(rec.get("message"), dict):
+            c = rec["message"].get("content")
+            question = c if isinstance(c, str) else next(
+                (b.get("text") for b in c or [] if isinstance(b, dict) and b.get("type") == "text"), None)
         msg = rec.get("message") if isinstance(rec, dict) else None
         if rec.get("type") != "assistant" or not isinstance(msg, dict):
             continue
@@ -113,8 +130,32 @@ def measure(transcript: pathlib.Path, ge, libs: dict):
     wasted = {f for f in reads if f.suffix == ".md" and owner(f) and f not in cited and f not in protocol}
     in_lib = sorted(f for f in cited if owner(f))     # a cited file outside every library names none
     lib = owner(in_lib[0]) if in_lib else (max(counts, key=counts.get) if counts else "(none)")
+    question = question or ""
+    named = SPECIALIST.search(question)
+    if named and named.group(1) in libs and not in_lib:
+        lib = named.group(1)                           # a specialist names its library outright
+    text = answer[1] if answer else ""
+    asked = SPECIALIST.sub("", question).split()       # the question on one line, without the SPECIALIST line
     return {"start": start or first, "library": lib, "tokens": tokens, "seconds": seconds, "steps": steps,
-            "wasted": len(wasted), "protocol": len(protocol)}
+            "wasted": len(wasted), "protocol": len(protocol), "not_found": bool(NOT_FOUND.search(text)),
+            "limit": LIMIT in text, "question": " ".join(asked)[:200]}
+
+
+def collect(projects: pathlib.Path, since, until, include_evals=False, library=None):
+    """(measured runs in [since, until], eval runs left out). kb-report reads the week through this."""
+    ge = load("grade_eval", "grade-eval")
+    libs = {n: pathlib.Path(p).resolve() for n, p in ge.installed()[0].items()}
+    measured, evals = [], 0
+    for t, meta in runs(projects):
+        r = measure(t, ge, libs)
+        if r is None or not (since <= r["start"].date() <= until):
+            continue
+        if EVAL.search(str(meta.get("description", ""))) and not include_evals:
+            evals += 1; continue
+        if library and r["library"] != library:
+            continue
+        measured.append(r)
+    return measured, evals
 
 
 def median(values):
@@ -131,7 +172,7 @@ def main(argv) -> int:
         a = argv[i]
         if a in ("--since", "--until", "--window", "--library", "--projects") and i + 1 < len(argv):
             opts[a] = argv[i + 1]; i += 2
-        elif a == "--include-evals":
+        elif a in ("--include-evals", "--not-found"):
             opts[a] = True; i += 1
         else:
             print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
@@ -146,36 +187,39 @@ def main(argv) -> int:
         print("kb-telemetry: --since/--until take YYYY-MM-DD (since first), --window takes Nd", file=sys.stderr)
         return 2
     projects = pathlib.Path(opts.get("--projects") or pathlib.Path.home() / ".claude" / "projects")
-    ge = load("grade_eval", "grade-eval")
-    libs = {n: pathlib.Path(p).resolve() for n, p in ge.installed()[0].items()}
+    measured, evals = collect(projects, since, until, "--include-evals" in opts, opts.get("--library"))
 
-    measured, evals = [], 0
-    for t, meta in runs(projects):
-        r = measure(t, ge, libs)
-        if r is None or not (since <= r["start"].date() <= until):
-            continue
-        if EVAL.search(str(meta.get("description", ""))) and "--include-evals" not in opts:
-            evals += 1; continue
-        if "--library" in opts and r["library"] != opts["--library"]:
-            continue
-        measured.append(r)
+    if "--not-found" in opts:
+        gaps = [r for r in measured if r["not_found"]]
+        print(f"kb-telemetry: {len(gaps)} fact-not-found run(s) from {since} to {until}"
+              + (f"; {evals} eval run(s) left out" if evals else ""))
+        print("Costliest first. A topic the library never holds belongs in its root `Not covered here:` "
+              "line (CONVENTIONS §3); a fact it should hold is a gap to fill.")
+        for n in sorted({r["library"] for r in gaps}):
+            rs = sorted((r for r in gaps if r["library"] == n), key=lambda r: -r["tokens"])
+            print(f"\n## {n}: {len(rs)} run(s), {sum(r['tokens'] for r in rs)} new tokens\n")
+            for r in rs:
+                print(f"- {r['start'].date()} · {r['tokens']} tokens"
+                      + (" · search limit reached" if r["limit"] else "") + f" · {r['question'] or '(no question)'}")
+        return 0
 
     print(f"kb-telemetry: {len(measured)} kb-retrieve run(s) from {since} to {until}"
           + (f"; {evals} eval run(s) left out" if evals else ""))
     print("Medians per library. tokens: new tokens; seconds and steps: to the first read of a cited file; "
           "wasted: uncited content reads; protocol: INDEX, contradictions, open-questions, queue reads.\n")
-    print("| window | library | runs | " + " | ".join(COLUMNS) + " |")
-    print("|---|---|---|" + "---|" * len(COLUMNS))
+    print("| window | library | runs | " + " | ".join(COLUMNS) + " | not found |")
+    print("|---|---|---|" + "---|" * (len(COLUMNS) + 1))
     start = since
     while start <= until:
         end = min(start + datetime.timedelta(days=width - 1), until)
         inside = [r for r in measured if start <= r["start"].date() <= end]
         names = sorted({r["library"] for r in inside})
         if not names:
-            print(f"| {start} to {end} | (no runs) | 0 |" + " |" * len(COLUMNS))
+            print(f"| {start} to {end} | (no runs) | 0 |" + " |" * len(COLUMNS) + " 0 |")
         for n in names:
             rs = [r for r in inside if r["library"] == n]
-            print(f"| {start} to {end} | {n} | {len(rs)} | " + " | ".join(median([r[c] for r in rs]) for c in COLUMNS) + " |")
+            print(f"| {start} to {end} | {n} | {len(rs)} | " + " | ".join(median([r[c] for r in rs]) for c in COLUMNS)
+                  + f" | {sum(r['not_found'] for r in rs)} |")
         start = end + datetime.timedelta(days=1)
     return 0
 
