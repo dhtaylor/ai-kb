@@ -1612,8 +1612,7 @@ case_run "nudge: distilled notes (either heading spelling) are not counted" 0 "2
 # 4b. Unstamped sourced sections (issue #29): §7 ranks unknown ahead of stale, so the nudge
 #     names them between sweeps. A CONFLICTED section, an episodic note and a source stub are
 #     not counted: the first is not served, the others are records, not facts.
-build_clean "$NFX/kb/unstamped-due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/unstamped-due/INDEX.md"
+build_clean "$NFX/kb/unstamped-due"   # never swept: no sweep to compare with, so the full count (#142)
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n\n## Colour\n\nRed.\n\nSource: manual\n\n## Size\n\nstatus: CONFLICTED · since: 2026-01-01\n\nSource: manual\n' >> "$NFX/kb/unstamped-due/widgets.md"
 mkdir -p "$NFX/kb/unstamped-due/episodic"
 printf -- '---\nname: 2026-01-01-note\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\n---\n# note\n\n## Distilled\n\nSource: manual\n' > "$NFX/kb/unstamped-due/episodic/2026-01-01-note.md"
@@ -1628,13 +1627,55 @@ case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- 
   bash -c '"$1" "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
 # Issue #64: §6 stacks one stamp per source, so a Source: line with no Verified: of its own is
 # unstamped even when the section's other source is stamped. Counted per Source: line.
-build_clean "$NFX/kb/stacked-due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/stacked-due/INDEX.md"
+build_clean "$NFX/kb/stacked-due"   # never swept, as above
 sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/stacked-due/widgets.md"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nSource: vendor sheet\nVerified: %s · by: agent · method: manual\n\n## Colour\n\nRed.\n\nSource: manual\nVerified: %s · by: agent · method: manual\nSource: vendor sheet\nVerified: %s · by: agent · method: manual\n' \
   "$(date +%F)" "$(date +%F)" "$(date +%F)" >> "$NFX/kb/stacked-due/widgets.md"
 case_run "nudge: a stacked source with no stamp of its own is counted" 0 "1 unstamped source (never verified)" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/stacked-due" --nudge
+# Issue #142: once a library has been swept, the nudge names only the unstamped sources that are new
+# since the sweep's commit; the standing stock was already in front of the sweep. Plain kb-due keeps
+# the full count. A source is matched by its heading and Source: line, not its file, so a move is
+# not new.
+gitc() { git -C "$1" -c user.email=t@t -c user.name=t commit -qm "$2" >/dev/null 2>&1; }
+build_clean "$NFX/kb/delta-due"
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-due/widgets.md"
+git -C "$NFX/kb/delta-due" add -A; gitc "$NFX/kb/delta-due" seed
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/delta-due/INDEX.md"
+git -C "$NFX/kb/delta-due" add -A; gitc "$NFX/kb/delta-due" sweep
+case_run "nudge: right after a committed sweep, no unstamped line (#142)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-due"
+printf '\n## Colour\n\nRed.\n\nSource: manual\n' >> "$NFX/kb/delta-due/widgets.md"
+case_run "nudge: a new unstamped source since the sweep is named (#142)" 0 \
+  "1 new unstamped source since the last sweep" -- "$ENGINE/scripts/kb-due" "$NFX/kb/delta-due" --nudge
+case_run "nudge: ...and counted in the summary line (#142)" 0 "unstamped: delta-due 1" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/delta-due" --nudge --summary
+case_run "kb-due without --nudge keeps the full unstamped count (#142)" 0 "2 unstamped sources" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/delta-due"
+# A section moved to another file after the sweep is the same source, not a new one.
+build_clean "$NFX/kb/delta-move"
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-move/widgets.md"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/delta-move/INDEX.md"
+git -C "$NFX/kb/delta-move" add -A; gitc "$NFX/kb/delta-move" sweep
+python3 - "$NFX/kb/delta-move/widgets.md" <<'PY'
+import sys; p = sys.argv[1]; t = open(p).read(); i = t.index("\n## Weight"); open(p, "w").write(t[:i] + "\n")
+PY
+fm weight general > "$NFX/kb/delta-move/weight.md"
+printf '# Weight\n\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-move/weight.md"
+printf -- '- [weight](weight.md) — what a widget weighs\n' >> "$NFX/kb/delta-move/INDEX.md"
+case_run "nudge: a section moved to another file since the sweep is not new (#142)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-move"
+# A sweep not yet committed: the comparison is with the files as they are, so nothing is new.
+build_clean "$NFX/kb/delta-uncommitted"
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-uncommitted/widgets.md"
+git -C "$NFX/kb/delta-uncommitted" add -A; gitc "$NFX/kb/delta-uncommitted" seed
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/delta-uncommitted/INDEX.md"
+case_run "nudge: a sweep not yet committed leaves nothing new (#142)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-uncommitted"
+# A swept tree outside git has no sweep commit to compare with: the full count.
+mkdir -p "$TMP/delta-nogit" && cp -r "$NFX/kb/delta-due" "$TMP/delta-nogit/lib" && rm -rf "$TMP/delta-nogit/lib/.git"
+case_run "nudge: a swept tree outside git reports the full count (#142)" 0 "2 unstamped sources (never verified)" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/delta-nogit/lib" --nudge
 # Issue #154: a section with no Source: line is counted too, and a sourced library reports none.
 build_clean "$NFX/kb/unsourced-due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/unsourced-due/INDEX.md"

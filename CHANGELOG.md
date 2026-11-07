@@ -6,6 +6,17 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The session-start nudge names only the unstamped sources that are new since a library's last
+  sweep (#142). It used to give the whole standing count at every session start. In a large install
+  that is hundreds of sources that only an owner can stamp, and the same line every day hid the
+  ones that were new.
+  - The sweep is the commit that last changed `last_swept` in the library's `INDEX.md`, read from
+    git, so kb-audit records nothing new. A sweep not yet committed leaves nothing new.
+  - A source is matched by its section heading and `Source:` line, not by its file, so a section
+    that kb-organize-domain moved isn't new.
+  - A library never swept, or not in git, still gets the full count. Plain `kb-due` now shows the
+    full count per library too.
+
 - The secret scanner no longer blocks a fully qualified SQL name such as
   `catalog.dbo.table.TermConfig` (#140). A mixed-case column at the end made the whole name read
   as a random string. A dotted name of three or more identifier segments is now judged segment by

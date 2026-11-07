@@ -101,7 +101,8 @@ def served_sections(body: str) -> list:
     source under one stamp is unstamped though its section is not (issue #64). derived_floor
     and kb-due's unstamped count read sections through this, so "unstamped" means one thing
     everywhere."""
-    new = lambda: {"sourced": False, "dates": [], "conflicted": False, "sources": []}
+    new = lambda h="": {"heading": h, "sourced": False, "dates": [], "conflicted": False, "sources": [],
+                        "source_lines": []}
     sections, cur, fenced = [], new(), False
     for line in body.split("\n"):
         if FENCE.match(line):
@@ -110,10 +111,11 @@ def served_sections(body: str) -> list:
             continue
         elif HEADING.match(line):
             sections.append(cur)
-            cur = new()
+            cur = new(line.strip())
         elif SOURCE.match(line):
             cur["sourced"] = True
             cur["sources"].append(False)
+            cur["source_lines"].append(line.strip())
         elif m := STAMP_DATE.match(line):
             cur["dates"].append(m.group(1))
             if cur["sources"]:
@@ -124,10 +126,17 @@ def served_sections(body: str) -> list:
     return [s for s in sections if not s["conflicted"]]
 
 
+def unstamped_keys(body: str) -> list:
+    """(heading, Source: line) for each Source: line in a served section with no Verified: stamp
+    of its own: unknown, not fresh (§7). One per source, not per section (§6 stacks one stamp per
+    source; #64). kb-due compares these with the last sweep's to name only new ones (#142)."""
+    return [(s["heading"], line) for s in served_sections(body)
+            for line, stamped in zip(s["source_lines"], s["sources"]) if not stamped]
+
+
 def unstamped(body: str) -> int:
-    """Source: lines in served sections with no Verified: stamp of their own: unknown, not
-    fresh (§7). Counted per source, not per section (§6 stacks one stamp per source; #64)."""
-    return sum(s["sources"].count(False) for s in served_sections(body))
+    """How many Source: lines are unstamped, by unstamped_keys."""
+    return len(unstamped_keys(body))
 
 
 def derived_floor(body: str) -> str:
