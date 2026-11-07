@@ -6,6 +6,18 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A topic a library never holds is now found for you (#147, P1). In a field A/B, naming such a
+  topic in the root `Not covered here:` line cut the same question from 16–23 turns to 3, but
+  nothing told a librarian which topics those were.
+  - `kb-telemetry` counts the kb-retrieve runs that answered `fact not found`. `--not-found` lists
+    them by library, costliest first, with each run's question and whether it hit the search
+    limit. A specialist's `not mine` is a routing miss and isn't listed. Only `--not-found` prints
+    a question, and nothing prints an answer or a file's text.
+  - The weekly report (`kb-report`) gives each library's not-found runs from the past 7 days, with
+    their count, their cost and the command that lists them. A person decides what each one is:
+    an absent topic for the line, or a fact the library should hold. The report holds no question
+    text.
+
 - `kb-retrieve` bounds the search for a fact that isn't there (#147). A search across a whole
   library now lists matching files first (`files_with_matches`), then reads or searches inside the
   likeliest one to three. A content search across a large library overflowed and was read back

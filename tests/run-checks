@@ -3362,10 +3362,10 @@ git -C "$TL/kb/fx" add -A; git -C "$TL/kb/fx" -c user.email=t@t -c user.name=t c
 HOME="$TLH" "$ENGINE/scripts/kb-library" add "$TL/kb/fx" >/dev/null 2>&1
 TLL=$(cd "$TL/kb/fx" && pwd -P)
 SUB="$TLH/.claude/projects/-proj/sess1/subagents"; mkdir -p "$SUB"
-mkrun() { # mkrun <id> <agentType> <description> <answer> -- a kb-retrieve transcript shaped like the real ones
-  python3 - "$SUB" "$1" "$2" "$3" "$4" "$TLL" <<'PY'
+mkrun() { # mkrun <id> <agentType> <description> <answer> [question] -- a kb-retrieve transcript shaped like the real ones
+  python3 - "$SUB" "$1" "$2" "$3" "$4" "$TLL" "${5:-SCHED-CANARY-QUESTION}" "${MKRUN_DAY:-2026-10-20}" <<'PY'
 import json, sys
-sub, aid, atype, desc, answer, lib = sys.argv[1:7]
+sub, aid, atype, desc, answer, lib, question, day = sys.argv[1:9]
 json.dump({"agentType": atype, "description": desc, "finished": True}, open(f"{sub}/agent-{aid}.meta.json", "w"))
 U = {"input_tokens": 10, "cache_creation_input_tokens": 100, "cache_read_input_tokens": 5000, "output_tokens": 5}
 def asst(mid, ts, block):
@@ -3375,7 +3375,7 @@ def result(tid, ts):
     return {"type": "user", "timestamp": ts, "message": {"role": "user", "content": [
         {"type": "tool_result", "tool_use_id": tid, "content": "SCHED-CANARY-FILE text"}]}}
 rd = lambda tid, f: {"type": "tool_use", "id": tid, "name": "Read", "input": {"file_path": f"{lib}/{f}"}}
-recs = [{"type": "user", "timestamp": "2026-10-20T10:00:00.000Z", "message": {"role": "user", "content": "SCHED-CANARY-QUESTION"}},
+recs = [{"type": "user", "timestamp": "2026-10-20T10:00:00.000Z", "message": {"role": "user", "content": question}},
         asst("m1", "2026-10-20T10:00:10.000Z", {"type": "text", "text": "Routing."}),
         asst("m1", "2026-10-20T10:00:10.100Z", rd("t1", "INDEX.md")),           # the same message, logged again
         result("t1", "2026-10-20T10:00:11.000Z"),
@@ -3387,7 +3387,7 @@ recs = [{"type": "user", "timestamp": "2026-10-20T10:00:00.000Z", "message": {"r
                                                   "input": {"message": answer}})]
 with open(f"{sub}/agent-{aid}.jsonl", "w") as f:
     for r in recs:
-        f.write(json.dumps(r) + "\n")
+        f.write(json.dumps(r).replace("2026-10-20T", day + "T") + "\n")
 PY
 }
 mkrun a1 knowledge-tools:kb-retrieve "widgets question" $'A widget holds up to 12 things. SCHED-CANARY-ANSWER\nSources: widgets.md'
@@ -3413,6 +3413,25 @@ mkrun a5 knowledge-tools:kb-retrieve "cites a file outside the libraries" "$(pri
 case_run "kb-telemetry: a run citing a file outside every library is still measured, by what it read" 0 "| fx | 2 |" -- \
   ktel --since 2026-10-19 --until 2026-10-25
 rm -f "$SUB"/agent-a5.*
+# #147 P1: a topic the library never holds costs ~10x less once its root Not covered here: line
+# names it. Telemetry finds the fact-not-found runs; only --not-found prints their questions, and
+# never an answer or file text. A specialist's "not mine" is a routing miss, not a library gap.
+mkrun n1 knowledge-tools:kb-retrieve "nf one" $'fact not found — check KB\nLooked at: widgets.md (search limit reached)\nSources: none' \
+  $'SPECIALIST: fx\nWhat colour is a widget? NF-QUESTION-ONE'
+mkrun n2 knowledge-tools:kb-retrieve "nm" $'not mine — outside this library\nReferred to: none\nSources: none' 'NM-QUESTION'
+TNF=$(ktel --since 2026-10-19 --until 2026-10-25 --not-found 2>&1)
+case_run "kb-telemetry --not-found: lists a fact-not-found run with its question" 0 "NF-QUESTION-ONE" -- printf '%s\n' "$TNF"
+case_run "kb-telemetry --not-found: says the run hit the search limit" 0 "search limit" -- printf '%s\n' "$TNF"
+case_run "kb-telemetry --not-found: a specialist's 'not mine' is not a gap" 1 "" -- bash -c 'printf "%s\n" "$1" | grep -q NM-QUESTION' _ "$TNF"
+case_run "kb-telemetry --not-found: no answer or file text, and no SPECIALIST line" 1 "" -- \
+  bash -c 'printf "%s\n" "$1" | grep -qE "SCHED-CANARY|SPECIALIST:|Looked at"' _ "$TNF"
+case_run "kb-telemetry: the table counts not-found runs, and still prints no question" 0 "not found" -- \
+  bash -c 'o=$("$@"); printf "%s\n" "$o" | grep -q NF-QUESTION && exit 1; printf "%s\n" "$o"' _ env HOME="$TLH" "$ENGINE/scripts/kb-telemetry" --since 2026-10-19 --until 2026-10-25
+MKRUN_DAY=$(date -u +%F) mkrun n3 knowledge-tools:kb-retrieve "nf today" $'fact not found — check KB\nLooked at: widgets.md\nSources: none' $'SPECIALIST: fx\nNF-QUESTION-TODAY'
+case_run "kb-report: a week's fact-not-found runs are a decision, with the command that lists them" 1 "kb-telemetry --not-found --library fx" -- \
+  bash -c 'HOME="$1" "$2" "$3" --out "$4" >/dev/null 2>&1; cat "$4"/*.md; exit 1' _ "$TLH" "$ENGINE/scripts/kb-report" "$TLL" "$TL/rep"
+case_run "kb-report: ...and holds no question text" 1 "" -- grep -rq NF-QUESTION "$TL/rep"
+rm -f "$SUB"/agent-n[123].*
 KES="$TL/sample"
 case_run "kb-eval-sample prepare: draws positive cases, with prompts for fresh kb-retrieve agents" 0 "kb-eval" -- \
   env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" prepare "$TLL" --seed 7 --n 1 --out "$KES"
