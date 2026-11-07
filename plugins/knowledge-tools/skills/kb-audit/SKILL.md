@@ -32,8 +32,8 @@ Run the engine's checks and report each one's output verbatim:
 - `scripts/check-scope <library>` — scope values well-formed and in agreement with the library;
 - `scripts/check-golden <library>` — every golden record well-formed, its file present, its excerpt
   present in that file;
-- `scripts/check-xlinks <kb-root>` — `[[library:slug]]` references into other installed libraries
-  (the `kb/` directory the library sits in; skip it for a project tree, which has no siblings);
+- `scripts/check-xlinks --installed` — `[[library:slug]]` references into the libraries registered
+  on this machine, wherever each lives (add its path after `--installed` if it is not registered yet, or if it is a project tree);
 - `scripts/check-transient <library>` — fact-file headings carrying a date or a ticket id, the
   shapes a changelog or a snapshot takes in a file that should state current state (#136). Each
   hit is a `transient content` finding. Judge each one: a dated heading can be right, such as a

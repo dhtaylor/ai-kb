@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- CONVENTIONS §5: a `[[slug]]` names a file, never a folder. The old "(or the folder name)" said
+  otherwise, but no check ever resolved a folder. A folder name is still reserved, so no file may
+  share it. kb-organize-domain now says to repoint inbound links when a split turns `foo.md` into
+  `foo/` (#151). No contract version change: nothing a library may hold changes.
+- kb-audit, kb-update-domain and kb-organize-domain run `check-xlinks --installed`, as the hooks
+  do, in place of `check-xlinks <kb-root>`. That missed libraries registered outside `kb/`, and
+  invited the library-folder mistake #151 reported.
+
 - `check-xlinks` no longer passes a library's own folder given as `<kb-root>` (#151). It read the
   library's sub-indexes as libraries, scanned none of its files, and exited 0 over dead links. A
   `<kb-root>` with an `INDEX.md` is now a usage error (exit 2) that names

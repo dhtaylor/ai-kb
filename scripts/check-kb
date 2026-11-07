@@ -491,7 +491,7 @@ def main(root: pathlib.Path) -> int:
         if count > 1 and name not in PATH_ADDRESSED:
             defects.append(f"filename '{name}' appears {count}x — slugs must be unique within a root")
 
-    # A folder name is a slug too (CONVENTIONS §5), so a file may not share a directory's name.
+    # A folder name is reserved (CONVENTIONS §5), so a file may not share a directory's name.
     dir_slugs = {d.name: d for d in root.rglob("*")
                  if d.is_dir() and not NON_KB_DIRS & set(d.relative_to(root).parts)}
     for f in files:
@@ -500,7 +500,7 @@ def main(root: pathlib.Path) -> int:
         if f.stem in dir_slugs:
             defects.append(
                 f"{f}: slug '{f.stem}' collides with directory '{dir_slugs[f.stem]}' — "
-                f"a folder name is a slug too, so [[{f.stem}]] is ambiguous")
+                f"a folder name is reserved (§5), so [[{f.stem}]] reads as the folder")
 
     defects += orphans(root, files)
 

@@ -231,7 +231,7 @@ and report each one's output verbatim:
 - `scripts/check-kb <library>` (the target is required);
 - `scripts/check-scope <library>`;
 - `scripts/check-golden <library>`;
-- `scripts/check-xlinks <kb-root>` — skip for a project tree, which has no siblings.
+- `scripts/check-xlinks --installed` — add its path after `--installed` if it is not registered yet, or if it is a project tree.
 
 **A check that already failed before you started is not yours to fix.** Report it as pre-existing
 and leave it — a fold that quietly repairs unrelated defects hides them in a diff reviewed for

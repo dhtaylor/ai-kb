@@ -84,7 +84,8 @@ two names are genuinely equal, **ask rather than coin one** — a rename is the 
 doing it twice is worse than doing it late.
 
 Before renaming, confirm the new slug collides with nothing in the library — including folder
-names, which are slugs too. (Other libraries cannot collide: a cross-library reference always
+names, which are reserved. A `[[slug]]` names a file, never a folder (§5): when a split
+turns `foo.md` into `foo/`, repoint every inbound link at the file that now holds what it cited. (Other libraries cannot collide: a cross-library reference always
 carries its library prefix.) After renaming, grep the library for `[[<old-slug>]]` and every other
 library registered on this machine (`kb-library list`) for `[[<this-library>:<old-slug>]]`, and show that nothing still
 references it. Say which libraries you searched. A `[[<this-library>:<old-slug>]]` in another
@@ -121,8 +122,8 @@ Run the engine's checks and report each one's output verbatim:
 - `scripts/check-kb <library>`;
 - `scripts/check-golden <library>` — the golden set still names files that exist and excerpts they
   contain, which is Step 6 proved rather than asserted;
-- `scripts/check-xlinks <kb-root>` — no other installed library still points at an old slug (skip
-  for a project tree, which has no siblings);
+- `scripts/check-xlinks --installed` — no registered library still points at an old slug
+  (add its path after `--installed` if it is not registered yet, or if it is a project tree);
 - `scripts/check-scope <library>`.
 
 **A check that already failed before you started is not yours to fix.** Run the checks before your
