@@ -45,6 +45,9 @@ reports, per tree, everything a librarian should act on:
                              its verified: floor uses). Counted per source, since §6 stacks one
                              stamp per source (issue #64). §7 ranks unknown ahead of stale, and
                              until now only a sweep surfaced them (issue #29).
+     unsourced sections   — sections with content and no Source: line, in fact files, read with
+                             check-kb's own reader (§6, issue #154). Shown beside unstamped sources:
+                             nothing was cited, so there is nothing to recheck.
   6. stale, no assertion   — stamped sections past the horizon or agent TTL that carry no
                              Recheck:, by kb-verify's own is_due(). kb-verify cannot settle them,
                              so they are told apart from category 2, and the budget does not cap
@@ -63,7 +66,7 @@ Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
   Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
   trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
-  --nudge   print the full librarian nudge (review packets + sweep + recheck + queue + episodic + unstamped + stale), and
+  --nudge   print the full librarian nudge (review packets + sweep + recheck + queue + episodic + unstamped + unsourced + stale), and
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
@@ -193,13 +196,24 @@ def unstamped_count(root: pathlib.Path, check_kb):
     return n
 
 
+def unsourced_count(root: pathlib.Path, check_kb):
+    """Sections with content and no Source: line, in fact files only, by check-kb's own rules
+    (§6, issue #154). A sourceless section is never counted as unstamped, so it needs its own count."""
+    n = 0
+    for f in check_kb.kb_files(root):
+        if check_kb.fact_file(root, f):
+            text = f.read_text(errors="replace")
+            n += len(check_kb.unsourced(text.split("---\n", 2)[2] if text.startswith("---\n") else text))
+    return n
+
+
 def plural(n: int, word: str) -> str:
     return f"{n} {word}" if n == 1 else f"{n} {word}s"
 
 
 # The --summary categories, in the order they are shown: (key, heading).
 SUMMARY = (("report", "weekly report"), ("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
-           ("queue", "queue"), ("distill", "to distill"), ("unstamped", "unstamped"),
+           ("queue", "queue"), ("distill", "to distill"), ("unstamped", "unstamped"), ("unsourced", "unsourced"),
            ("contract", "contract"))
 
 
@@ -280,6 +294,17 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=()):
     if un:
         counts["unstamped"] = un
         parts.append(f"{plural(un, 'unstamped source')} (never verified)")
+
+    try:
+        if check_kb is None:
+            raise RuntimeError("check-kb could not be loaded")
+        us = unsourced_count(tree, check_kb)
+    except Exception as e:
+        warnings.append(f"{lbl}: could not count unsourced sections ({e}) — skipped")
+        us = 0
+    if us:
+        counts["unsourced"] = us
+        parts.append(f"{plural(us, 'unsourced section')} (no Source: line)")
 
     try:   # ADR-0016: a library behind the contract is told; never a failure
         if check_kb is None:

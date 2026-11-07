@@ -9,6 +9,8 @@ Covers, within a single root:
   * stamp placement   — no indented Verified:/Recheck: line outside a code fence
   * verified: floor   — a declared floor equals the one derived from the section stamps (§7);
                         no stamp is dated in the future
+  * section provenance — a section with content in a fact file has a Source: line (§6);
+                        fails from contract 2.5, warns below
   * agent_ttl         — if the root INDEX.md declares one, it is <N>d and shorter than
                         freshness_horizon (§7)
   * kb_contract       — if the root INDEX.md declares one, it is a quoted MAJOR.MINOR (§3, ADR-0016)
@@ -137,6 +139,47 @@ def derived_floor(body: str) -> str:
     if unstamped(body):
         return "unknown"
     return min((d for s in served for d in s["dates"]), default="unknown")
+
+
+STATE_LEAF = re.compile(r"-(golden|open-questions|contradictions)\.md$")
+
+
+def fact_file(root: pathlib.Path, f: pathlib.Path) -> bool:
+    """A file whose sections state facts (§6). Routers, the golden set, the queue, the state
+    leaves (§2), episodic notes and source stubs are records: their sections cite nothing."""
+    rel = f.relative_to(root).parts
+    return not (f.name in PATH_ADDRESSED or f.name == "needs-attention.md"
+                or STATE_LEAF.search(f.name) or {"episodic", "sources"} & set(rel[:-1]))
+
+
+def unsourced(body: str) -> list:
+    """Headings of served sections that hold content and no Source: line (§6, issue #154). They
+    are unchecked, and derived_floor never sees them. Exempt: the intro under a level-1 title,
+    a heading with only subheadings under it, and a CONFLICTED section, which is not served."""
+    out, cur, fenced = [], None, False
+    def close():
+        if cur and cur["content"] and not cur["sourced"] and not cur["conflicted"]:
+            out.append(cur["heading"])
+    for line in body.split("\n"):
+        if FENCE.match(line):
+            fenced = not fenced
+            if cur:
+                cur["content"] = True
+        elif not fenced and HEADING.match(line):
+            close()
+            level = len(line) - len(line.lstrip("#"))
+            cur = None if level == 1 else {"heading": line.lstrip("#").strip(), "content": False,
+                                            "sourced": False, "conflicted": False}
+        elif cur is None:
+            continue
+        elif not fenced and SOURCE.match(line):
+            cur["sourced"] = True
+        elif not fenced and CONFLICTED.match(line):
+            cur["conflicted"] = True
+        elif line.strip():
+            cur["content"] = True
+    close()
+    return out
 
 
 def agent_ttl(declared, horizon: int) -> int:
@@ -430,6 +473,11 @@ def main(root: pathlib.Path) -> int:
                 contract_version(raw.group(1))
             except ValueError as e:
                 defects.append(f"{f}: {e}")
+
+        if fact_file(root, f):
+            for heading in unsourced(block[2]):
+                rule((2, 5), f"{f}: section '{heading}' has no Source: line — cite where it came "
+                             f"from, or move it out of the fact file (§6)")
 
         if "verified" in fm:
             declared = fm["verified"].split(" #")[0].strip()      # a trailing YAML comment

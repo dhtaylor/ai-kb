@@ -315,6 +315,13 @@ for them.
 - **Granularity: per-section, per-fact on exception.** Each topic block/heading carries a
   `Source: [[slug]]` backlink. A fact whose origin differs from its section gets its own inline
   `[[slug]]` backlink.
+- **What counts as a section.** Every heading with text under it in a fact file. Three are
+  exempt: the intro under the file's `#` title, which orients and holds no facts (put a fact
+  under a heading, never in the intro); a heading with only subheadings under it; and a
+  `CONFLICTED` section, which is not served (§8). Routers, the golden set, the queue, the state
+  leaves (§2), episodic notes and source stubs are records, not fact files. `check-kb` fails a
+  section with no `Source:` line, from contract 2.5. An unsourced section is unchecked, and the
+  `verified:` floor never sees it.
 - **Dedup merges provenance.** When two copies of a fact collapse into one canonical home, keep
   **all** contributing `[[source]]` links — never drop a citation in a merge.
 - **Corroboration keeps its own stamp.** When a second source confirms a claim the KB already holds,
@@ -738,6 +745,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | contract version | `kb_contract` is a quoted `MAJOR.MINOR`; rules apply by it; a library behind is told what newer versions add, one ahead by a minor is checked by the newest rules known, and an unsupported major fails and is not served (§14) | **built** — `check-kb`, `kb-libraries`, `kb-due` |
 | stamp placement | no indented `Verified:` / `Recheck:` line outside a code fence (§7) | **built** — `check-kb` |
 | `verified:` floor | a declared floor equals the one derived from the section stamps; no stamp dated in the future (§7) | **built** — `check-kb` |
+| section provenance | every section with content in a fact file carries a `Source:` line; the intro, parent headings and `CONFLICTED` sections are exempt (§6). Fails from contract 2.5, warns below it (§14) | **built** — `check-kb`, `kb-due` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
 | secret scan | staged, worktree, or every blob in full history | **built** — `check-secrets` |
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
@@ -757,7 +765,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one, or a redirect to a sign-in page, as `source-unreachable`, each with its dependants; a `Liveness: manual` stub is counted, never fetched; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
-All twenty-six are built. A library passing the built checks is **structurally sound within itself**
+All twenty-seven are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
 routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.
 
@@ -821,3 +829,13 @@ does not fetch it, and the weekly report lists it once per sweep interval for a 
 
 Migrating from 2.3: nothing is required. To adopt it, mark the stubs only a person can check and
 declare `kb_contract: "2.4"`.
+
+### 2.5
+
+Every section with content in a fact file carries a `Source:` line (§6). The intro under the
+`#` title, a heading with only subheadings under it, and a `CONFLICTED` section are exempt.
+`check-kb` fails a section with no `Source:` line, from this version, and `kb-due` counts them.
+
+Migrating from 2.4: run `check-kb`, which warns about each unsourced section below 2.5. Give each
+one its source, move a fact out of the intro under a heading, or remove what nobody can source.
+Then declare `kb_contract: "2.5"`.
