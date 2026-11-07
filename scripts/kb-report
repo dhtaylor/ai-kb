@@ -11,7 +11,10 @@ listing per library only what a person has to decide:
 - rechecks that are due but marked `Recheck (attended):`, which only a person can run;
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
 - while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
-- a library behind the contract, or on one this engine cannot serve.
+- a library behind the contract, or on one this engine cannot serve;
+- kb-retrieve runs in the past 7 days that answered `fact not found` (kb-telemetry, #147): an absent
+  topic named in the root `Not covered here:` line makes the next such question far cheaper. The
+  report gives the count and cost; `kb-telemetry --not-found` lists the questions.
 
 A library with nothing to decide gets no section. When no library has anything, the report says so
 in one line. Either way the file is written, so a quiet week can be told from a week the job did not
@@ -70,7 +73,25 @@ def where(rec: dict) -> str:
     return "(no location recorded)"
 
 
-def decisions_for(tree: pathlib.Path, mods: dict, packets: list) -> list:
+def not_found_week(mods: dict) -> dict:
+    """{library root: its fact-not-found kb-retrieve runs in the past 7 days}, from kb-telemetry,
+    which names a library by its registered name. Never fails the report: no transcripts, or none
+    readable, is no runs."""
+    try:
+        roots = {n: pathlib.Path(p).resolve() for n, p in mods["kb_libraries"].installed().items()}
+        today = datetime.datetime.now(datetime.timezone.utc).date()   # transcripts are stamped in UTC
+        runs, _evals = mods["kb_telemetry"].collect(pathlib.Path.home() / ".claude" / "projects",
+                                                    today - datetime.timedelta(days=6), today)
+    except Exception:
+        return {}
+    out = {}
+    for r in runs:
+        if r["not_found"] and r["library"] in roots:
+            out.setdefault(roots[r["library"]], []).append(r)
+    return out
+
+
+def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> list:
     kb_due, kb_verify, kb_watch, check_kb = mods["kb_due"], mods["kb_verify"], mods["kb_watch"], mods["check_kb"]
     root, out = tree.resolve(), []
     mine = [(p, h) for p, h in packets if h.get("library_path") == str(root)]
@@ -116,6 +137,15 @@ def decisions_for(tree: pathlib.Path, mods: dict, packets: list) -> list:
                    f"Decide whether to adopt it (CONVENTIONS §14).")
     elif state in ("unsupported", "malformed"):
         out.append("Its contract version cannot be served by this engine; check-kb says why.")
+
+    mine = (gaps or {}).get(root, [])
+    name = next((n for n, p in mods["kb_libraries"].installed().items() if pathlib.Path(p).resolve() == root), None)
+    if mine and name:
+        limit = sum(r["limit"] for r in mine)
+        out.append(f"{len(mine)} kb-retrieve run(s) this week answered `fact not found`, costing "
+                   f"{sum(r['tokens'] for r in mine)} new tokens" + (f" ({limit} hit the search limit)" if limit else "")
+                   + f". Name each absent topic in the root `Not covered here:` line, or fill the gap: "
+                   f"`kb-telemetry --not-found --library {name}` lists the questions.")
     return out
 
 
@@ -134,7 +164,9 @@ def main(argv) -> int:
             trees = list(load_module("kb_libraries", "kb-libraries").installed().values())
         mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
                 "kb_sources": load_module("kb_sources", "kb-sources"),
-                "kb_watch": load_module("kb_watch", "kb-watch"), "check_kb": load_module("check_kb", "check-kb")}
+                "kb_watch": load_module("kb_watch", "kb-watch"), "check_kb": load_module("check_kb", "check-kb"),
+                "kb_telemetry": load_module("kb_telemetry", "kb-telemetry"),
+                "kb_libraries": load_module("kb_libraries", "kb-libraries")}
         packets = load_module("kb_apply", "kb-apply").pending()
     except Exception as e:
         print(f"kb-report: could not load the engine's readers ({type(e).__name__})", file=sys.stderr)
@@ -146,12 +178,12 @@ def main(argv) -> int:
             print(f"kb-report: the report must be kept outside every library, not in {dest_dir}", file=sys.stderr)
             return 2
 
-    sections, total = [], 0
+    sections, total, gaps = [], 0, not_found_week(mods)
     for t in trees:
         if not (t / "INDEX.md").is_file():
             continue
         try:
-            items = decisions_for(t, mods, packets)
+            items = decisions_for(t, mods, packets, gaps)
         except Exception as e:
             print(f"kb-report: {t}: could not be read ({type(e).__name__})", file=sys.stderr)
             return 2
