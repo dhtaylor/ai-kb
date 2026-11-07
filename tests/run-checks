@@ -52,7 +52,7 @@ build_clean() {
   mkdir -p "$d"
   # Declares the newest contract (CONVENTIONS §14), so a fixture is not "behind" (ADR-0016).
   # Publishing a new contract version means raising this line.
-  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.4"\nlast_swept: never\n' > "$d/INDEX.md"
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.5"\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
   sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
@@ -136,7 +136,7 @@ printf '\n## Debate\n\n- One side.\n  Source: manual\n  Verified: 2026-09-22 · 
 case_run "indented Verified: line fails check-kb" 1 "indented Verified:" -- "$ENGINE/scripts/check-kb" "$TMP/indentstamp"
 case_run "indented Recheck: line fails check-kb" 1 "indented Recheck:" -- "$ENGINE/scripts/check-kb" "$TMP/indentstamp"
 build_clean "$TMP/fencedstamp"
-printf '\n## Example\n\n- How a stamp looks:\n\n  ```\n  Verified: 2026-09-22 · by: agent · method: manual\n  ```\n' >> "$TMP/fencedstamp/widgets.md"
+printf '\n## Example\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n\n- How a stamp looks:\n\n  ```\n  Verified: 2026-09-22 · by: agent · method: manual\n  ```\n' >> "$TMP/fencedstamp/widgets.md"
 case_run "an indented stamp inside a code fence is an example, not a stamp" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fencedstamp"
 
 # Issue #71: sources/ holds only .md citation stubs (§6); a raw artifact (DDL, an ERD export, a
@@ -1410,6 +1410,32 @@ case_run "Liveness: a value other than manual fails check-kb from contract 2.4" 
 sed -i 's/^kb_contract: .*/kb_contract: "2.3"/' "$LB/INDEX.md"
 case_run "Liveness: a value other than manual is only a warning below 2.4" 0 "fails from contract 2.4" -- "$ENGINE/scripts/check-kb" "$LB"
 
+# Issue #154: a section with content and no Source: line was invisible: no check failed it, and
+# the verified: floor ignored it, so one stamped section dated the whole file (§6, contract 2.5).
+US="$TMP/unsourced"; build_clean "$US"
+printf '\n## Colour\n\nA widget is red.\n' >> "$US/widgets.md"
+case_run "unsourced: a section with content and no Source: fails check-kb from contract 2.5" 1 "'Colour' has no Source: line" -- "$ENGINE/scripts/check-kb" "$US"
+sed -i 's/^kb_contract: .*/kb_contract: "2.4"/' "$US/INDEX.md"
+case_run "unsourced: below 2.5 it is only a warning" 0 "fails from contract 2.5" -- "$ENGINE/scripts/check-kb" "$US"
+USX="$TMP/unsourced-exempt"; build_clean "$USX"
+# The intro under the title, a heading with only subheadings under it, a heading in a code fence,
+# a CONFLICTED section (not served) and the state leaves are not sections that need a source.
+python3 - "$USX/widgets.md" <<'EOF'
+import sys
+p = sys.argv[1]; t = open(p).read()
+t = t.replace("# Widgets\n", "# Widgets\n\nWhat a widget is and does, in one place.\n", 1)
+t += ("\n## Parts\n\n### Shell\n\nThe shell is steel.\n\nSource: manual\n"
+      "Verified: 2026-09-22 · by: agent · method: manual\n"
+      "\n## Example\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n\n```\n## Not a heading\n\ntext\n```\n"
+      "\n## Weight\n\nstatus: CONFLICTED · since: 2026-09-22\n\nOne sheet says 3 kg, another 4 kg.\n")
+open(p, "w").write(t)
+EOF
+fm fx-open-questions general > "$USX/fx-open-questions.md"; printf '# Open questions\n\n## Is it blue?\n\nNo source says.\n' >> "$USX/fx-open-questions.md"
+fm fx-contradictions general > "$USX/fx-contradictions.md"; printf '# Contradictions\n\n## ACTIVE — widget weight\n\nSee widgets.md.\n' >> "$USX/fx-contradictions.md"
+printf -- '- [fx-open-questions](fx-open-questions.md) — open questions\n- [fx-contradictions](fx-contradictions.md) — contradictions\n' >> "$USX/INDEX.md"
+printf '\n## Router notes\n\nRead widgets first.\n' >> "$USX/INDEX.md"
+case_run "unsourced: intro, parent headings, fenced headings, CONFLICTED and state leaves are exempt" 0 "clean" -- "$ENGINE/scripts/check-kb" "$USX"
+
 # HEAD is a cheap first try, GET the answer (issue #74): a server that answers HEAD with any
 # error but serves GET is alive, and only GET's 404/410 is dead. 429 is the exception: the
 # server asked us to back off, so no second request is sent.
@@ -1606,6 +1632,15 @@ printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nSource: vendor s
   "$(date +%F)" "$(date +%F)" "$(date +%F)" >> "$NFX/kb/stacked-due/widgets.md"
 case_run "nudge: a stacked source with no stamp of its own is counted" 0 "1 unstamped source (never verified)" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/stacked-due" --nudge
+# Issue #154: a section with no Source: line is counted too, and a sourced library reports none.
+build_clean "$NFX/kb/unsourced-due"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/unsourced-due/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/unsourced-due/widgets.md"
+printf '\n## Colour\n\nRed.\n\n## Size\n\nSmall.\n' >> "$NFX/kb/unsourced-due/widgets.md"
+case_run "nudge: sections with no Source: line are counted" 0 "2 unsourced sections (no Source: line)" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/unsourced-due" --nudge
+case_run "nudge: a fully sourced library reports no unsourced sections" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "unsourced"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
 # Issue #63: a stale fact with no Recheck is due too. kb-verify cannot settle it, so it is its own
 # category, told apart from rechecks a command can run, and it is not capped by verifier_budget.
 build_clean "$NFX/kb/stale-noassert"
@@ -1976,7 +2011,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.4"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.5"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \

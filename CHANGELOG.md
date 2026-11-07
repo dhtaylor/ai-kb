@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Contract 2.5 (#154): every section with content in a fact file carries a `Source:` line.
+  Before this, nothing checked for one. A section with no `Source:` was never counted as
+  unstamped, so the `verified:` floor ignored it, and one stamped section could date a file whose
+  other sections were never sourced. `check-kb` fails such a section from 2.5 and warns below it.
+  The intro under the `#` title, a heading with only subheadings under it, and a `CONFLICTED`
+  section are exempt. `kb-due` counts unsourced sections, and `kb-audit` queues them at severity 4
+  beside unstamped facts. `kb-init` writes 2.5. Library PRs follow.
+
 - Contract 2.4 (#120): a source stub may carry `- **Liveness:** manual` for a source a script cannot
   check, such as a page behind a sign-in wall. `kb-sources` doesn't fetch it, and lists and counts it
   instead of queuing it. `kb-report` lists these stubs while the library's sweep is due, so a person

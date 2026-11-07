@@ -60,6 +60,11 @@ the retrieval agent its answer key. Report both.
 and per the contract §7 it surfaces **first** — a sweep cannot flag what was never written, so the
 absence is the finding.
 
+**Unsourced sections.** A section with content and no `Source:` line at all has nothing to stamp,
+so it never shows as missing currency, and the file's `verified:` floor ignores it: one stamped
+section can date a file whose other sections nobody sourced. `check-kb` names each one: it fails
+from contract 2.5 and warns below it (§6). Queue each named section, from its output.
+
 **Stale currency.** A stamp older than its domain's `freshness_horizon`. Agent-verified stamps
 expire at **one tenth** the human interval, or at the domain's `agent_ttl` if it declares one. High-blast-radius facts — deploy targets, environment
 routing, credential references — are stale the moment their last stamp was written by an agent,
@@ -176,6 +181,9 @@ Each item carries:
   4. **unstamped fact** (`unknown`) — ahead of stale, per §7: absence hides more easily than age.
      A frontmatter `verified:` date with no section stamp behind it is this too (locus
      `unsupported-floor`): it claims a freshness nothing supports, which is worse than silence;
+     An **unsourced section** belongs here too, keyed by its heading (locus is the heading text):
+     it is unknown with nothing cited to recheck against. Apply the high-blast-radius test as for
+     an unstamped fact;
   5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval (or the domain's `agent_ttl`);
   6. **orphan** — real knowledge nothing can route to;
   7. **informational contradiction, uncorroborated claim, empty routed leaf, index bloat, scope
