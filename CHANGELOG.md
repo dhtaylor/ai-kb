@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-sources` no longer calls a source alive when its URL redirects to a sign-in page. A final
+  URL whose path has a `login`, `signin`, `sso` or `UserLogin` segment, or `/oauth2/authorize`, is
+  `unreachable` and queued as `source-unreachable`. A login page answers 200, but it is not the
+  source. Before this, a page behind single sign-on passed every run (#120).
+
 - ADR-0019: ai-kb-architecture, the engine's reference library, takes the engine's release tag.
   From v0.4.0 both repositories are tagged `vX.Y.Z` on release day, so the library goes from v0.2.0
   to v0.4.0. Published tags are not moved. The ADR lists the release-day steps for both repositories.
