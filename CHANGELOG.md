@@ -12,6 +12,8 @@ engine release it was last verified against in its own release notes.
   whole. And it stops after 8 file reads or 5 library-wide searches with nothing that answers: it
   answers `fact not found`, and ends its `Looked at:` line with `(search limit reached)`. Field
   runs on a ~440K-word library took 16–33 turns to reach the same `fact not found`.
+  The limits are per question, counted across every library searched. In a field test a question
+  across three libraries made 10–12 library-wide searches without reaching 5 in any one.
 
 - CONVENTIONS §5: a `[[slug]]` names a file, never a folder. The old "(or the folder name)" said
   otherwise, but no check ever resolved a folder. A folder name is still reserved, so no file may

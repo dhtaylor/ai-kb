@@ -108,8 +108,9 @@ job.
    answer, not a failure. Its citation line is `Sources: none` (rule 2 and *Output*).
 
    **Stop when the search stops paying.** For each question, stop after **8 reads** of library
-   files with no passage that answers, or **5 searches across the whole library**. A section read
-   counts as a read, but a router `INDEX.md` and a heading outline do not. Then answer
+   files with no passage that answers, or **5 library-wide searches**. Both limits are per question,
+   counted across every library you search: three libraries do not get fifteen searches. A section
+   read counts as a read, but a router `INDEX.md` and a heading outline do not. Then answer
    `fact not found — check KB`, list everything you checked under `Looked at:`, and end that line
    with `(search limit reached)`, so a reader can see how far you looked. More synonyms will not
    help: the ninth near-miss is no likelier to hold the fact than the first. If you found part of
