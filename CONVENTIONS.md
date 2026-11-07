@@ -279,7 +279,9 @@ for them.
 
 ## 5. Slugs & cross-root links
 
-- **`slug` = the filename without `.md`** (or the folder name). Not a frontmatter field.
+- **`slug` = the filename without `.md`.** Not a frontmatter field. A `[[slug]]` names a file, never
+  a folder: point it at the file that answers, not at a router. A folder name is still reserved: no
+  file may share it, so a slug never reads as a folder (`check-kb`).
 - **Bare `[[slug]]`** resolves within the KB root it appears in. Filenames are therefore **unique within
   a root** — which is why per-domain state leaves take a domain-prefixed *filename*
   (`<domain>-contradictions.md`), not a prefixed frontmatter name.
@@ -606,7 +608,7 @@ Every retrieval agent's body states, and every agent is held to:
 - **Surface the `verified:` date** on freshness-sensitive facts.
 
 **The golden set** lives at the library root, `<domain>-golden.md`, and travels with the domain it
-tests. The `-golden` suffix is load-bearing: a **folder name is a slug too** (§5), so a file named
+tests. The `-golden` suffix is load-bearing: a **folder name is reserved** (§5), so a file named
 `<domain>.md` would collide with the library's own directory name. It is **not routed from the
 library's `INDEX.md`** — an agent that can descend to the oracle can read the answers, and its
 refusals then prove nothing. **Eval evidence**, kept under `documents/eval-<date>/`, records past
