@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-retrieve` bounds the search for a fact that isn't there (#147). A search across a whole
+  library now lists matching files first (`files_with_matches`), then reads or searches inside the
+  likeliest one to three. A content search across a large library overflowed and was read back
+  whole. And it stops after 8 file reads or 5 library-wide searches with nothing that answers: it
+  answers `fact not found`, and ends its `Looked at:` line with `(search limit reached)`. Field
+  runs on a ~440K-word library took 16–33 turns to reach the same `fact not found`.
+
 - CONVENTIONS §5: a `[[slug]]` names a file, never a folder. The old "(or the folder name)" said
   otherwise, but no check ever resolved a folder. A folder name is still reserved, so no file may
   share it. kb-organize-domain now says to repoint inbound links when a split turns `foo.md` into
