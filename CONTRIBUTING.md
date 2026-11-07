@@ -224,6 +224,10 @@ any time:
 kb-due knowledge                        # every registered library, plus this project's tree
 ```
 
+Once a library has been swept, session start names only the unstamped sources that are new since
+that sweep's commit; the rest were in front of the sweep already. `kb-due` itself always gives the
+full count.
+
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
 is true, whether its source still says so, or whether it landed where a reader would look.
 

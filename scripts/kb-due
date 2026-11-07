@@ -44,7 +44,11 @@ reports, per tree, everything a librarian should act on:
                              are not CONFLICTED, read with check-kb's own section reader (the one
                              its verified: floor uses). Counted per source, since §6 stacks one
                              stamp per source (issue #64). §7 ranks unknown ahead of stale, and
-                             until now only a sweep surfaced them (issue #29).
+                             until now only a sweep surfaced them (issue #29). Once a tree has
+                             been swept, only the ones new since the sweep's commit are named
+                             (issue #142): the commit that last changed last_swept in INDEX.md, read
+                             from git. Never swept, or not in git: the full count. A sweep not yet
+                             committed: nothing is new. Plain kb-due (no flag) shows the full count.
      unsourced sections   — sections with content and no Source: line, in fact files, read with
                              check-kb's own reader (§6, issue #154). Shown beside unstamped sources:
                              nothing was cited, so there is nothing to recheck.
@@ -70,7 +74,7 @@ Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
-import datetime, importlib.machinery, importlib.util, pathlib, re, shlex, sys
+import collections, datetime, importlib.machinery, importlib.util, pathlib, re, shlex, subprocess, sys
 
 DEFAULT_INTERVAL = 30
 TODAY = datetime.date.today()
@@ -178,22 +182,66 @@ def episodic_count(root: pathlib.Path):
                 if f.name != "INDEX.md" and not DISTILLED.search(f.read_text(errors="replace"))])
 
 
-def unstamped_count(root: pathlib.Path, check_kb):
-    """Served sections citing a Source: with no stamp, counted by check-kb's own section reader
-    (issue #29). Only a kb-audit sweep surfaced these before, though §7 ranks unknown ahead of
-    stale. Facts only: the golden set, the queue, the state leaves (open questions and the
-    contradiction register, §2), episodic notes and source stubs are records, and no stamp
-    could ever clear them."""
-    n = 0
+def holds_facts(rel: tuple) -> bool:
+    """Whether a library-relative path counts toward unstamped sources. Facts only: the golden set,
+    the queue, the state leaves (open questions and the contradiction register, §2), episodic notes
+    and source stubs are records, and no stamp could ever clear them."""
+    return not (rel[-1].endswith(("-golden.md", "-open-questions.md", "-contradictions.md"))
+                or rel[-1] == "needs-attention.md" or "episodic" in rel[:-1] or "sources" in rel[:-1])
+
+
+def body_of(text: str) -> str:
+    return text.split("---\n", 2)[2] if text.startswith("---\n") else text
+
+
+def unstamped_keys(root: pathlib.Path, check_kb) -> collections.Counter:
+    """Served sections' Source: lines with no stamp, by check-kb's own section reader (issue #29),
+    each as (heading, Source: line). Only a kb-audit sweep surfaced these before, though §7 ranks
+    unknown ahead of stale."""
+    keys = collections.Counter()
     for f in check_kb.kb_files(root):
-        rel = f.relative_to(root).parts
-        if f.name.endswith(("-golden.md", "-open-questions.md", "-contradictions.md")) \
-                or f.name == "needs-attention.md" \
-                or "episodic" in rel[:-1] or "sources" in rel[:-1]:
-            continue
-        text = f.read_text(errors="replace")
-        n += check_kb.unstamped(text.split("---\n", 2)[2] if text.startswith("---\n") else text)
-    return n
+        if holds_facts(f.relative_to(root).parts):
+            keys.update(check_kb.unstamped_keys(body_of(f.read_text(errors="replace"))))
+    return keys
+
+
+def unstamped_count(root: pathlib.Path, check_kb):
+    return sum(unstamped_keys(root, check_kb).values())
+
+
+def git(root: pathlib.Path, *args, data=None):
+    return subprocess.run(["git", "-C", str(root), *args], input=data, capture_output=True, timeout=60)
+
+
+def sweep_baseline(root: pathlib.Path, check_kb):
+    """The unstamped sources as the last sweep left them (issue #142), or None when there is no
+    sweep to compare with: never swept, or not in git. The sweep is the commit that last changed
+    INDEX.md's last_swept line. A sweep not yet committed is compared with the files as they are,
+    so nothing reads as new. Keys hold no file path: a section moved by kb-organize-domain is the
+    same source, not a new one."""
+    swept = field((root / "INDEX.md").read_text(errors="replace"), "last_swept")
+    if swept in (None, "never"):
+        return None
+    r = git(root, "rev-parse", "--show-prefix")
+    if r.returncode:
+        return None
+    prefix = r.stdout.decode().strip()
+    commit = git(root, "log", "-1", "--format=%H", "-G", "^last_swept:", "--", "INDEX.md").stdout.decode().strip()
+    committed = git(root, "show", f"{commit}:./INDEX.md").stdout.decode(errors="replace") if commit else ""
+    if not commit or field(committed, "last_swept") != swept:
+        return unstamped_keys(root, check_kb)
+    names = git(root, "ls-tree", "-r", "--name-only", "--full-name", commit, "--", ".").stdout.decode().splitlines()
+    wanted = [n for n in names if n.endswith(".md") and n.startswith(prefix)
+              and not check_kb.NON_KB_DIRS & set(n[len(prefix):].split("/"))
+              and holds_facts(tuple(n[len(prefix):].split("/")))]
+    out = git(root, "cat-file", "--batch", data="".join(f"{commit}:{n}\n" for n in wanted).encode()).stdout
+    keys, i = collections.Counter(), 0
+    for _ in wanted:   # each blob: "<sha> blob <size>\n<content>\n"
+        nl = out.index(b"\n", i)
+        size = int(out[i:nl].split()[2])
+        keys.update(check_kb.unstamped_keys(body_of(out[nl + 1:nl + 1 + size].decode(errors="replace"))))
+        i = nl + 1 + size + 1
+    return keys
 
 
 def unsourced_count(root: pathlib.Path, check_kb):
@@ -287,13 +335,22 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=()):
     try:
         if check_kb is None:
             raise RuntimeError("check-kb could not be loaded")
-        un = unstamped_count(tree, check_kb)
+        now = unstamped_keys(tree, check_kb)
     except Exception as e:
         warnings.append(f"{lbl}: could not count unstamped sections ({e}) — skipped")
-        un = 0
+        now = collections.Counter()
+    try:
+        before = sweep_baseline(tree, check_kb) if now else None
+    except Exception as e:
+        warnings.append(f"{lbl}: could not read the last sweep from git ({e}) — full count shown")
+        before = None
+    un = sum((now - before).values()) if before is not None else sum(now.values())
     if un:
         counts["unstamped"] = un
-        parts.append(f"{plural(un, 'unstamped source')} (never verified)")
+        if before is None:
+            parts.append(f"{plural(un, 'unstamped source')} (never verified)")
+        else:
+            parts.append(f"{plural(un, 'new unstamped source')} since the last sweep (never verified)")
 
     try:
         if check_kb is None:
@@ -396,10 +453,18 @@ def main(argv) -> int:
 
     if not rows:
         print("kb-due: no knowledge trees found"); return 0
+    try:
+        check_kb = load_module("check_kb", "check-kb")
+    except Exception:
+        check_kb = None
     for s in rows:
         when = "never swept" if s["age"] is None else f"{s['age']}d ago"
+        try:   # the full count, never the nudge's new-since-sweep one (#142)
+            un = unstamped_count(s["tree"], check_kb) if check_kb else 0
+        except Exception:
+            un = 0
         print(f"  {'DUE ' if s['due'] else 'ok  '} {label(s['tree']):<28} swept {when:<14} "
-              f"(every {s['interval']}d)")
+              f"(every {s['interval']}d)" + (f"  {plural(un, 'unstamped source')}" if un else ""))
     print(f"\n{len(due)} of {len(rows)} tree(s) due for a sweep"
           + ("" if due else " — nothing to do"))
     return 0
