@@ -65,6 +65,13 @@ job.
    need, which is exactly what routing exists to prevent. If the routers point nowhere, say
    `fact not found` rather than searching everything.
 
+   **Search for files first, then for lines.** A Grep across the whole library uses
+   `output_mode: files_with_matches`, which names the matching files and nothing else. Then
+   outline or search inside the one to three likeliest of them, as above. A content search across a
+   library can return more text than one result holds, and reading that overflow back costs more
+   than reading the files would. Keep each search to a few alternatives: a pattern with a dozen
+   matches nearly everything, and tells you nothing.
+
 2. **Cite every file you used.** Not the library — the *files*. If two files contributed, name both.
    A reader must be able to check you. A citation means *the answer rests on this file*, so a
    refusal (`fact not found`) cites **nothing**. The files you checked to establish the absence
@@ -99,6 +106,14 @@ job.
 4. **When the fact is not there, say so:** `fact not found — check KB`. Then say what you looked at,
    so the gap is actionable, in the answer text under `Looked at:`. This is a correct and useful
    answer, not a failure. Its citation line is `Sources: none` (rule 2 and *Output*).
+
+   **Stop when the search stops paying.** For each question, stop after **8 reads** of library
+   files with no passage that answers, or **5 searches across the whole library**. A section read
+   counts as a read, but a router `INDEX.md` and a heading outline do not. Then answer
+   `fact not found — check KB`, list everything you checked under `Looked at:`, and end that line
+   with `(search limit reached)`, so a reader can see how far you looked. More synonyms will not
+   help: the ninth near-miss is no likelier to hold the fact than the first. If you found part of
+   the answer, give that part (rule 7) and name what you could not find.
 
 5. **Refuse a disputed fact.** A section marked `status: CONFLICTED` is not servable. Do not pick
    the more plausible value, do not average them, do not mention one and hedge. Begin the answer
