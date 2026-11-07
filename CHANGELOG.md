@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Contract 2.4 (#120): a source stub may carry `- **Liveness:** manual` for a source a script cannot
+  check, such as a page behind a sign-in wall. `kb-sources` doesn't fetch it, and lists and counts it
+  instead of queuing it. `kb-report` lists these stubs while the library's sweep is due, so a person
+  checks them once per sweep interval. `check-kb` fails a `Liveness:` value other than `manual` from
+  2.4, and warns below it. `kb-init` writes 2.4. Library PRs follow.
+
 - `kb-sources` no longer calls a source alive when its URL redirects to a sign-in page. A final
   URL whose path has a `login`, `signin`, `sso` or `UserLogin` segment, or `/oauth2/authorize`, is
   `unreachable` and queued as `source-unreachable`. A login page answers 200, but it is not the

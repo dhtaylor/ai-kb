@@ -56,6 +56,10 @@ stub URL, in the library that owns the stub:
                 new finding and is added
     stub, url, detail (status or error), dependants (count, then `file § section` list), date
 
+A stub marked `- **Liveness:** manual` (§6, contract 2.4) is a source only a person can check:
+behind a sign-in wall, or refusing every client. It is never fetched, so it is counted and listed
+instead of queued, and `kb-report` lists it while the library's sweep is due (issue #120).
+
 Usage: kb-sources <library-or-tree> [--yes]
   <library-or-tree>  a library root (has INDEX.md), or a directory of libraries (kb/)
   --yes              approve this run's network access: fetch each unique URL once
@@ -68,6 +72,7 @@ UA = "kb-sources/1 (knowledge-base liveness check; HEAD only unless refused)"
 TIMEOUT = 10
 NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
           ".claude-plugin", ".claude", ".git", "episodic"}
+LIVENESS_MANUAL = re.compile(r"^\s*-\s*\*\*Liveness:\*\*\s*manual\s*$")
 URL_LINE = re.compile(r"^\s*-\s*\*\*(?:URL[^:*]*|Artifact location):\*\*\s*(https?://[^\s<>`]+)")
 HEADING = re.compile(r"^#{1,6}\s+(.*)$")
 SOURCE_LINE = re.compile(r"^Source:")
@@ -98,11 +103,25 @@ def markdown_files(root):
     return sorted(out)
 
 
+def stubs(lib):
+    """The library's source stubs, as paths."""
+    return [f for f in markdown_files(lib) if "sources" in f.relative_to(lib).parts[:-1]]
+
+
+def manual_stubs(lib):
+    """Relative paths of the stubs marked `Liveness: manual` (§6, contract 2.4): only a person can
+    check them, so they are never fetched. kb-report lists them once per sweep interval."""
+    return [str(f.relative_to(lib)) for f in stubs(lib)
+            if any(LIVENESS_MANUAL.match(l) for l in f.read_text(errors="replace").split("\n"))]
+
+
 def stub_urls(lib):
-    """{stub_slug: (relative path, url)} from labelled URL lines in the library's sources/ dirs."""
+    """{stub_slug: (relative path, url)} from labelled URL lines in the library's sources/ dirs.
+    A stub marked `Liveness: manual` is left out."""
     out = {}
-    for f in markdown_files(lib):
-        if "sources" not in f.relative_to(lib).parts[:-1]:
+    manual = set(manual_stubs(lib))
+    for f in stubs(lib):
+        if str(f.relative_to(lib)) in manual:
             continue
         for line in f.read_text(errors="replace").split("\n"):
             m = URL_LINE.match(line)
@@ -247,11 +266,12 @@ def main(argv):
         print(f"kb-sources: {root} is neither a library (no INDEX.md) nor a directory of libraries",
               file=sys.stderr); return 2
 
-    found = []                       # (lib, slug, stub_rel, url, [dependants])
+    found, manual = [], []           # (lib, slug, stub_rel, url, [dependants]); manual stub paths
     for lib in libs:
-        stubs = stub_urls(lib)
-        deps = dependants(lib, stubs)
-        found += [(lib, slug, rel, url, deps[slug]) for slug, (rel, url) in sorted(stubs.items())]
+        urlmap = stub_urls(lib)
+        deps = dependants(lib, urlmap)
+        found += [(lib, slug, rel, url, deps[slug]) for slug, (rel, url) in sorted(urlmap.items())]
+        manual += [f"{lib.name}/{rel}" for rel in manual_stubs(lib)]
     urls = sorted({f[3] for f in found})
 
     print(f"kb-sources: {root}  ({len(libs)} librar{'y' if len(libs) == 1 else 'ies'}, "
@@ -259,6 +279,11 @@ def main(argv):
     for lib, slug, rel, url, deps in found:
         print(f"\n  {url}\n    stub: {lib.name}/{rel}")
         print("    dependants: " + ("; ".join(deps) if deps else "(no fact section cites this stub directly)"))
+    if manual:
+        print(f"\n{len(manual)} stub(s) marked Liveness: manual, never fetched: only a person can check "
+              f"them, and the weekly report lists them while the library's sweep is due.")
+        for m in manual:
+            print(f"  {m}")
     if not found:
         print("\nNo external URLs found.")
         return 0

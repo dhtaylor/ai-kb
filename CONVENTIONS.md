@@ -328,6 +328,10 @@ for them.
   stub for something already in the KB.
 - A source stub (`sources/<slug>.md`, inside the library) records: title, origin (URL / page-ID /
   filename), date ingested, and where the artifact itself lives.
+- **A source only a person can check** (behind a sign-in wall, or refusing every client) carries
+  `- **Liveness:** manual` in its stub, from contract 2.4. `kb-sources` does not fetch it and counts
+  it instead, and the weekly report lists it while the library's sweep is due, so a person checks it
+  once per sweep interval. `manual` is the only value; `check-kb` fails any other.
 - **`sources/` and `documents/` hold different things.** `sources/` holds **only `.md` citation
   stubs**: routed from the library's `INDEX.md`, checked like any other file, and what a `Source:`
   line cites. `documents/` holds **the archived artifacts themselves**, kept verbatim: a schema dump,
@@ -751,7 +755,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | sweep and re-check due | which trees are due for a sweep, and how many facts, open queue items and episodic notes await a librarian; a reminder, exit 0 always | **built** — `kb-due` |
 | external drift | a saved snapshot of an external source still matches its recorded baseline; drift is queued, never applied; offline, fetches nothing | **built** — `kb-watch` |
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
-| external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one as `source-unreachable`, each with its dependants; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
+| external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one, or a redirect to a sign-in page, as `source-unreachable`, each with its dependants; a `Liveness: manual` stub is counted, never fetched; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
 All twenty-six are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
@@ -808,3 +812,12 @@ colon, from this version.
 
 Migrating from 2.2: nothing is required. To adopt it, add the line to the root `INDEX.md` and declare
 `kb_contract: "2.3"`.
+
+### 2.4
+
+A source stub may carry `- **Liveness:** manual` for a source a script cannot check: `kb-sources`
+does not fetch it, and the weekly report lists it once per sweep interval for a person to check
+(§6). `check-kb` fails a `Liveness:` value other than `manual`, from this version.
+
+Migrating from 2.3: nothing is required. To adopt it, mark the stubs only a person can check and
+declare `kb_contract: "2.4"`.

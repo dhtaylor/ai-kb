@@ -417,6 +417,13 @@ def main(root: pathlib.Path) -> int:
                     rule((2, 3), f"{f}: 'Not covered here' line names nothing — write "
                                  f"'Not covered here: <topics> — <library>' or remove it (§3)")
 
+        if "sources" in f.relative_to(root).parts[:-1]:
+            # "Liveness: manual" (§6, contract 2.4) marks a stub only a person can check.
+            for line in text.split("\n"):
+                m = re.match(r"^\s*-\s*\*\*Liveness:\*\*\s*(.*?)\s*$", line)
+                if m and m.group(1) != "manual":
+                    rule((2, 4), f"{f}: 'Liveness: {m.group(1)}' — the only value is 'manual' (§6)")
+
         if f == root / "INDEX.md" and "kb_contract" in fm:
             try:
                 raw = re.search(r"^kb_contract:[ \t]*(.*?)[ \t]*$", block[1], re.M)

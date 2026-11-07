@@ -10,6 +10,7 @@ listing per library only what a person has to decide:
 - each open queue item: its category, and where (file § section, source stub or watched source);
 - rechecks that are due but marked `Recheck (attended):`, which only a person can run;
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
+- while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
 - a library behind the contract, or on one this engine cannot serve.
 
 A library with nothing to decide gets no section. When no library has anything, the report says so
@@ -96,6 +97,12 @@ def decisions_for(tree: pathlib.Path, mods: dict, packets: list) -> list:
     st = kb_due.status(root)
     if st and st["due"] and "kb-audit" not in covered:
         out.append("Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule.")
+    if st and st["due"]:
+        # Once per sweep interval: listed while the sweep is due, gone once it is done (#120).
+        manual = mods["kb_sources"].manual_stubs(root)
+        if manual:
+            out.append(f"{len(manual)} source(s) marked Liveness: manual, which only a person can check: "
+                       f"{', '.join(manual)}. Open each and confirm it still holds what its facts cite.")
     notes = kb_due.episodic_count(root)
     if notes and "kb-distill" not in covered:
         out.append(f"{notes} note(s) awaiting distillation and no packet drafted: run kb-distill.")
@@ -126,6 +133,7 @@ def main(argv) -> int:
         if not trees:
             trees = list(load_module("kb_libraries", "kb-libraries").installed().values())
         mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
+                "kb_sources": load_module("kb_sources", "kb-sources"),
                 "kb_watch": load_module("kb_watch", "kb-watch"), "check_kb": load_module("check_kb", "check-kb")}
         packets = load_module("kb_apply", "kb-apply").pending()
     except Exception as e:
