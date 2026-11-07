@@ -25,11 +25,12 @@ Usage: check-xlinks --installed [tree ...]
   --installed  resolve against the libraries registered on this machine (ADR-0014): the
             installed set, wherever each one lives. This is what the hooks run.
   kb-root   a directory whose library folders are the set a link can resolve INTO
+            (never a library itself: that is a usage error; pass it as a tree after --installed)
   tree      any further tree whose links should be resolved — a project
             knowledge/ tree, typically. It is a source of links, never a target:
             nothing may cite a project's facts, because they are true of one
             deployment only.
-Exit 0 when nothing is dead, 1 otherwise. Warnings alone do not fail.
+Exit 0 when nothing is dead, 1 otherwise, 2 on a usage error. Warnings alone do not fail.
 """
 import importlib.machinery, importlib.util, pathlib, re, sys
 
@@ -110,6 +111,12 @@ def main(kb, trees) -> int:
         kb = pathlib.Path(kb)
         if not kb.is_dir():
             print(f"check-xlinks: {kb} is not a directory", file=sys.stderr); return 2
+        if (kb / "INDEX.md").is_file():
+            # A library's own folder, not one that holds libraries: its sub-indexes would be
+            # read as libraries and none of its files scanned, a clean pass over nothing (#151).
+            print(f"check-xlinks: {kb} is a library (it has an INDEX.md), not a folder of "
+                  f"libraries. Check it against the registered libraries with: "
+                  f"check-xlinks --installed {kb}", file=sys.stderr); return 2
         libs, where = {d.name: d for d in sorted(kb.iterdir())
                        if d.is_dir() and (d / "INDEX.md").is_file()}, f"under {kb}"
     if not libs:

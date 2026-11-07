@@ -461,6 +461,9 @@ case_run "live cross-library link resolves" 0 "0 dead" -- "$ENGINE/scripts/check
 
 printf '\nAnd [[beta:no-such-thing]].\n' >> "$TMP/kb/alpha/widgets.md"
 case_run "dead cross-library link fails" 1 "has no slug" -- "$ENGINE/scripts/check-xlinks" "$TMP/kb"
+# Issue #151: a library's own folder passed as <kb-root> scanned none of its files (its
+# sub-indexes looked like libraries) and exited 0 over a dead link. It is a usage error now.
+case_run "check-xlinks: a library folder as <kb-root> is a usage error" 2 "--installed" -- "$ENGINE/scripts/check-xlinks" "$TMP/kb/alpha"
 
 # episodic/ is a legitimate citation target: a session note is routed and citable.
 # Excluding it from the slug index called a live citation dead — the bug that shipped.

@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `check-xlinks` no longer passes a library's own folder given as `<kb-root>` (#151). It read the
+  library's sub-indexes as libraries, scanned none of its files, and exited 0 over dead links. A
+  `<kb-root>` with an `INDEX.md` is now a usage error (exit 2) that names
+  `check-xlinks --installed <path>`, which checks an unregistered library against the registered
+  ones.
+
 - Contract 2.5 (#154): every section with content in a fact file carries a `Source:` line.
   Before this, nothing checked for one. A section with no `Source:` was never counted as
   unstamped, so the `verified:` floor ignored it, and one stamped section could date a file whose
