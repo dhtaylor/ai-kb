@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The secret scanner no longer blocks a fully qualified SQL name such as
+  `catalog.dbo.table.TermConfig` (#140). A mixed-case column at the end made the whole name read
+  as a random string. A dotted name of three or more identifier segments is now judged segment by
+  segment, and passes when no segment would be flagged on its own. A JWT is three dot-separated
+  segments too, but each one is random-looking, so it is still caught.
+
 - A topic a library never holds is now found for you (#147, P1). In a field A/B, naming such a
   topic in the root `Not covered here:` line cut the same question from 16–23 turns to 3, but
   nothing told a librarian which topics those were.

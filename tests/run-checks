@@ -1876,6 +1876,22 @@ sec_stage "$TMP/sec8" "$(printf '%s\n' \
   'password: <your-password>  token: $API_TOKEN')"
 case_run "sha, prose, URL, wiki-link, code and placeholders are not flagged" 0 "clean" -- \
   sh -c "cd '$TMP/sec8' && '$ENGINE/scripts/check-secrets'"
+# Issue #140: a fully qualified SQL name is an identifier, not a secret, when no dotted
+# segment would be flagged on its own. A JWT (three base64url segments) still is.
+# Tokens are assembled so this file does not trip the rule it tests.
+sec_stage "$TMP/sec9" "$(printf '%s\n' \
+  "Read \`srvprd12data03_env04_vendor_""consolidated.dbo.billing_termdata.TermConfig\` for the plan." \
+  "Read \`srvprd12data03_env04_vendor_""consolidated.dbo.billing_termdata.termconfig\` for the plan." \
+  "Read \`vendor_catalog.dbo.billing_termdata.TermConfig\` for the plan." \
+  "Read \`srvprd12data03_env04_vendor_""consolidated.dbo\` for the plan.")"
+case_run "fully qualified SQL name with a mixed-case column is not flagged (#140)" 0 "clean" -- \
+  sh -c "cd '$TMP/sec9' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec10" "auth \`eyJhbGciOi""JIUzI1NiJ9.eyJzdWIi""OiIxMjM0NTY3""ODkwIn0.dozjgNryP4""J3jVmNHl0w5N_X""gL0n3I9PlFUP""0THsR8U\`"
+case_run "dotted JWT-shaped token is still flagged (#140)" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec10' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec11" "read \`db.dbo.Xk9fQ2mZ7p""L4vR8tN3wB\` today"
+case_run "dotted name with one random-looking segment is still flagged (#140)" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec11' && '$ENGINE/scripts/check-secrets'"
 case_run "entropy pass runs in --worktree mode" 1 "SECRET?" -- \
   sh -c "cd '$TMP/sec3' && '$ENGINE/scripts/check-secrets' --worktree"
 git -C "$TMP/sec3" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>&1
