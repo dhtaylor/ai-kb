@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A project's `knowledge/` tree kept as a read-only archive can drop out of the session-start nudge
+  (#141). Declare `archived: <date or reason>` in its root `INDEX.md`. The nudge then skips it, and
+  plain `kb-due` lists it as `archived`. Before, it was nudged every session to sweep, stamp and
+  declare a contract, none of which a frozen tree can do. A registered library is served whatever
+  it declares, so it is nudged as usual and told to use `kb-library remove`. This is a `kb-due`
+  setting, not a contract change.
+
 - The session-start nudge names only the unstamped sources that are new since a library's last
   sweep (#142). It used to give the whole standing count at every session start. In a large install
   that is hundreds of sources that only an owner can stamp, and the same line every day hid the
