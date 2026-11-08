@@ -228,6 +228,11 @@ Once a library has been swept, session start names only the unstamped sources th
 that sweep's commit; the rest were in front of the sweep already. `kb-due` itself always gives the
 full count.
 
+A project's old `knowledge/` tree, kept read-only once its facts have moved to registered libraries,
+can stop the nudge by declaring `archived: <date or reason>` in its root `INDEX.md` frontmatter.
+Session start then skips it, and `kb-due` lists it as `archived`. This is a setting for `kb-due`,
+not part of the contract, and it does not retire a registered library: `kb-library remove` does.
+
 A clean run means structurally sound. It does not mean verified: nothing here checks whether a fact
 is true, whether its source still says so, or whether it landed where a reader would look.
 

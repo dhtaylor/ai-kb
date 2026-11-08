@@ -1676,6 +1676,25 @@ case_run "nudge: a sweep not yet committed leaves nothing new (#142)" 1 "" -- \
 mkdir -p "$TMP/delta-nogit" && cp -r "$NFX/kb/delta-due" "$TMP/delta-nogit/lib" && rm -rf "$TMP/delta-nogit/lib/.git"
 case_run "nudge: a swept tree outside git reports the full count (#142)" 0 "2 unstamped sources (never verified)" -- \
   "$ENGINE/scripts/kb-due" "$TMP/delta-nogit/lib" --nudge
+# Issue #141: a project tree kept as a read-only archive declares `archived:` in its root INDEX.md
+# and drops out of the nudge; plain kb-due still lists it, marked archived. A registered library is
+# served whatever it says, so it is nudged as usual and told how to retire it.
+build_clean "$NFX/kb/arch-proj"
+sed -i 's/^last_swept: never$/&\narchived: 2026-11-01, moved to registered libraries/' "$NFX/kb/arch-proj/INDEX.md"
+printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/arch-proj/widgets.md"
+mkdir -p "$TMP/archhome"
+case_run "nudge: an archived project tree prints nothing (#141)" 0 "" -- \
+  bash -c '[ -z "$(HOME="$3" "$1" "$2" --nudge --summary)" ]' _ "$ENGINE/scripts/kb-due" "$NFX/kb/arch-proj" "$TMP/archhome"
+case_run "kb-due --quiet: an archived project tree is not due (#141)" 0 "" -- \
+  bash -c '[ -z "$(HOME="$3" "$1" "$2" --quiet)" ]' _ "$ENGINE/scripts/kb-due" "$NFX/kb/arch-proj" "$TMP/archhome"
+case_run "kb-due: an archived project tree is still listed, marked archived (#141)" 0 "archived: 2026-11-01" -- \
+  env HOME="$TMP/archhome" "$ENGINE/scripts/kb-due" "$NFX/kb/arch-proj"
+cp -r "$NFX/kb/arch-proj" "$NFX/kb/arch-lib" && sed -i 's/^domain: arch-proj$/domain: arch-lib/' "$NFX/kb/arch-lib/INDEX.md"
+mkdir -p "$TMP/archhome2"; HOME="$TMP/archhome2" "$ENGINE/scripts/kb-library" add "$NFX/kb/arch-lib" >/dev/null 2>&1
+case_run "nudge: a registered library declaring archived: is still nudged (#141)" 0 "arch-lib: sweep due" -- \
+  env HOME="$TMP/archhome2" "$ENGINE/scripts/kb-due" --nudge
+case_run "nudge: ...and told how to retire it (#141)" 0 "kb-library remove arch-lib" -- \
+  env HOME="$TMP/archhome2" "$ENGINE/scripts/kb-due" --nudge
 # Issue #154: a section with no Source: line is counted too, and a sourced library reports none.
 build_clean "$NFX/kb/unsourced-due"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/unsourced-due/INDEX.md"

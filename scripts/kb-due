@@ -57,7 +57,10 @@ reports, per tree, everything a librarian should act on:
                              so they are told apart from category 2, and the budget does not cap
                              them (issue #63).
 
-  A tree with nothing due in any of the six contributes no line at all. A failure computing one
+  A tree with nothing due in any of the six contributes no line at all, and so does a tree whose
+  root INDEX.md declares `archived: <date or reason>` (issue #141): a read-only archive cannot act on
+  a nudge. Plain kb-due still lists it, marked archived. A registered library is served whatever it
+  declares, so it is nudged as usual and told to use kb-library remove. A failure computing one
   category for one tree (a malformed needs-attention.md, an INDEX.md with no freshness_horizon) is
   printed as a one-line warning to stderr and that category is skipped for that tree only — every
   other tree and every other category still gets computed. This hook must never crash a session.
@@ -98,13 +101,16 @@ def status(tree: pathlib.Path):
     interval = field(text, "sweep_interval") or f"{DEFAULT_INTERVAL}d"
     days = int(re.sub(r"\D", "", interval) or DEFAULT_INTERVAL)
     swept = field(text, "last_swept")
+    m = re.search(r"^archived:\s*(.+?)\s*$", text, re.M)   # issue #141: a read-only archive
+    row = {"tree": tree, "age": None, "interval": days, "due": True, "archived": m.group(1) if m else None}
     if swept in (None, "never"):
-        return {"tree": tree, "age": None, "interval": days, "due": True}
+        return row
     try:
-        age = (TODAY - datetime.date.fromisoformat(swept)).days
+        row["age"] = (TODAY - datetime.date.fromisoformat(swept)).days
     except ValueError:
-        return {"tree": tree, "age": None, "interval": days, "due": True}
-    return {"tree": tree, "age": age, "interval": days, "due": age > days}
+        return row
+    row["due"] = row["age"] > days
+    return row
 
 
 # -------------------------------------------------------------------- --nudge ----
@@ -277,7 +283,7 @@ def summary_line(counts: list) -> str:
     return "KB due — " + " · ".join(out) if out else ""
 
 
-def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=()):
+def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=(), retire=None):
     """(line-or-None, [warning, ...], {summary key: count}) for one tree's row from status(). A
     warning never stops the other categories, this tree's own line, or any other tree — see
     module docstring: a malformed or uncomputable category is reported once and skipped."""
@@ -387,6 +393,9 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=()):
     elif st == "malformed":
         parts.append("kb_contract cannot be read — not served (check-kb says why)")
 
+    if retire:   # a registered library is served whatever it declares (#141)
+        parts.append(f"declares archived: {s['archived']}, but is registered and still served "
+                     f"(kb-library remove {retire} to retire it)")
     line = f"{lbl}: " + "; ".join(parts) if parts else None
     return line, warnings, counts
 
@@ -397,15 +406,18 @@ def main(argv) -> int:
     summary = "--summary" in argv
     args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary")]
 
-    trees = []
+    trees, registered = [], {}
     try:   # the registry's one reader; an unreadable registry must not crash a session
-        trees += list(load_module("kb_libraries", "kb-libraries").installed().values())
+        registered = {p: n for n, p in load_module("kb_libraries", "kb-libraries").installed().items()}
+        trees += list(registered)
     except Exception as e:
         print(f"kb-due: library registry unreadable, registered libraries skipped: {e}", file=sys.stderr)
     trees += [pathlib.Path(a) for a in args]
 
     rows = [s for s in (status(t) for t in trees) if s]
-    due = [s for s in rows if s["due"]]
+    # An archived tree that is not registered drops out of the nudge and of --quiet (issue #141).
+    shelved = lambda s: s["archived"] and s["tree"].resolve() not in registered
+    due = [s for s in rows if s["due"] and not shelved(s)]
 
     if nudge:
         kb_verify = load_module("kb_verify", "kb-verify")
@@ -421,7 +433,10 @@ def main(argv) -> int:
             print(f"kb-due: review packets unreadable, skipped: {e}", file=sys.stderr)
             packets = []
         for s in rows:
-            line, warn, c = nudge_for(s, kb_verify, kb_watch, check_kb, packets)
+            if shelved(s):
+                continue
+            retire = registered.get(s["tree"].resolve()) if s["archived"] else None
+            line, warn, c = nudge_for(s, kb_verify, kb_watch, check_kb, packets, retire)
             if line:
                 lines.append(line)
             warnings += warn
@@ -463,6 +478,9 @@ def main(argv) -> int:
             un = unstamped_count(s["tree"], check_kb) if check_kb else 0
         except Exception:
             un = 0
+        if shelved(s):
+            print(f"  arch {label(s['tree']):<28} archived: {s['archived']}")
+            continue
         print(f"  {'DUE ' if s['due'] else 'ok  '} {label(s['tree']):<28} swept {when:<14} "
               f"(every {s['interval']}d)" + (f"  {plural(un, 'unstamped source')}" if un else ""))
     print(f"\n{len(due)} of {len(rows)} tree(s) due for a sweep"
