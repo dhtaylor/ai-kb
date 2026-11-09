@@ -25,7 +25,7 @@ facts**:
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills, the `kb-retrieve` agent, the `kb-ask` triage skill, and the `/kb-capture` and `/kb-init` commands. |
 | `plugins/analysis-tools/` | A second plugin: a skill that reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft. It reads its tradecraft from a library and holds none. |
 | `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`), the upkeep commands (`kb-verify`, `kb-sources`, `kb-watch`, `kb-due`), the opt-in weekly job (`kb-schedule`, with `kb-prepare`, `kb-apply` and `kb-report`), `kb-backup`, the retrieval-cost tools (`kb-telemetry`, `kb-eval-sample`), and the checks that guard the contract. |
-| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0017). Each one explains why a rule exists. |
+| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0020). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
 The facts live elsewhere, in two kinds of home:
