@@ -209,10 +209,18 @@ def run() -> int:
         libs = subprocess.run([str(SCRIPTS / "kb-libraries")], capture_output=True, text=True).stdout
     except OSError:
         libs = ""
+    try:   # a read-only library is its publisher's to verify (ADR-0020)
+        consumed = {l.split("\t")[0] for l in subprocess.run(
+            [str(SCRIPTS / "kb-libraries"), "--read-only"], capture_output=True, text=True).stdout.splitlines()}
+    except OSError:
+        consumed = set()
     rcs = []
     for line in libs.splitlines():
         state, name, path = (line.split("\t") + ["", "", ""])[:3]
         if state != "ok":
+            continue
+        if name in consumed:
+            note(f"{name} skipped: read-only")
             continue
         rcs.append(step(f"kb-verify {name}", [str(SCRIPTS / "kb-verify"), path, "--yes", "--unattended"]))
         rcs.append(step(f"kb-sources {name}", [str(SCRIPTS / "kb-sources"), path, "--yes"]))

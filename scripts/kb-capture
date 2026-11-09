@@ -49,6 +49,15 @@ if [ -z "$tree" ] || [ ! -f "$tree/INDEX.md" ]; then
   exit 2
 fi
 tree=$(cd "$tree" && pwd)
+# A read-only library is a consumer's copy of someone else's (ADR-0020): nothing is filed into it.
+engine="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/.." && pwd)"
+ro=$("$engine/scripts/kb-libraries" --read-only 2>/dev/null | awk -F'\t' -v p="$(cd "$tree" && pwd -P)" '$2 == p {print $1 "\t" $3; exit}')
+if [ -n "$ro" ]; then
+  echo "kb-capture: ${ro%%$'\t'*} is registered read-only on this machine, a consumer's copy: nothing is" >&2
+  origin=${ro#*$'\t'}
+  echo "  filed into it (ADR-0020). Capture into your project's tree, or file it with ${origin:-its publisher}." >&2
+  exit 2
+fi
 
 field() { sed -n "s/^$1:[[:space:]]*//p" "$tree/INDEX.md" | head -1; }
 domain=$(field domain); scope=$(field scope)

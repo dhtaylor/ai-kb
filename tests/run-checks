@@ -3667,6 +3667,63 @@ case_run "kb-schedule run: a second run while one holds the lock exits 0 and doe
 case_run "schedulable: kb-schedule run from / with a stripped environment" 0 "exit=0" -- \
   sched env HOME="$KR/home" STUB_LOG="$KR/stub-args" STUB_RESULT="$PK/result" "$ENGINE/scripts/kb-schedule" run
 
+# ---------------------------------------- read-only libraries: a consumer's copy (ADR-0020) ----
+# A library someone else publishes can be registered read-only. It is served as usual, but this
+# machine never curates it: the hook refuses commits, nothing writes into it, nothing nudges about it.
+RO="$TMP/ro"; ROH="$RO/home"; mkdir -p "$ROH"
+build_clean "$RO/pub"; build_clean "$RO/mine"
+for l in pub mine; do git -C "$RO/$l" -c user.email=t@t -c user.name=t commit -qm init; done
+HOME="$ROH" "$ENGINE/scripts/kb-library" add "$RO/pub" --read-only >/dev/null 2>&1
+HOME="$ROH" "$ENGINE/scripts/kb-library" add "$RO/mine" >/dev/null 2>&1
+ROREG="$ROH/.config/ai-kb/libraries"
+case_run "read-only: kb-library add --read-only records it in the registry" 0 "true" -- \
+  git config --file "$ROREG" --get library.pub.readonly
+case_run "read-only: a library added without the flag is not read-only" 1 "" -- \
+  git config --file "$ROREG" --get library.mine.readonly
+case_run "read-only: kb-library list shows the mode" 0 "read-only" -- env HOME="$ROH" "$ENGINE/scripts/kb-library" list
+case_run "read-only: kb-libraries --read-only names it, and only it" 0 "" -- \
+  bash -c 'out=$(HOME="$1" "$2/scripts/kb-libraries" --read-only); printf "%s\n" "$out" | grep -q "^pub	" && ! printf "%s\n" "$out" | grep -q "^mine	"' _ "$ROH" "$ENGINE"
+printf '\nExtra.\n' >> "$RO/pub/widgets.md"; git -C "$RO/pub" add -A
+case_run "read-only: the library hook refuses a commit in a read-only clone" 1 "registered read-only" -- \
+  env HOME="$ROH" git -C "$RO/pub" -c user.email=t@t -c user.name=t commit -qm edit
+git -C "$RO/pub" reset -q --hard
+printf '\nExtra.\n' >> "$RO/mine/fx-golden.md"; git -C "$RO/mine" add -A
+case_run "read-only: ...and still allows one in a curated library" 0 "" -- \
+  env HOME="$ROH" git -C "$RO/mine" -c user.email=t@t -c user.name=t commit -qm edit
+case_run "read-only: kb-verify --yes refuses it" 2 "read-only" -- env HOME="$ROH" "$ENGINE/scripts/kb-verify" "$RO/pub" --yes
+case_run "read-only: kb-verify --apply refuses it" 2 "read-only" -- env HOME="$ROH" "$ENGINE/scripts/kb-verify" "$RO/pub" --apply
+case_run "read-only: kb-verify with no flag, which writes nothing, still reports" 0 "kb-verify: $RO/pub" -- \
+  env HOME="$ROH" "$ENGINE/scripts/kb-verify" "$RO/pub"
+case_run "read-only: kb-sources --yes refuses it" 2 "read-only" -- env HOME="$ROH" "$ENGINE/scripts/kb-sources" "$RO/pub" --yes
+case_run "read-only: kb-prepare refuses it" 2 "read-only" -- \
+  env HOME="$ROH" "$ENGINE/scripts/kb-prepare" audit "$RO/pub" --claude /bin/false --out "$RO/packets"
+watch_snapshot "$RO/baseline.html" 255 "Home" 2026-01-01
+watch_snapshot "$RO/changed.html"  500 "Home" 2026-02-02
+watch_allowlist "$RO/allowlist.json" "$RO/pub" "$RO/baseline.html" "$RO/changed.html"
+case_run "read-only: kb-capture refuses to file into it" 2 "read-only" -- \
+  bash -c 'echo "Saw a thing." | HOME="$1" "$2/scripts/kb-capture" --title "a thing" --into "$3" --from -' _ "$ROH" "$ENGINE" "$RO/pub"
+case_run "read-only: ...and wrote nothing there" 1 "" -- test -d "$RO/pub/episodic"
+case_run "read-only: kb-watch skips a read-only library's sources" 0 "read-only" -- \
+  env HOME="$ROH" "$ENGINE/scripts/kb-watch" "$RO/allowlist.json"
+case_run "read-only: ...and queues nothing into it" 1 "" -- test -e "$RO/pub/needs-attention.md"
+case_run "read-only: the nudge leaves it out" 1 "" -- \
+  bash -c 'HOME="$1" "$2/scripts/kb-due" --nudge | grep -q "^pub:"' _ "$ROH" "$ENGINE"
+case_run "read-only: ...while still nudging the curated library" 0 "mine: sweep due" -- env HOME="$ROH" "$ENGINE/scripts/kb-due" --nudge
+case_run "read-only: plain kb-due lists it as read-only" 0 "" -- \
+  bash -c 'HOME="$1" "$2/scripts/kb-due" | grep -E "^  ro +pub +read-only"' _ "$ROH" "$ENGINE"
+env HOME="$ROH" "$ENGINE/scripts/kb-report" --out "$RO/reports" >/dev/null 2>&1
+case_run "read-only: the weekly report leaves it out" 1 "" -- bash -c 'grep -q "^## pub" "$1"/*-W*.md' _ "$RO/reports"
+case_run "read-only: ...and still reports the curated library" 0 "" -- bash -c 'grep -q "^## mine" "$1"/*-W*.md' _ "$RO/reports"
+case_run "read-only: session start marks it (read-only) and still serves it" 0 "pub -> $RO/pub (read-only)" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i HOME='$ROH' PATH='$PATH' '$ENGINE/scripts/kb-session-start'"
+HOME="$ROH" "$ENGINE/scripts/kb-schedule" run >/dev/null 2>&1
+ROLOG="$ROH/.local/state/ai-kb/schedule.log"
+case_run "read-only: the weekly job runs nothing on it" 1 "" -- grep -qE "kb-(verify|sources|prepare)( [a-z]+)? pub " "$ROLOG"
+case_run "read-only: ...and still runs on the curated library" 0 "" -- grep -qF "kb-verify mine exit=" "$ROLOG"
+HOME="$ROH" "$ENGINE/scripts/kb-library" add "$RO/pub" >/dev/null 2>&1
+case_run "read-only: re-adding without the flag makes it curated again" 1 "" -- \
+  git config --file "$ROREG" --get library.pub.readonly
+
 # ------------------------------------------------- kb-catalog: the triage catalog (#130) ----
 # Triage reads one catalog, not every root INDEX.md. It must carry what tells neighbors apart
 # (scope, description, the Not covered here line), and a library that is registered but not

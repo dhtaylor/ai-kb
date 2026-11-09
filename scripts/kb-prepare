@@ -78,6 +78,18 @@ def prompt_for(skill: str, lib: pathlib.Path) -> str:
     return text
 
 
+def read_only_entry(path):
+    """The registry entry if the library at path is registered read-only (ADR-0020), else None."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(
+        "kb_libraries", str(pathlib.Path(__file__).resolve().parent / "kb-libraries"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod, mod.read_only(path)
+
+
 def main(argv) -> int:
     args, opts, i = [], {}, 0
     while i < len(argv):
@@ -97,6 +109,9 @@ def main(argv) -> int:
     skill, lib = args[0], pathlib.Path(args[1]).resolve()
     if not (lib / "INDEX.md").is_file():
         return fail(f"{lib} has no INDEX.md: not a library")
+    kl, ro = read_only_entry(lib)
+    if ro:   # a packet proposes writes this machine will not make (ADR-0020)
+        print(kl.refusal("kb-prepare", ro), file=sys.stderr); return 2
 
     kb_apply = load_module("kb_apply", "kb-apply")
     out = pathlib.Path(kb_apply.packets_dir(opts.get("--out"))).resolve()

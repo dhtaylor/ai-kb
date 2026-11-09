@@ -66,7 +66,9 @@ Write the body to a temporary file, then:
 
 The script finds the nearest tree, names and dates the note, adds frontmatter and routes it newest
 first. If it reports there is no tree, say so and relay its suggestion — do not create one yourself,
-and do not file the note somewhere improvised.
+and do not file the note somewhere improvised. If it refuses a library registered read-only (a consumer's copy,
+ADR-0020), relay that too: offer the project's own tree, or a note for the person to file with the
+library's publisher.
 
 If `KB_ENGINE_ROOT` is unset, say so and stop.
 

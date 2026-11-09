@@ -255,6 +255,18 @@ def stable_id(category, stub, url):
     return hashlib.sha1(f"{category}|{stub}|{url}".encode()).hexdigest()[:8]
 
 
+def read_only_entry(path):
+    """The registry entry if the library at path is registered read-only (ADR-0020), else None."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(
+        "kb_libraries", str(pathlib.Path(__file__).resolve().parent / "kb-libraries"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod, mod.read_only(path)
+
+
 def main(argv):
     args = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}
@@ -265,6 +277,14 @@ def main(argv):
     if not libs:
         print(f"kb-sources: {root} is neither a library (no INDEX.md) nor a directory of libraries",
               file=sys.stderr); return 2
+    # A read-only library (ADR-0020) is its publisher's to check: --yes would queue into it.
+    kl, ro = read_only_entry(root)
+    if ro and "--yes" in flags:
+        print(kl.refusal("kb-sources", ro), file=sys.stderr); return 2
+    if not (root / "INDEX.md").is_file():   # a directory of libraries: skip the read-only ones
+        for lib in [l for l in libs if kl.read_only(l)]:
+            print(f"kb-sources: {lib.name} is registered read-only on this machine — skipped (ADR-0020)")
+        libs = [l for l in libs if not kl.read_only(l)]
 
     found, manual = [], []           # (lib, slug, stub_rel, url, [dependants]); manual stub paths
     for lib in libs:

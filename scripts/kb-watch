@@ -421,6 +421,18 @@ def process_entry(entry: dict, dry_run: bool):
     return to_write, errors, len(findings)
 
 
+def read_only_entry(path):
+    """The registry entry if the library at path is registered read-only (ADR-0020), else None."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(
+        "kb_libraries", str(pathlib.Path(__file__).resolve().parent / "kb-libraries"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod, mod.read_only(path)
+
+
 def main(argv):
     if argv[:1] == ["--dump"]:
         if len(argv) != 2:
@@ -453,7 +465,13 @@ def main(argv):
 
     run_errors = []
     total_new = total_found = 0
+    kl = read_only_entry(".")[0]
     for entry in entries:
+        ro = kl.read_only(entry["library"])
+        if ro:   # its publisher watches it; a finding would be queued into their library (ADR-0020)
+            print(f"kb-watch: {entry['source_id']}: {ro['name']} is registered read-only on this "
+                  f"machine — skipped (ADR-0020)")
+            continue
         written, errors, found = process_entry(entry, dry_run)
         total_new += len(written)
         total_found += found

@@ -6,6 +6,19 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A consumer's copy of someone else's library can be registered read-only (ADR-0020 step 1, #148):
+  `kb-library add <path | git-url> --read-only`. It is served as usual, and session start marks it
+  `(read-only)`. Nothing on this machine curates it:
+  - The engine's library hook refuses commits in it, naming the origin to file with.
+  - `kb-verify --yes/--apply`, `kb-sources --yes`, `kb-prepare` and `kb-capture --into` refuse it,
+    and `kb-watch` skips its sources. A dry run of `kb-verify` or `kb-sources`, which writes nothing,
+    still works.
+  - The weekly job, the nudge and `kb-report` leave it out. Plain `kb-due` lists it as `read-only`.
+  - kb-update-domain, kb-distill, kb-organize-domain, kb-audit and /kb-capture refuse to write to it.
+
+  `kb-library list` shows the mode, and `kb-libraries --read-only` lists each read-only library with
+  its origin. Re-adding the same path without the flag makes it curated again.
+
 - ADR-0020 (#148): a library says where each library it links to comes from, and a consumer's copy
   of someone else's library can be registered read-only. A link into a same-named library from a
   different origin is reported as a dependency mismatch and warns, rather than failing as a dead

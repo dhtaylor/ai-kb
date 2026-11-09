@@ -246,6 +246,10 @@ diff) and external `Source:` URL liveness. A clean run means structurally sound 
 Stop and say so rather than proceeding, if:
 
 - the engine root is unconfigured;
+- the target library is marked `(read-only)` in your session context. It is a consumer's copy of
+  someone else's library (ADR-0020): it is served here, never curated here. Say what you would have
+  changed, and that it is filed with the library's publisher (`kb-libraries --read-only` names its
+  origin). Never write to it, and never file the issue yourself;
 - the target domain does not exist — that is `kb-create-domain`;
 - the source material is not actually available to you. **Never fold from memory of what a
   document probably says.** A fold with no source is invention wearing a citation;
