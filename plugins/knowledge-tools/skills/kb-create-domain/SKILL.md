@@ -126,6 +126,7 @@ verifier_budget: <N — max facts re-checked per cycle>
 sweep_interval: 30d
 kb_contract: "<MAJOR.MINOR — the current contract version, CONVENTIONS §14>"
 last_swept: never
+links_to:                 # only if it links across libraries: <library>: <its git remote>
 metadata:
   type: index
   node_type: router
@@ -187,7 +188,9 @@ Not covered here: <neighbouring topics> — held by [[other-lib:slug]] or <libra
 ```
 
 Link a library with `[[library:slug]]` only when that slug exists in a registered library
-(`check-xlinks` checks it); otherwise name the library in words. Topics only, never facts about them.
+(`check-xlinks` checks it); otherwise name the library in words. List that library under `links_to:` in the root `INDEX.md`, with the git remote it came from
+(`kb-library list` and `git -C <library> remote get-url origin` give it): `check-kb` fails a link
+whose library is not listed (CONVENTIONS §3, §5). Topics only, never facts about them.
 The line is optional: a library with no near neighbour omits it, and says so rather than inventing one.
 
 **An empty domain still needs a body.** "Nothing else" forbids stored *facts* in a router, not

@@ -114,7 +114,7 @@ the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-li
 The reference library, ai-kb-architecture, is released with the engine under the same tag
 ([ADR-0019](documents/decisions/0019-engine-and-reference-library-release-together.md)).
 
-- **Built and tested:** the contract (version 2.5), ADRs 1 to 17, the five skills, the retrieval agent, both
+- **Built and tested:** the contract (version 2.6), ADRs 1 to 17, the five skills, the retrieval agent, both
   halves of the retrieval eval, the guardrails above, and the weekly job.
 - **Evidenced, not guaranteed:** that an agent retrieves rather than recalls has been tested on five
   libraries by agents that never saw the answer key. The latest recorded runs scored 15/16, 16/16,

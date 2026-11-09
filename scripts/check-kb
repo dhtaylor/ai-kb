@@ -11,6 +11,8 @@ Covers, within a single root:
                         no stamp is dated in the future
   * section provenance — a section with content in a fact file has a Source: line (§6);
                         fails from contract 2.5, warns below
+  * links_to          — every library a [[library:slug]] link names is listed, with its origin,
+                        under links_to: in the root INDEX.md (§3, ADR-0020); fails from 2.6
   * agent_ttl         — if the root INDEX.md declares one, it is <N>d and shorter than
                         freshness_horizon (§7)
   * kb_contract       — if the root INDEX.md declares one, it is a quoted MAJOR.MINOR (§3, ADR-0016)
@@ -230,6 +232,17 @@ def contract_version(declared) -> tuple:
 
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
+
+
+def engine_module(name: str, filename: str):
+    """Another engine script, imported (the SourceFileLoader pattern kb-due uses)."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(name, str(ENGINE / "scripts" / filename))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
 CONTRACT_SECTION = re.compile(r"^## \d+\. Contract versions\n(.*?)(?=^## |\Z)", re.M | re.S)
 CONTRACT_HEADING = re.compile(r"^### (0|[1-9]\d*)\.(0|[1-9]\d*)\s*$")
 
@@ -510,6 +523,27 @@ def main(root: pathlib.Path) -> int:
             defects.append(
                 f"{f}: slug '{f.stem}' collides with directory '{dir_slugs[f.stem]}' — "
                 f"a folder name is reserved (§5), so [[{f.stem}]] reads as the folder")
+
+    # links_to (§3, contract 2.6, ADR-0020): every library a link names says where it comes from,
+    # so a machine with a different library under that name can tell. check-xlinks' reader, so a
+    # fence or a code span means the same in both: a span explains the form and needs no entry.
+    xl, kl = engine_module("check_xlinks", "check-xlinks"), engine_module("kb_libraries", "kb-libraries")
+    declared, named, first = kl.links_to(root), set(), {}
+    for f in files:
+        for link, in_span in xl.links(f.read_text(errors="replace")):
+            if ":" not in link or xl.PLACEHOLDER.search(link) or link in xl.EXAMPLES or link in EXAMPLE_SLUGS:
+                continue
+            lib = link.partition(":")[0]
+            named.add(lib)
+            if not in_span:
+                first.setdefault(lib, []).append(f)
+    for lib, where in sorted(first.items()):
+        if lib not in declared:
+            rule((2, 6), f"{index}: {len(where)} link(s) into '{lib}' (first in {where[0]}), which "
+                         f"links_to does not name — add '{lib}: <the origin you linked against>' "
+                         f"under links_to: (§3)")
+    for lib in sorted(set(declared) - named):
+        warnings.append(f"{index}: links_to names '{lib}', which no link uses — remove it (§3)")
 
     defects += orphans(root, files)
 

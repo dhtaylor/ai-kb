@@ -52,7 +52,7 @@ build_clean() {
   mkdir -p "$d"
   # Declares the newest contract (CONVENTIONS §14), so a fixture is not "behind" (ADR-0016).
   # Publishing a new contract version means raising this line.
-  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.5"\nlast_swept: never\n' > "$d/INDEX.md"
+  fm fx-index "$scope" $'freshness_horizon: 90d\nverifier_budget: 5\nsweep_interval: 30d\nkb_contract: "2.6"\nlast_swept: never\n' > "$d/INDEX.md"
   printf '# fx\n\n- [widgets](widgets.md) — what widgets do\n' >> "$d/INDEX.md"
   sed -i "s/^domain: fx\$/domain: $(basename "$d")/" "$d/INDEX.md"   # a library declares its own name (ADR-0014)
   fm widgets "$scope" > "$d/widgets.md"
@@ -613,6 +613,7 @@ case_run "overlap: the registry holds only the entries" 0 "library.backlogs.path
 LHOME="$TMP/lhook-home"; mkdir -p "$LHOME"
 build_clean "$TMP/lhook/solo"
 printf '\nSee [[gamma:widgets]].\n' >> "$TMP/lhook/solo/widgets.md"
+sed -i 's|^last_swept: never$|&\nlinks_to:\n  gamma: https://example.com/gamma.git|' "$TMP/lhook/solo/INDEX.md"   # contract 2.6
 git -C "$TMP/lhook/solo" add -A
 HOME="$LHOME" "$ENGINE/scripts/kb-library" add "$TMP/lhook/solo" >/dev/null
 case_run "library hook warns, but does not fail, on a link into an absent library" 0 "unresolvable" -- \
@@ -2090,7 +2091,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.5"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.6"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \
@@ -3214,6 +3215,7 @@ case_run "contract 2.2 is known, with what it adds" 0 "2.2" -- \
 # cross-root link does.
 NC="$TMP/notcovered"; build_clean "$NC"
 printf 'Not covered here: gadgets — held by [[nc-peer:widgets]]\n' >> "$NC/INDEX.md"
+sed -i 's|^last_swept: never$|&\nlinks_to:\n  nc-peer: https://example.com/nc-peer.git|' "$NC/INDEX.md"   # contract 2.6
 case_run "Not covered here: a line with content passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$NC"
 NE="$TMP/notcovered-empty"; build_clean "$NE"
 printf '**Not covered here:**\n' >> "$NE/INDEX.md"
@@ -3723,6 +3725,76 @@ case_run "read-only: ...and still runs on the curated library" 0 "" -- grep -qF 
 HOME="$ROH" "$ENGINE/scripts/kb-library" add "$RO/pub" >/dev/null 2>&1
 case_run "read-only: re-adding without the flag makes it curated again" 1 "" -- \
   git config --file "$ROREG" --get library.pub.readonly
+
+# ------------------------------- links_to: where a linked library comes from (ADR-0020, 2.6) ----
+# A library names the origin of each library it links into. Origins compare by host and path, so the
+# https and ssh forms of one repository are the same; a different origin is a dependency mismatch,
+# which warns (the consumer can't fix a published library) instead of failing as a dead link.
+same_origin() { python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+sys.dont_write_bytecode = True
+l = m.SourceFileLoader("kl", sys.argv[1] + "/scripts/kb-libraries"); s = u.spec_from_loader("kl", l)
+k = u.module_from_spec(s); l.exec_module(k); sys.exit(0 if k.same_origin(sys.argv[2], sys.argv[3]) else 1)' "$ENGINE" "$1" "$2"; }
+case_run "origins: https and ssh forms of one repository are the same" 0 "" -- same_origin https://example.com/acme/lib.git git@example.com:acme/lib
+case_run "origins: the host's case and a trailing slash don't matter" 0 "" -- same_origin https://GitHub.com/acme/lib/ https://github.com/acme/lib.git
+case_run "origins: another owner is another origin" 1 "" -- same_origin https://github.com/acme/lib.git https://github.com/other/lib.git
+case_run "origins: another host is another origin" 1 "" -- same_origin https://github.com/acme/lib.git https://gitlab.com/acme/lib.git
+
+LT="$TMP/lt"; mkdir -p "$LT"
+lt_link() { printf '\n## Gadgets\n\nSee [[%s:gadgets]].\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n' "$2" >> "$1/widgets.md"; }
+lt_declare() { sed -i "s|^last_swept: never\$|&\nlinks_to:\n  $2: $3|" "$1/INDEX.md"; }
+build_clean "$LT/undeclared"; lt_link "$LT/undeclared" ltb
+case_run "links_to: from 2.6, a link into a library links_to does not name fails" 1 "links_to" -- "$ENGINE/scripts/check-kb" "$LT/undeclared"
+build_clean "$LT/declared"; lt_link "$LT/declared" ltb; lt_declare "$LT/declared" ltb https://github.com/acme/ltb.git
+case_run "links_to: a declared library passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$LT/declared"
+build_clean "$LT/unused"; lt_declare "$LT/unused" ltb https://github.com/acme/ltb.git
+case_run "links_to: a key no link uses is a warning" 0 "no link uses" -- "$ENGINE/scripts/check-kb" "$LT/unused"
+build_clean "$LT/old"; lt_link "$LT/old" ltb; sed -i 's/^kb_contract: .*$/kb_contract: "2.5"/' "$LT/old/INDEX.md"
+case_run "links_to: below 2.6 an undeclared library is only a warning" 0 "fails from contract 2.6" -- "$ENGINE/scripts/check-kb" "$LT/old"
+build_clean "$LT/span"; printf '\nThe form is `[[ltb:gadgets]]`.\n' >> "$LT/span/INDEX.md"
+case_run "links_to: a link inside a code span (the form explained) needs no declaration" 0 "clean" -- "$ENGINE/scripts/check-kb" "$LT/span"
+
+# check-xlinks against a registry: lta links into ltb, which lacks the slug it names.
+ltx() { # ltx <case> <ltb-origin|none> <declared-origin> [read-only] -- a fresh registry for one case
+  local d="$LT/x-$1" h="$LT/x-$1/home"; mkdir -p "$h"
+  build_clean "$d/lta"; lt_link "$d/lta" ltb; lt_declare "$d/lta" ltb "$3"
+  build_clean "$d/ltb"
+  [ "$2" != none ] && git -C "$d/ltb" remote add origin "$2"
+  HOME="$h" "$ENGINE/scripts/kb-library" add "$d/lta" ${4:+--read-only} >/dev/null 2>&1
+  [ "$2" != unregistered ] && HOME="$h" "$ENGINE/scripts/kb-library" add "$d/ltb" >/dev/null 2>&1
+  true
+}
+ltx mismatch https://github.com/someone-else/ltb.git https://github.com/acme/ltb.git
+case_run "check-xlinks: a same-named library from another origin is a dependency mismatch, and warns" 0 "dependency mismatch" -- \
+  env HOME="$LT/x-mismatch/home" "$ENGINE/scripts/check-xlinks" --installed
+case_run "check-xlinks: ...naming both origins and the slug" 0 "" -- bash -c \
+  'out=$(HOME="$1" "$2/scripts/check-xlinks" --installed); for w in someone-else/ltb acme/ltb gadgets; do printf "%s" "$out" | grep -q "$w" || exit 1; done' _ "$LT/x-mismatch/home" "$ENGINE"
+ltx same git@example.com:acme/ltb.git https://example.com/acme/ltb.git
+case_run "check-xlinks: the same origin in another form resolves as before: a missing slug is dead" 1 "has no slug 'gadgets'" -- \
+  env HOME="$LT/x-same/home" "$ENGINE/scripts/check-xlinks" --installed
+ltx noorigin none https://github.com/acme/ltb.git
+case_run "check-xlinks: a library with no recorded origin resolves as before" 1 "has no slug 'gadgets'" -- \
+  env HOME="$LT/x-noorigin/home" "$ENGINE/scripts/check-xlinks" --installed
+case_run "check-xlinks: ...with a note that its origin can't be confirmed" 1 "can't be confirmed" -- \
+  env HOME="$LT/x-noorigin/home" "$ENGINE/scripts/check-xlinks" --installed
+ltx unregistered unregistered https://github.com/acme/ltb.git
+case_run "check-xlinks: an unregistered dependency warns, naming the origin to add" 0 "kb-library add https://github.com/acme/ltb.git" -- \
+  env HOME="$LT/x-unregistered/home" "$ENGINE/scripts/check-xlinks" --installed
+ltx readonly https://github.com/acme/ltb.git https://github.com/acme/ltb.git ro
+case_run "check-xlinks: a dead link in a read-only library warns instead of failing" 0 "read-only" -- \
+  env HOME="$LT/x-readonly/home" "$ENGINE/scripts/check-xlinks" --installed
+
+# kb-library add warns, both ways, and still registers.
+LA="$LT/add"; mkdir -p "$LA/home"
+build_clean "$LA/lta"; lt_link "$LA/lta" ltb; lt_declare "$LA/lta" ltb https://github.com/acme/ltb.git
+build_clean "$LA/ltb"; git -C "$LA/ltb" remote add origin https://github.com/someone-else/ltb.git
+case_run "kb-library add: a dependency not registered here is named, with its origin" 0 "kb-library add https://github.com/acme/ltb.git" -- \
+  env HOME="$LA/home" "$ENGINE/scripts/kb-library" add "$LA/lta"
+case_run "kb-library add: a newcomer that an existing library expects from elsewhere warns" 0 "dependency mismatch" -- \
+  env HOME="$LA/home" "$ENGINE/scripts/kb-library" add "$LA/ltb"
+case_run "kb-library add: ...and still registers it" 0 "ltb" -- env HOME="$LA/home" "$ENGINE/scripts/kb-library" list
+mkdir -p "$LA/home2"; HOME="$LA/home2" "$ENGINE/scripts/kb-library" add "$LA/ltb" >/dev/null 2>&1
+case_run "kb-library add: a newcomer whose dependency here is from elsewhere warns" 0 "dependency mismatch" -- \
+  env HOME="$LA/home2" "$ENGINE/scripts/kb-library" add "$LA/lta"
 
 # ------------------------------------------------- kb-catalog: the triage catalog (#130) ----
 # Triage reads one catalog, not every root INDEX.md. It must carry what tells neighbors apart

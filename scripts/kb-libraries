@@ -166,6 +166,41 @@ def installed():
     return {e["name"]: e["path"].resolve() for e in entries() if e["state"] == "ok"}
 
 
+def origin_key(url: str) -> tuple:
+    """(host, path) an origin names, so that its forms compare equal (ADR-0020): scheme, user, port,
+    the host's case, a trailing .git and trailing slashes don't matter. A local path is ("", path)."""
+    u = url.strip()
+    m = re.match(r"^[a-z][a-z0-9+.-]*://(?:[^@/]*@)?([^/:]*)(?::\d+)?/(.*)$", u, re.I) \
+        or re.match(r"^(?:[^@/:]+@)?([^/:]{2,}):(?!//)(.*)$", u)
+    host, path = (m.group(1).lower(), m.group(2)) if m else ("", u)
+    return host, re.sub(r"(\.git)?/*$", "", path.lstrip("/") if host else path)
+
+
+def same_origin(a: str, b: str) -> bool:
+    return origin_key(a) == origin_key(b)
+
+
+def links_to(root) -> dict:
+    """{library: origin} from the `links_to:` block in a root INDEX.md's frontmatter (contract 2.6):
+    where each library it links into comes from. {} when it declares none."""
+    try:
+        text = (pathlib.Path(root) / "INDEX.md").read_text(errors="replace")
+    except OSError:
+        return {}
+    block = text.split("---\n", 2)
+    if not text.startswith("---\n") or len(block) < 3:
+        return {}
+    out, inside = {}, False
+    for line in block[1].split("\n"):
+        if re.match(r"^links_to:\s*$", line):
+            inside = True
+        elif inside and (m := re.match(r"^[ \t]+([A-Za-z0-9][\w.-]*):[ \t]*(\S.*?)[ \t]*$", line)):
+            out[m.group(1)] = m.group(2).strip("'\"")
+        elif inside and line.strip():
+            inside = line[:1] in " \t"
+    return out
+
+
 def read_only(path) -> dict:
     """The registry entry of the read-only library at path, or None (ADR-0020). Every script that
     writes into a library asks this first. An unreadable registry reads as no entry: the writer then

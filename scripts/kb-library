@@ -68,6 +68,41 @@ GENERIC = {"knowledge", "kb", "library", "doc", "documentation", "guide", "refer
            "index", "general", "fact", "note", "topic"}
 
 
+def link_count(path: pathlib.Path, lib: str) -> int:
+    """[[lib:slug]] links in a library, outside code spans and fences, by check-xlinks' reader."""
+    loader = importlib.machinery.SourceFileLoader("check_xlinks", str(ENGINE / "scripts" / "check-xlinks"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    xl = importlib.util.module_from_spec(spec)
+    loader.exec_module(xl)
+    return sum(1 for f in path.rglob("*.md") if not xl.NON_KB & set(f.relative_to(path).parts)
+               for link, span in xl.links(f.read_text(errors="replace"))
+               if not span and link.partition(":")[0] == lib and ":" in link)
+
+
+def warn_dependencies(name: str, path: pathlib.Path, own: str, others: dict):
+    """Warn when a dependency named in links_to (ADR-0020) is absent here or from another origin,
+    both for the library being added and for registered libraries that link to it. Advice only."""
+    for lib, expected in sorted(KL.links_to(path).items()):
+        e = others.get(lib)
+        n = link_count(path, lib)
+        if not e or e["state"] != "ok":
+            print(f"kb-library: warning: {name} links to {lib} ({n} link(s)), from {expected}, which is "
+                  f"not registered here, so those links won't resolve: kb-library add {expected}")
+        elif e["origin"] and not same_origin(expected, e["origin"]):
+            print(f"kb-library: warning: dependency mismatch — {name} expects {lib} from {expected}, but "
+                  f"{lib} here is from {e['origin']}: its {n} link(s) into {lib} won't resolve as written "
+                  f"(check-xlinks --installed names them)")
+    for other in sorted(others):
+        e = others[other]
+        if other == name or e["state"] != "ok":
+            continue
+        expected = KL.links_to(e["path"]).get(name)
+        if expected and own and not same_origin(expected, own):
+            print(f"kb-library: warning: dependency mismatch — {other} expects {name} from {expected}, "
+                  f"but this {name} is from {own}: {other}'s {link_count(e['path'], name)} link(s) into "
+                  f"{name} won't resolve as written (check-xlinks --installed names them)")
+
+
 def terms_of(name: str, path: pathlib.Path) -> set:
     return KL.declared_terms(path) - GENERIC - {KL.normalize_term(name)}
 
@@ -107,9 +142,7 @@ def is_repo(path: pathlib.Path) -> bool:
 URL = re.compile(r"^[a-z][a-z0-9+.-]*://|^[\w.-]+@[\w.-]+:")
 
 
-def same_origin(a: str, b: str) -> bool:
-    norm = lambda u: re.sub(r"(\.git)?/*$", "", u.strip())
-    return norm(a) == norm(b)
+same_origin = KL.same_origin   # one comparison for import and the link checks (ADR-0020)
 
 
 def clone(url: str, dest: pathlib.Path):
@@ -194,6 +227,11 @@ def add(arg: str, read_only=False) -> int:
             warn_overlap(name, path, current)
         except Exception as e:       # advice only: it must never change registration's outcome
             print(f"kb-library: overlap check skipped: {e}", file=sys.stderr)
+        try:
+            own = origin.stdout.strip() if origin is not None and origin.returncode == 0 else ""
+            warn_dependencies(name, path, own, current)
+        except Exception as e:       # advice too
+            print(f"kb-library: dependency check skipped: {e}", file=sys.stderr)
 
     if is_repo(path):
         if git("config", "--get", "core.hooksPath", cwd=path).stdout.strip() != str(HOOKS):
