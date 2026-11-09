@@ -13,6 +13,11 @@ engine's library hook), which git never commits or clones.
   add <git-url> [--into DIR]
                   clone it into the library home (or DIR), then register it as above. Never
                   clones over an existing folder.
+  add ... --read-only
+                  register it as a consumer's copy of someone else's library (ADR-0020): served
+                  as usual, but never curated here. The hook refuses commits in it, nothing writes
+                  into it, and nothing nudges about it. Re-adding the same path with or without
+                  the flag changes it.
   remove <name>   unregister, and unwire the hook if it points at this engine. Never deletes files.
   list            every registered library: state, name, path (see kb-libraries for the states).
   home            where new libraries are cloned: $KB_LIBRARY_HOME, else kb.libraryHome in the
@@ -125,19 +130,26 @@ def clone(url: str, dest: pathlib.Path):
     return dest
 
 
-def add_url(url: str, into) -> int:
+def add_url(url: str, into, read_only=False) -> int:
     into = pathlib.Path(into).expanduser() if into else KL.library_home(ENGINE)
     name = re.sub(r"\.git$", "", url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1])
     path = clone(url, into / name)
     if not path:
         return 1
-    rc = add(str(path))
+    rc = add(str(path), read_only)
     if rc:
         print(f"kb-library: the clone at {path} was left in place")
     return rc
 
 
-def add(arg: str) -> int:
+def set_mode(name: str, read_only: bool) -> None:
+    if read_only:
+        reg(f"library.{name}.readOnly", "true")
+    else:
+        reg("--unset", f"library.{name}.readOnly")
+
+
+def add(arg: str, read_only=False) -> int:
     path = pathlib.Path(arg).expanduser()
     if not path.is_dir():
         print(f"kb-library: {arg} is not a directory"); return 1
@@ -151,7 +163,13 @@ def add(arg: str) -> int:
     current = {e["name"]: e for e in KL.entries()}
     old = current.get(name)
     if old and old["path"].resolve() == path:
-        print(f"kb-library: {name} is already registered at {path}")
+        if old.get("read_only") != read_only:
+            set_mode(name, read_only)
+            print(f"kb-library: {name} at {path} is now "
+                  + ("read-only: served, never curated here" if read_only else "curated here"))
+        else:
+            print(f"kb-library: {name} is already registered at {path}"
+                  + (" (read-only)" if read_only else ""))
     elif old and old["state"] == "ok":
         print(f"kb-library: {name} is already registered at {old['path']}, which is still a "
               f"library — one name, one library. Remove it first: kb-library remove {name}")
@@ -163,12 +181,14 @@ def add(arg: str) -> int:
                 reg("--remove-section", f"library.{e['name']}")
                 print(f"kb-library: unregistered {e['name']} — {path} now declares {name}")
         reg(f"library.{name}.path", str(path))
+        set_mode(name, read_only)
         origin = git("remote", "get-url", "origin", cwd=path) if is_repo(path) else None
         if origin is not None and origin.returncode == 0 and origin.stdout.strip():
             reg(f"library.{name}.origin", origin.stdout.strip())
         else:
             reg("--unset", f"library.{name}.origin")
         print(f"kb-library: registered {name} at {path}"
+              + (" read-only: served, never curated here" if read_only else "")
               + (f" (was {old['state']} at {old['path']})" if old else ""))
         try:
             warn_overlap(name, path, current)
@@ -252,19 +272,23 @@ def list_() -> int:
     if not rows:
         print(f"kb-library: no libraries registered ({KL.REGISTRY})")
     for e in rows:
-        print(f"  {e['state']:<14} {e['name']:<28} {e['path']}")
+        print(f"  {e['state']:<14} {e['name']:<28} {e['path']}" + ("  read-only" if e["read_only"] else ""))
     return 0
 
 
 def main(argv) -> int:
+    read_only = "--read-only" in argv
+    argv = [a for a in argv if a != "--read-only"]
+    if read_only and argv[:1] != ["add"]:
+        print("kb-library: --read-only goes with add", file=sys.stderr); return 2
     into = None
     if len(argv) == 4 and argv[2] == "--into":
         into, argv = argv[3], argv[:2]
     if argv[:1] == ["add"] and len(argv) == 2:
         if URL.match(argv[1]):
-            return add_url(argv[1], into)
+            return add_url(argv[1], into, read_only)
         if into is None:
-            return add(argv[1])
+            return add(argv[1], read_only)
     if argv[:1] == ["import"] and len(argv) == 2:
         return import_(argv[1], into)
     if into is None:
@@ -276,7 +300,7 @@ def main(argv) -> int:
             print(KL.library_home(ENGINE)); return 0
         if argv == ["export"]:
             return export()
-    print("usage: kb-library add <path> | add <git-url> [--into DIR] | remove <name> | list\n"
+    print("usage: kb-library add <path> | add <git-url> [--into DIR] [--read-only] | remove <name> | list\n"
           "                  | home | export | import <file> [--into DIR]", file=sys.stderr)
     return 2
 

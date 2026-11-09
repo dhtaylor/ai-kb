@@ -469,6 +469,18 @@ def assertion_env(empty_home: str) -> dict:
     return env
 
 
+def read_only_entry(path):
+    """The registry entry if the library at path is registered read-only (ADR-0020), else None."""
+    import importlib.machinery, importlib.util
+    sys.dont_write_bytecode = True
+    loader = importlib.machinery.SourceFileLoader(
+        "kb_libraries", str(pathlib.Path(__file__).resolve().parent / "kb-libraries"))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod, mod.read_only(path)
+
+
 def main(argv) -> int:
     args = [a for i, a in enumerate(argv)
             if not a.startswith("--") and (i == 0 or argv[i - 1] != "--budget")]
@@ -484,6 +496,10 @@ def main(argv) -> int:
     if not (root / "INDEX.md").is_file():
         print(f"kb-verify: {root} has no INDEX.md — not a library or project tree", file=sys.stderr)
         return 2
+    if flags & {"--yes", "--apply"}:   # both write into the library: queue items, stamps
+        kl, ro = read_only_entry(root)
+        if ro:
+            print(kl.refusal("kb-verify", ro), file=sys.stderr); return 2
     budget_override = None
     if "--budget" in flags:
         try:

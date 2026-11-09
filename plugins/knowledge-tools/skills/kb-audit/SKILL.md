@@ -289,3 +289,6 @@ When a person asks you to review a packet, this is the decide half, and it is al
 - Do not resolve a contradiction, delete a file, or re-stamp a `Verified:` date. Re-stamping in
   particular is manufacturing freshness — you did not re-verify anything, you ran a sweep.
 - Do not report a clean sweep as a verified knowledge base. State the coverage gap every time.
+- **Do not sweep a library marked `(read-only)`** in your session context. It is a consumer's copy of
+  someone else's library (ADR-0020): its queue and its `last_swept` belong to its publisher. Say so,
+  and name its origin (`kb-libraries --read-only`) for anything the person wants to file there.

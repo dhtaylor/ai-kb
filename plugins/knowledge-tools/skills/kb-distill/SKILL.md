@@ -258,6 +258,10 @@ When a person asks you to review a packet, this is the decide half, and it is al
 Stop rather than proceed, if:
 
 - the engine root is unconfigured;
+- the target library is marked `(read-only)` in your session context. It is a consumer's copy of
+  someone else's library (ADR-0020): it is served here, never curated here. Say what you would have
+  changed, and that it is filed with the library's publisher (`kb-libraries --read-only` names its
+  origin). Never write to it, and never file the issue yourself;
 - the episodic material is not actually available to you — never distil from memory of a session;
 - no domain exists for the facts, and you would have to invent one on the fly;
 - the only way to record a security finding is to include the secret's value or a person's

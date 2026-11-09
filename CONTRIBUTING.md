@@ -41,6 +41,17 @@ enough to blur routing, `kb-library add` says so and names the neighbour. It nev
 `Not covered here:` line to each library's root `INDEX.md` (CONVENTIONS §3) and the warning has
 done its job.
 
+A library someone else publishes, which you read but don't curate, is added with `--read-only`
+(ADR-0020). It is served like any other, and session start marks it `(read-only)`. Nothing on this
+machine curates it:
+- The library hook refuses commits in it.
+- `kb-verify --yes`, `kb-sources --yes`, `kb-watch`, `kb-prepare` and `kb-capture --into` refuse
+  it or skip it, and the weekly job leaves it alone.
+- The nudge and the weekly report leave it out, and the curation skills won't write to it.
+
+What you find in it is filed with its publisher; `kb-libraries --read-only` names its origin.
+Re-add the same path without the flag to curate it here.
+
 **Then restart your terminal and any open Claude Code session.** A shell profile is read at shell
 start, and Claude reads its settings and plugin content once per session.
 

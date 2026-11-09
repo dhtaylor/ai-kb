@@ -60,7 +60,9 @@ reports, per tree, everything a librarian should act on:
   A tree with nothing due in any of the six contributes no line at all, and so does a tree whose
   root INDEX.md declares `archived: <date or reason>` (issue #141): a read-only archive cannot act on
   a nudge. Plain kb-due still lists it, marked archived. A registered library is served whatever it
-  declares, so it is nudged as usual and told to use kb-library remove. A failure computing one
+  declares, so it is nudged as usual and told to use kb-library remove. A library registered
+  read-only (ADR-0020) is a consumer's copy, curated by its publisher: it drops out too, and plain
+  kb-due lists it as read-only. A failure computing one
   category for one tree (a malformed needs-attention.md, an INDEX.md with no freshness_horizon) is
   printed as a one-line warning to stderr and that category is skipped for that tree only — every
   other tree and every other category still gets computed. This hook must never crash a session.
@@ -406,9 +408,11 @@ def main(argv) -> int:
     summary = "--summary" in argv
     args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary")]
 
-    trees, registered = [], {}
+    trees, registered, consumed = [], {}, set()
     try:   # the registry's one reader; an unreadable registry must not crash a session
-        registered = {p: n for n, p in load_module("kb_libraries", "kb-libraries").installed().items()}
+        kl = load_module("kb_libraries", "kb-libraries")
+        registered = {p: n for n, p in kl.installed().items()}
+        consumed = {e["path"].resolve() for e in kl.entries() if e["read_only"]}   # ADR-0020
         trees += list(registered)
     except Exception as e:
         print(f"kb-due: library registry unreadable, registered libraries skipped: {e}", file=sys.stderr)
@@ -416,7 +420,8 @@ def main(argv) -> int:
 
     rows = [s for s in (status(t) for t in trees) if s]
     # An archived tree that is not registered drops out of the nudge and of --quiet (issue #141).
-    shelved = lambda s: s["archived"] and s["tree"].resolve() not in registered
+    # A read-only library is a consumer's copy, curated by its publisher (ADR-0020): it too drops out.
+    shelved = lambda s: (s["archived"] and s["tree"].resolve() not in registered) or s["tree"].resolve() in consumed
     due = [s for s in rows if s["due"] and not shelved(s)]
 
     if nudge:
@@ -478,6 +483,9 @@ def main(argv) -> int:
             un = unstamped_count(s["tree"], check_kb) if check_kb else 0
         except Exception:
             un = 0
+        if s["tree"].resolve() in consumed:
+            print(f"  ro   {label(s['tree']):<28} read-only: curated by its publisher, not here")
+            continue
         if shelved(s):
             print(f"  arch {label(s['tree']):<28} archived: {s['archived']}")
             continue

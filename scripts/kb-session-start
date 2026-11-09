@@ -47,11 +47,16 @@ fi
 # turns every answer it held into a "fact not found" that looks correct.
 libs=""; count=0; broken=""; nbroken=0
 registry=$("$engine/scripts/kb-libraries" 2>&1) || registry="unreadable	$registry"
+# A read-only library (ADR-0020) is served, but is a consumer's copy: never written to here.
+readonly_libs=$("$engine/scripts/kb-libraries" --read-only 2>/dev/null | cut -f1)
+nro=0
 while IFS=$'\t' read -r state name path; do
   case "$state" in
     "") ;;
-    ok) libs="${libs}
-  - ${name} -> ${path}"; count=$((count+1)) ;;
+    ok) mark=""
+        if printf '%s\n' "$readonly_libs" | grep -qxF -- "$name"; then mark=" (read-only)"; nro=$((nro+1)); fi
+        libs="${libs}
+  - ${name} -> ${path}${mark}"; count=$((count+1)) ;;
     unreadable) broken="${broken}
   ! the library registry could not be read: ${name}"; nbroken=$((nbroken+1)) ;;
     *) broken="${broken}
@@ -82,6 +87,9 @@ Registered but NOT served — anything they hold is unavailable, so say so rathe
 Fix with kb-library add <path> (moved), or kb-library remove <name>. For unsupported-contract, check-kb <path> names the contract versions this engine supports."
 fi
 
+rohint=""
+[ "$nro" -gt 0 ] && rohint="
+A library marked (read-only) is a consumer's copy of someone else's library (ADR-0020). Answer from it as from any other, but never write to it: no fold, distill, reshape, sweep or capture into it. A correction is filed with its publisher; kb-libraries --read-only names its origin."
 # The libraries, plus this session's own project tree if it is in one.
 proj=""
 if root=$(git rev-parse --show-toplevel 2>/dev/null) && [ -f "$root/knowledge/INDEX.md" ]; then
@@ -110,4 +118,4 @@ case "$registry" in unreadable*) [ "$event" = SessionStart ] && msg="The knowled
 emit "Knowledge engine resolves to: ${engine}
 Contract: ${engine}/CONVENTIONS.md — load it before curating or retrieving. Use these absolute paths directly with the Read tool; it does not expand \$KB_ENGINE_ROOT.
 Domain libraries registered on this machine (${count}):${libs}${broken}${unmigrated}
-Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${due}" "$msg"
+Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${rohint}${due}" "$msg"

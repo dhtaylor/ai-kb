@@ -162,6 +162,11 @@ def main(argv) -> int:
     try:
         if not trees:
             trees = list(load_module("kb_libraries", "kb-libraries").installed().values())
+        # A read-only library is curated by its publisher, so nothing in it is this machine's
+        # decision (ADR-0020).
+        consumed = {e["path"].resolve() for e in load_module("kb_libraries", "kb-libraries").entries()
+                    if e["read_only"]}
+        trees = [t for t in trees if t.resolve() not in consumed]
         mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
                 "kb_sources": load_module("kb_sources", "kb-sources"),
                 "kb_watch": load_module("kb_watch", "kb-watch"), "check_kb": load_module("check_kb", "check-kb"),

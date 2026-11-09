@@ -13,6 +13,17 @@ set -uo pipefail
 ENGINE="$(cd "$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/.." && pwd)"
 here=$(cd "$(git rev-parse --show-toplevel)" && pwd -P)
 
+# A read-only library is a consumer's copy of someone else's (ADR-0020): it is not curated here,
+# so a commit to it would only drift from what its publisher released.
+ro=$("$ENGINE/scripts/kb-libraries" --read-only 2>/dev/null | awk -F'\t' -v p="$here" '$2 == p {print $1 "\t" $3; exit}')
+if [ -n "$ro" ]; then
+  name=${ro%%$'\t'*}; origin=${ro#*$'\t'}
+  echo "domain pre-commit: $name is registered read-only on this machine, a consumer's copy: it is not"
+  echo "curated here (ADR-0020). File the correction with ${origin:-its publisher}."
+  echo "To curate it here instead: kb-library add $here"
+  echo; echo "Commit blocked."; exit 1
+fi
+
 fail=0
 echo "domain pre-commit (engine: $ENGINE):"
 "$ENGINE/scripts/check-exec-bits" .  || fail=1

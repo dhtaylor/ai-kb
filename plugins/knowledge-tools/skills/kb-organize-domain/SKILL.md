@@ -154,6 +154,10 @@ every reference update lands in that same commit.
 Stop rather than proceed, if:
 
 - the engine root is unconfigured;
+- the target library is marked `(read-only)` in your session context. It is a consumer's copy of
+  someone else's library (ADR-0020): it is served here, never curated here. Say what you would have
+  changed, and that it is filed with the library's publisher (`kb-libraries --read-only` names its
+  origin). Never write to it, and never file the issue yourself;
 - the domain does not exist, or holds no content to organize;
 - you would have to change a fact's meaning to make the structure nicer. **The structure loses**;
 - the reshape would resolve a contradiction, drop a `Source:` link, or delete knowledge. None of

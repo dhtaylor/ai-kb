@@ -7,6 +7,10 @@ A library is installed on a machine when it is registered there, and only then. 
     [library "azure-devops"]
         path = /mnt/c/workspace/kb/azure-devops
         origin = https://github.com/dhtaylor/azure-devops.git
+        readOnly = true        # optional: a consumer's copy of someone else's library (ADR-0020)
+
+A read-only library is served like any other, but this machine never curates it: nothing commits
+to it, writes into it or nudges about it. Its corrections are filed with its origin.
 
 The path is FIXED and does not follow XDG_CONFIG_HOME: that variable is often set only in an
 interactive shell, which would put a git hook and the terminal on two different registries
@@ -27,6 +31,7 @@ vanishes makes retrieval answer `fact not found`, which looks exactly like a cor
 Shell callers run it; Python callers import it (the SourceFileLoader pattern kb-due uses).
 
 Usage: kb-libraries          one line per registered library: <state>TAB<name>TAB<path>
+       kb-libraries --read-only   one line per read-only library: <name>TAB<path>TAB<origin>
 Exit 0, or 2 if the registry exists and git cannot read it.
 """
 import os, pathlib, re, subprocess, sys
@@ -137,6 +142,7 @@ def entries():
             continue
         path = pathlib.Path(libs[name]["path"])
         out.append({"name": name, "path": path, "origin": libs[name].get("origin", ""),
+                    "read_only": libs[name].get("readonly", "").lower() == "true",
                     "state": state_of(name, path)})
     return out
 
@@ -160,16 +166,42 @@ def installed():
     return {e["name"]: e["path"].resolve() for e in entries() if e["state"] == "ok"}
 
 
-def main() -> int:
+def read_only(path) -> dict:
+    """The registry entry of the read-only library at path, or None (ADR-0020). Every script that
+    writes into a library asks this first. An unreadable registry reads as no entry: the writer then
+    behaves as it did before read-only libraries existed, and session start names the registry."""
+    try:
+        here = pathlib.Path(path).resolve()
+        return next((e for e in entries() if e["read_only"] and e["path"].resolve() == here), None)
+    except (RuntimeError, OSError):
+        return None
+
+
+def refusal(tool: str, e: dict) -> str:
+    """One wording for every writer that refuses a read-only library."""
+    where = e["origin"] or "its publisher"
+    return (f"{tool}: {e['name']} is registered read-only on this machine, a consumer's copy: it is "
+            f"not curated here (ADR-0020). File what you found with {where}. To curate it here: "
+            f"kb-library add {e['path']}")
+
+
+def main(argv=()) -> int:
     try:
         rows = entries()
     except RuntimeError as e:
         print(f"kb-libraries: {e}", file=sys.stderr)
         return 2
+    if list(argv) == ["--read-only"]:
+        for e in rows:
+            if e["read_only"]:
+                print(f"{e['name']}\t{e['path']}\t{e['origin']}")
+        return 0
+    if argv:
+        print("usage: kb-libraries [--read-only]", file=sys.stderr); return 2
     for e in rows:
         print(f"{e['state']}\t{e['name']}\t{e['path']}")
     return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))
