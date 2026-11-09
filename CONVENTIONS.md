@@ -221,6 +221,9 @@ kb_contract: "<MAJOR.MINOR>"  # optional: the contract version (§14) this libra
 last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `never` until the first.
                               # It lives here, not in needs-attention.md, because a CLEAN sweep
                               # writes no queue file and would erase the evidence that it ran.
+links_to:                     # every library a [[library:slug]] link names, and the origin (git
+  <library>: <origin>         # remote) it was linked against (§5, contract 2.6). Required by a
+                              # tree that links across libraries; check-kb fails one missing.
 ```
 
 A library's root `INDEX.md` may also carry one body line saying what the library does **not** hold,
@@ -304,9 +307,18 @@ for them.
   *remote* root without scanning it. Every installed library is local and registered, so resolution
   reads the registry and scans each library, and a manifest would be committed state that can go
   stale for a problem that no longer exists. Add one when a remote library exists to justify it.
-- **Resolution runs one level up.** A library cannot see its siblings, so `check-kb` skips prefixed
-  links by design and `check-xlinks --installed` resolves them across every registered library. That split is not
-  an implementation detail: it is why a library remains checkable on its own.
+- **Resolution runs one level up.** A library cannot see its siblings, so `check-kb` does not resolve
+  prefixed links, and `check-xlinks --installed` resolves them across every registered library. That
+  split is not an implementation detail: it is why a library remains checkable on its own.
+- **A link says where its library comes from.** A library name means something only on one machine:
+  another machine may hold a different library under it. So a tree that links across libraries lists,
+  under `links_to:` in its root `INDEX.md` (§3), the origin of each library it links into: the git
+  remote it was linked against. `check-kb` fails a link whose library is not listed, from contract
+  2.6. A link inside an inline code span explains the form and needs no entry. With `--installed`,
+  `check-xlinks` compares the listed origin with the one the registry records. Origins compare by
+  host and path, so `https://` and `git@` forms of one repository are the same. A different origin
+  is a **dependency mismatch**: the links are not resolved, and it warns, naming both origins and the
+  slugs, because whoever sees it cannot fix the library that links (ADR-0020).
 - **Graceful absence is a distinction, not a leniency.** A link into a library that is **not installed**
   is a *soft dependency*: it warns, and agents continue. A link into a library that **is** installed but
   lacks the slug is **dead** and fails. Collapsing the two would punish portability — a machine need not
@@ -753,7 +765,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | executable bits | hooks and scripts recorded 100755, so a clone is not silently unguarded | **built** — `check-exec-bits` |
 | hygiene sweep | stale and missing stamps, ageing contradictions, golden-set rot, doubly-routed files | **built** — the `kb-audit` skill |
 | `check-scope` | `scope:` values well-formed; every file agrees with its library's tier; no relative link climbing out of a library | **built** |
-| `check-xlinks` | `[[library:slug]]` resolution from any tree — the registered libraries (`--installed`) and each project tree passed to it — into the registered libraries; dead links fail, absent libraries warn. A link in a code fence is an example and is skipped; one in an inline code span is resolved but never warns of an absent library | **built** |
+| `check-xlinks` | `[[library:slug]]` resolution from any tree — the registered libraries (`--installed`) and each project tree passed to it — into the registered libraries; dead links fail, absent libraries warn. A link in a code fence is an example and is skipped; one in an inline code span is resolved but never warns of an absent library. With `--installed`, a library from another origin than `links_to` names is a dependency mismatch, which warns, and a dead link in a read-only library warns (ADR-0020) | **built** |
 | routing check | golden-set questions actually route to `expected_file`. Deterministic tier: the file exists, holds the excerpt and is reachable from the root `INDEX.md` through the routers. Agent tier: an agent's tool calls Read the expected file, read content from no library the case does not need, read nothing outside the registered libraries but this contract, and never touch the golden set or an eval folder. The agent tier is sampled and started by a person, never per commit ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)) | **built** — `check-golden` (every commit) and `grade-routing` (graded from a subagent's tool calls, not its self-report) |
 | answer-grounding eval | the agent's answer contains `expected_excerpt` or an `alt_excerpt` AND the expected file is among those it cited (a cited path is resolved to a file, not string-matched); quote characters and trailing punctuation are normalised, wording is not; grep-verified | **built** — `grade-eval` |
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
@@ -841,3 +853,15 @@ Every section with content in a fact file carries a `Source:` line (§6). The in
 Migrating from 2.4: run `check-kb`, which warns about each unsourced section below 2.5. Give each
 one its source, move a fact out of the intro under a heading, or remove what nobody can source.
 Then declare `kb_contract: "2.5"`.
+
+### 2.6
+
+A tree that links across libraries lists, under `links_to:` in its root `INDEX.md`, the origin of
+each library its `[[library:slug]]` links name (§3, §5, ADR-0020). `check-xlinks --installed`
+compares it with the registry, and reports a same-named library from another origin as a
+dependency mismatch instead of a dead link. `check-kb` fails a link whose library is not listed,
+from this version, and warns about an entry no link uses.
+
+Migrating from 2.5: run `check-kb`, which warns about each unlisted library below 2.6. Add each one
+under `links_to:` with the git remote you cloned it from. Then declare `kb_contract: "2.6"`. A
+library with no cross-library links changes only the declaration.

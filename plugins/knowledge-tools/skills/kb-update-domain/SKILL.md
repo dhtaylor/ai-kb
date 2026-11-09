@@ -129,7 +129,9 @@ of question. Create a new file only when the fact is genuinely queried on its ow
 is as harmful as a monolith — it just fails at a different step.
 
 Crossing to another domain's fact? **Link it with `[[slug]]`, never restate it.** A general-tier
-fact in a different library is linked `[[<library>:slug]]` — the prefix names the library.
+fact in a different library is linked `[[<library>:slug]]` — the prefix names the library. List that library under `links_to:` in the root `INDEX.md`, with the git remote it came from
+(`kb-library list` and `git -C <library> remote get-url origin` give it): `check-kb` fails a link
+whose library is not listed (CONVENTIONS §3, §5).
 
 ## Step 5 — Contradictions: flag, never resolve
 

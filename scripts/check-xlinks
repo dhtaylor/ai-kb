@@ -20,6 +20,15 @@ That WARNS. A link into a library that IS installed, naming a slug it does not
 have, is dead and FAILS — the difference matters, because treating absence as
 breakage would punish the portability the whole design is for.
 
+WHERE A LINK POINTS (ADR-0020, contract 2.6). A library names, in `links_to:` in its root
+INDEX.md, the origin of each library it links into. With --installed, that is compared with the
+origin the registry records. A different origin is a DEPENDENCY MISMATCH: this machine's library of
+that name is not the one the links were written against. Its links are not resolved, and the
+mismatch WARNS, naming both origins and the slugs: whoever sees it cannot fix a published library,
+and "fixing" their own would only hide it. A library with no recorded origin is resolved as before,
+with a note. A dead link in a library registered read-only WARNS: its publisher's CI is where it
+fails.
+
 Usage: check-xlinks --installed [tree ...]
        check-xlinks <kb-root> [tree ...]
   --installed  resolve against the libraries registered on this machine (ADR-0014): the
@@ -69,8 +78,12 @@ def slugs_of(lib: pathlib.Path):
             if not NON_KB & set(f.relative_to(lib).parts) and f.name != "INDEX.md"}
 
 
-def links_in(tree: pathlib.Path, label: str, index, dead, warn):
-    """Resolve every [[lib:slug]] written anywhere in one tree. Returns the count resolved."""
+def links_in(tree: pathlib.Path, label: str, index, dead, warn, ctx=None):
+    """Resolve every [[lib:slug]] written anywhere in one tree. Returns the count resolved. ctx, with
+    --installed: {"declared": this tree's links_to, "origins": {name: registered origin},
+    "read_only": bool, "mismatch": {(tree, lib, expected origin): [slugs]}, "notes": set} (ADR-0020)."""
+    ctx = ctx or {}
+    declared, origins = ctx.get("declared", {}), ctx.get("origins")
     ok = 0
     for f in sorted(tree.rglob("*.md")):
         if NON_KB & set(f.relative_to(tree).parts):
@@ -80,33 +93,53 @@ def links_in(tree: pathlib.Path, label: str, index, dead, warn):
                 continue                 # bare link, template placeholder, or the form in prose
             target_lib, _, slug = link.partition(":")
             where = f"{label}/{f.relative_to(tree)}"
+            expected = declared.get(target_lib)
             if target_lib not in index:
                 if in_span:              # explaining the form, or citing an absent library
                     continue
                 warn.append(f"{where}: [[{link}]] -> library '{target_lib}' is not installed "
-                            f"(soft dependency, not a broken link)")
+                            f"(soft dependency, not a broken link)"
+                            + (f"; it comes from {expected}: kb-library add {expected}" if expected else ""))
+            elif expected and origins is not None and origins.get(target_lib) and \
+                    not ctx["same_origin"](expected, origins[target_lib]):
+                ctx["mismatch"].setdefault((label, target_lib, expected), []).append(slug)
             elif slug not in index[target_lib]:
-                dead.append(f"{where}: [[{link}]] -> '{target_lib}' is installed but has no "
-                            f"slug '{slug}'")
+                if expected and origins is not None and not origins.get(target_lib):
+                    ctx["notes"].add(f"{label}: '{target_lib}' here has no recorded origin, so that it "
+                                     f"is the one from {expected} can't be confirmed")
+                msg = f"{where}: [[{link}]] -> '{target_lib}' is installed but has no slug '{slug}'"
+                if ctx.get("read_only"):
+                    warn_ro = ctx.setdefault("ro_dead", [])
+                    warn_ro.append(f"{msg} — {label} is registered read-only here; file it with "
+                                   f"{ctx.get('own_origin') or 'its publisher'}")
+                else:
+                    dead.append(msg)
             else:
                 ok += 1
     return ok
 
 
-def registered():
-    """{name: root} from the registry, through kb-libraries, its one reader."""
+def registry():
+    """kb-libraries, the registry's one reader."""
     path = pathlib.Path(__file__).resolve().parent / "kb-libraries"
     sys.dont_write_bytecode = True
     loader = importlib.machinery.SourceFileLoader("kb_libraries", str(path))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
-    return dict(sorted(mod.installed().items()))
+    return mod
+
+
+def registered():
+    """{name: root} from the registry."""
+    return dict(sorted(registry().installed().items()))
 
 
 def main(kb, trees) -> int:
+    kl = None
     if kb == "--installed":
-        libs, where = registered(), "on this machine (kb-library list)"
+        kl = registry()
+        libs, where = dict(sorted(kl.installed().items())), "on this machine (kb-library list)"
     else:
         kb = pathlib.Path(kb)
         if not kb.is_dir():
@@ -125,9 +158,20 @@ def main(kb, trees) -> int:
 
     index = {name: slugs_of(path) for name, path in libs.items()}
     dead, warn, ok = [], [], 0
+    shared = {"mismatch": {}, "notes": set(), "ro_dead": []}
+    if kl:
+        entries = {e["name"]: e for e in kl.entries()}
+        shared.update(origins={n: entries[n]["origin"] for n in libs}, same_origin=kl.same_origin)
+
+    def ctx_for(path, name=None):
+        if not kl:
+            return shared
+        e = entries.get(name, {})
+        return dict(shared, declared=kl.links_to(path), read_only=e.get("read_only", False),
+                    own_origin=e.get("origin", ""))
 
     for name, path in libs.items():
-        ok += links_in(path, name, index, dead, warn)
+        ok += links_in(path, name, index, dead, warn, ctx_for(path, name))
 
     extra = 0
     for tree in trees:
@@ -135,16 +179,27 @@ def main(kb, trees) -> int:
         if not tree.is_dir():
             print(f"check-xlinks: {tree} is not a directory", file=sys.stderr); return 2
         extra += 1
-        ok += links_in(tree, tree.name or tree.resolve().name, index, dead, warn)
+        ok += links_in(tree, tree.name or tree.resolve().name, index, dead, warn, ctx_for(tree))
 
     for d in dead:
         print(f"FAIL {d}")
     for w in warn:
         print(f"WARN {w}")
+    for w in shared["ro_dead"]:
+        print(f"WARN {w}")
+    for (src, lib, expected), slugs in sorted(shared["mismatch"].items()):
+        print(f"WARN dependency mismatch: {src} expects '{lib}' from {expected}, but '{lib}' here is "
+              f"from {shared['origins'][lib]}. {len(slugs)} link(s) not resolved: "
+              f"{', '.join(sorted(set(slugs)))}. Not a dead link: this machine has a different "
+              f"library under that name (ADR-0020)")
+    for n in sorted(shared["notes"]):
+        print(f"NOTE {n}")
     scanned = (f"{len(libs)} librar{'y' if len(libs)==1 else 'ies'}"
                + (f" and {extra} other tree{'' if extra == 1 else 's'}" if extra else ""))
+    nm = len(shared["mismatch"])
     print(f"\n{scanned}, {ok} cross-link(s) resolved, "
-          f"{len(dead)} dead, {len(warn)} unresolvable (library absent)")
+          f"{len(dead)} dead, {len(warn)} unresolvable (library absent)"
+          + (f", {nm} dependency mismatch(es)" if nm else ""))
     return 1 if dead else 0
 
 

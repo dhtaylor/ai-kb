@@ -6,6 +6,22 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Contract 2.6: a link says where its library comes from (ADR-0020 step 2, #148). A tree that links
+  across libraries lists each one under `links_to:` in its root `INDEX.md`, with the git remote it
+  was linked against. `check-kb` fails a link whose library isn't listed, from 2.6, and warns below
+  it. A link in a code span, which explains the form, needs no entry.
+  - `check-xlinks --installed` compares that origin with the registry. A same-named library from
+    another origin is a **dependency mismatch**: its links aren't resolved, and it warns with both
+    origins and the slugs, where it used to fail as dead links the consumer couldn't fix. A library
+    with no recorded origin resolves as before, with a note. An unregistered dependency's warning
+    names the origin to add.
+  - A dead link in a library registered read-only warns on this machine instead of failing.
+  - `kb-library add` warns, never refuses, both ways: when the new library's dependency here is
+    from elsewhere or absent, and when a registered library expects the new one from elsewhere.
+  - Origins compare by host and path, so `https://` and `git@` forms of one repository are the
+    same. `kb-library import` uses the same comparison; it used to tell those forms apart.
+  - kb-init declares 2.6. kb-create-domain and kb-update-domain say to list a linked library.
+
 - A consumer's copy of someone else's library can be registered read-only (ADR-0020 step 1, #148):
   `kb-library add <path | git-url> --read-only`. It is served as usual, and session start marks it
   `(read-only)`. Nothing on this machine curates it:
