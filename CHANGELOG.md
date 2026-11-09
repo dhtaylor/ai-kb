@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- ADR-0020 (#148): a library says where each library it links to comes from, and a consumer's copy
+  of someone else's library can be registered read-only. A link into a same-named library from a
+  different origin is reported as a dependency mismatch and warns, rather than failing as a dead
+  link the consumer can't fix. A read-only library is served as usual, but this machine doesn't
+  curate it: the hook refuses commits, nothing writes into it, and nothing nudges about it.
+  Delivered in steps: the read-only role, then `links_to` (contract 2.6), then `--ref` pinning.
+
 - A project's `knowledge/` tree kept as a read-only archive can drop out of the session-start nudge
   (#141). Declare `archived: <date or reason>` in its root `INDEX.md`. The nudge then skips it, and
   plain `kb-due` lists it as `archived`. Before, it was nudged every session to sweep, stamp and
