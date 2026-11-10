@@ -3193,6 +3193,13 @@ case_run "an attended run passes the caller's environment through" 1 "FAILED" --
 case_run "--unattended runs with an empty HOME and no inherited variables, KB_ENGINE_ROOT kept" 0 "still hold" -- \
   env UA_TOKEN_PROBE=x "$ENGINE/scripts/kb-verify" "$UE" --yes --unattended
 rm -f "$HOME/.netrc"
+# #165: PATH is kept, as section 7 says: a tool installed per user (claude in ~/.local/bin) is found.
+UP="$TMP/unatt-path"; build_clean "$UP"; mkdir -p "$TMP/unatt-bin"
+printf '#!/bin/sh\nexit 0\n' > "$TMP/unatt-bin/kbtool2"; chmod +x "$TMP/unatt-bin/kbtool2"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$UP/widgets.md"
+printf 'Recheck: kbtool2\n' >> "$UP/widgets.md"
+case_run "--unattended keeps the caller's PATH, so a per-user tool is found" 0 "still hold" -- \
+  env PATH="$TMP/unatt-bin:$PATH" "$ENGINE/scripts/kb-verify" "$UP" --yes --unattended
 
 # An attended assertion does not spend the budget of a run that will skip it.
 UB="$TMP/unatt-budget"; build_clean "$UB"
@@ -3852,6 +3859,26 @@ printf '\n## Open question from 2026-10-22\n' > "$TR/lib4/fx-open-questions.md"
 printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n\n## Pricing for 2026\n\n## Contract v2.3\n' >> "$TR/lib4/widgets.md"
 case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
 case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"
+
+# ------------------------------------- kb-schedule: the job runs with the installing PATH (#165) ----
+# A systemd user unit, and cron, start with a bare system PATH, which leaves out ~/.local/bin, where
+# the claude installer puts claude. A Recheck calling such a tool then failed under the timer and was
+# queued as stale although the fact still held. install records the PATH it ran with; run applies it.
+KP="$TMP/sched-path"; KPH="$KP/home"; mkdir -p "$KPH" "$KP/userbin"
+printf '#!/bin/sh\nexit 0\n' > "$KP/userbin/kbtool"; chmod +x "$KP/userbin/kbtool"
+build_clean "$KP/lib"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$KP/lib/widgets.md"
+printf 'Recheck: kbtool\n' >> "$KP/lib/widgets.md"
+kpsched() { env -i HOME="$KPH" PATH="$1" KS_LOG="$KS/log" KS_CRON="$KP/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" \
+  "$ENGINE/scripts/kb-schedule" "${@:2}"; }
+HOME="$KPH" "$ENGINE/scripts/kb-library" add "$KP/lib" >/dev/null 2>&1
+kpsched "$KP/userbin:$PATH" install --backend cron >/dev/null 2>&1
+case_run "kb-schedule install records the PATH it ran with" 0 "" -- grep -qx "path=$KP/userbin:$PATH" "$KPH/.config/ai-kb/schedule.conf"
+kpsched /usr/bin:/bin run >/dev/null 2>&1
+case_run "kb-schedule run under a bare PATH still finds a tool from the installing PATH" 0 "" -- \
+  bash -c '! grep -qs stale-recheck "$1"' _ "$KP/lib/needs-attention.md"
+case_run "kb-schedule run: ...so its kb-verify step passed" 0 "" -- \
+  grep -q 'kb-verify lib exit=0' "$KPH/.local/state/ai-kb/schedule.log"
 
 # ------------------------------------------- a home directory managed by Stow or similar (#138) ----
 # A dotfiles manager links files, or whole folders, from a repository synced across machines. Every
