@@ -99,7 +99,7 @@ Usage: kb-verify <library-or-tree> [--yes] [--apply] [--all] [--budget N] [--una
   --yes      run the commands (without it, they are printed and nothing runs, and
              nothing is queued either — the --yes gate covers both)
   --unattended  for a scheduled run: skip `Recheck (attended):` assertions, and run the rest
-             with an empty HOME and only PATH, KB_ENGINE_ROOT and proxy settings, so no cached
+             with an empty HOME and only the caller's PATH, KB_ENGINE_ROOT and proxy settings, so no cached
              login or exported credential is reachable (CONVENTIONS §7). Refuses --apply.
   --apply    restamp sections whose assertion passed (today, by: agent, method: query)
   --all      every section with an assertion, not only the stale ones
@@ -462,9 +462,12 @@ PROXY_VARS = ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROX
 
 def assertion_env(empty_home: str) -> dict:
     """The environment of an unattended assertion: an empty HOME, so no ~/.netrc, ~/.curlrc or CLI
-    login is found; a fixed PATH; the engine root; and the caller's proxy settings, without which a
-    public fetch fails on a network that requires a proxy. Nothing else is inherited (#100)."""
-    env = {"HOME": empty_home, "PATH": "/usr/bin:/bin", "KB_ENGINE_ROOT": str(ENGINE), "LC_ALL": "C.UTF-8"}
+    login is found; the caller's PATH; the engine root; and the caller's proxy settings, without which a
+    public fetch fails on a network that requires a proxy. Nothing else is inherited (#100).
+    PATH is kept because it names folders, not secrets: a fixed /usr/bin:/bin left out ~/.local/bin,
+    so an assertion calling claude failed and was queued as stale although the fact held (#165)."""
+    env = {"HOME": empty_home, "PATH": os.environ.get("PATH") or "/usr/bin:/bin",
+           "KB_ENGINE_ROOT": str(ENGINE), "LC_ALL": "C.UTF-8"}
     env.update({k: os.environ[k] for k in PROXY_VARS if k in os.environ})
     return env
 

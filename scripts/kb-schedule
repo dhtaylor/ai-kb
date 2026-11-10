@@ -15,6 +15,12 @@ The job, `kb-schedule run`, does for every registered library, in order:
 then, once: check-xlinks --installed, kb-watch on the allowlist chosen at install, and kb-report,
 the weekly report of decisions. No fact is edited: every step queues, drafts or reports.
 
+THE PATH (#165). A systemd user unit and a crontab line both start with a bare system PATH, which
+leaves out per-user folders such as ~/.local/bin, where the claude installer puts claude. A Recheck
+calling a tool from one failed under the timer and was queued as stale although the fact held. So
+`install` records the PATH it was run with in schedule.conf, and `run` uses it for every step.
+Reinstall to change it.
+
 The log, ${XDG_STATE_HOME:-~/.local/state}/ai-kb/schedule.log, records each step's exit code and
 nothing a step printed, so it never holds a fact's or a source's text. A run that finds another
 still holding the lock does nothing.
@@ -152,7 +158,7 @@ def install(opts: dict) -> int:
 
     CONF.parent.mkdir(parents=True, exist_ok=True)
     CONF.write_text(f"backend={backend}\nprepare={'yes' if prepare else 'no'}\nbudget_usd={budget}\n"
-                    f"claude={claude}\nwatch={watch}\n")
+                    f"claude={claude}\nwatch={watch}\npath={os.environ.get('PATH', '')}\n")
     note_links(*([UNIT_DIR / f"{UNIT}.service", UNIT_DIR / f"{UNIT}.timer"] if backend == "systemd" else []), CONF)
     say(f"installed ({backend}, Mondays 07:00; preparation {'on, capped at $' + budget + ' a run' if prepare else 'off'}). "
         f"It queues, drafts and reports; it never edits a fact.")
@@ -204,6 +210,8 @@ def run() -> int:
         say("already running; this run does nothing")
         return 0
     conf = read_conf()
+    if conf.get("path"):   # the PATH install ran with, not the unit's bare one (#165)
+        os.environ["PATH"] = conf["path"]
     log = open(LOG, "a")
 
     def note(text):

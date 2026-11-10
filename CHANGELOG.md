@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- An unattended recheck finds a tool installed per user, such as `claude` in `~/.local/bin` (#165).
+  Two things hid it: `kb-verify --unattended` ran every assertion with a fixed `/usr/bin:/bin`, and
+  a systemd unit or crontab line starts with a bare system `PATH` anyway. Such an assertion failed
+  with `command not found` and was queued as stale although the fact held. Now `kb-verify
+  --unattended` keeps the caller's `PATH` (`HOME` stays empty, and nothing else is inherited, as
+  CONVENTIONS §7 says), and `kb-schedule install` records the `PATH` it ran with in `schedule.conf`,
+  which `kb-schedule run` uses for every step. Reinstall to change it.
+
 - A home directory whose dotfiles are links into a shared repository, as GNU Stow makes them (#138).
   The engine's writes go through such a link, so this machine's paths land in the shared copy and
   reach every machine it syncs to. `kb-bootstrap` now names each target that is a link, or sits under
