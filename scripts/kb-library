@@ -127,7 +127,15 @@ def git(*args, cwd=None):
     return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
 
 
+_noted = []
+
+
 def reg(*args):
+    if not _noted:
+        _noted.append(True)
+        note = KL.linked_note("kb-library", KL.REGISTRY)
+        if note:
+            print(note, file=sys.stderr)
     KL.REGISTRY.parent.mkdir(parents=True, exist_ok=True)
     r = git("config", "--file", str(KL.REGISTRY), *args)
     if r.returncode not in (0, 5):          # 5: unsetting something that is not set

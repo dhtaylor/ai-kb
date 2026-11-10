@@ -6,6 +6,17 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A home directory whose dotfiles are links into a shared repository, as GNU Stow makes them (#138).
+  The engine's writes go through such a link, so this machine's paths land in the shared copy and
+  reach every machine it syncs to. `kb-bootstrap` now names each target that is a link, or sits under
+  a linked folder, every run; `kb-library` says so when it writes a linked registry, and
+  `kb-schedule install` when its units or config are linked. Notes only: nothing is refused and no
+  exit status changes. A `HOME` that is itself a link is not reported. `kb-libraries --linked` holds
+  the rule.
+- `kb-bootstrap` keeps its backups of `settings.json` and the shell rc in
+  `${XDG_STATE_HOME:-~/.local/state}/ai-kb/backups/`, and says where. They used to sit beside the
+  file, which put an untracked backup into a dotfiles repository whenever `~/.claude` was a link.
+
 - The contract's header says version 2.6. It had said 2.3 since 2.4 was added; `tests/run-checks`
   now fails when the header and the newest version in §14 disagree.
 
