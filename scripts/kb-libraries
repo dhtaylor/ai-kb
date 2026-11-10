@@ -30,8 +30,14 @@ vanishes makes retrieval answer `fact not found`, which looks exactly like a cor
 
 Shell callers run it; Python callers import it (the SourceFileLoader pattern kb-due uses).
 
+A file the engine writes under HOME may be a link into a dotfiles repository synced across
+machines, as GNU Stow and its kin make (#138). The write goes through the link, so this machine's
+paths land in the shared copy. `linked()` names such a file, and every writer says so; it never
+refuses. HOME itself being a link (/home on another disk) is not reported.
+
 Usage: kb-libraries          one line per registered library: <state>TAB<name>TAB<path>
        kb-libraries --read-only   one line per read-only library: <name>TAB<path>TAB<origin>
+       kb-libraries --linked PATH...   one line per PATH reached through a link: <path>TAB<real path>
 Exit 0, or 2 if the registry exists and git cannot read it.
 """
 import os, pathlib, re, subprocess, sys
@@ -220,7 +226,38 @@ def refusal(tool: str, e: dict) -> str:
             f"kb-library add {e['path']}")
 
 
+def linked(path):
+    """The real path of `path` when it, or a folder between it and HOME, is a symlink; else None."""
+    p = pathlib.Path(os.path.abspath(os.path.expanduser(str(path))))
+    home = pathlib.Path(os.path.abspath(pathlib.Path.home()))
+    q = p
+    while q != home and q.parent != q:
+        if q.is_symlink():
+            return os.path.realpath(p)
+        if home not in q.parents:      # outside HOME: only the file itself is asked about
+            return None
+        q = q.parent
+    return None
+
+
+def linked_note(tool: str, path) -> str:
+    """The note a writer prints for a linked target, or '' when it is not linked."""
+    real = linked(path)
+    if not real:
+        return ""
+    return (f"{tool}: note: {path} is a link to {real}. What is written there is this machine's, so "
+            f"if that file is shared with other machines, as a dotfiles repository is, it carries "
+            f"this machine's paths to them (#138).")
+
+
 def main(argv=()) -> int:
+    argv = list(argv)
+    if argv[:1] == ["--linked"]:
+        for a in argv[1:]:
+            real = linked(a)
+            if real:
+                print(f"{a}\t{real}")
+        return 0
     try:
         rows = entries()
     except RuntimeError as e:

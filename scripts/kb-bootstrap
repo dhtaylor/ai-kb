@@ -18,7 +18,14 @@
 #   installed libraries       core.hooksPath, which git does not clone
 #
 # Existing settings are merged, never replaced; a file is backed up before its
-# first change. Projects are wired per clone by `kb-init`, not from here.
+# first change, into ${XDG_STATE_HOME:-~/.local/state}/ai-kb/backups/ and never beside
+# it: beside it may be a folder a dotfiles manager links into a shared repository.
+#
+# A LINKED TARGET: a dotfiles manager (GNU Stow and its kin) may make any of these
+# files, or a folder above it, a link into a repository synced across machines.
+# Writes go through the link, so this machine's paths would land in the shared copy
+# and reach every other machine. Each linked target is named, every run; nothing is
+# refused (#138). Projects are wired per clone by `kb-init`, not from here.
 #
 # PORTABILITY: paths resolve through python3 rather than `readlink -f`, which does
 # not exist on macOS before Monterey and takes different arguments on BSD. python3
@@ -65,13 +72,20 @@ report() { # status item detail
   case "$1" in ok) ;; *) drift=1 ;; esac
 }
 verb() { [ "$mode" = apply ] && echo "$1" || echo "$2"; }
+backups="${XDG_STATE_HOME:-$HOME/.local/state}/ai-kb/backups"
+linknote() { # target: say so when it is reached through a link (kb-libraries owns the rule)
+  local real
+  real=$("$engine/scripts/kb-libraries" --linked "$1" | cut -f2)
+  [ -n "$real" ] && printf '  note     %s is a link to %s. What is written there is this machine'"'"'s, so if that file is shared with other machines, as a dotfiles repository is, it carries this machine'"'"'s paths to them.\n' "$1" "$real"
+  return 0
+}
 
 echo "kb-bootstrap: engine $engine$([ "$mode" = check ] && echo '  (check only — nothing changed)')"
 
 # 1. Claude settings -----------------------------------------------------------
 cfg="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 settings="$cfg/settings.json"
-result=$(MODE="$mode" ENGINE="$engine" SETTINGS="$settings" MARKET="$market" python3 - <<'PY'
+result=$(MODE="$mode" ENGINE="$engine" SETTINGS="$settings" MARKET="$market" BACKUPS="$backups" python3 - <<'PY'
 import json, os, pathlib, shutil, time
 engine, mode = os.environ["ENGINE"], os.environ["MODE"]
 path = pathlib.Path(os.environ["SETTINGS"])
@@ -124,7 +138,10 @@ changed = d != before
 if changed and mode == "apply":
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
-        shutil.copy2(path, path.with_name(f"settings.json.bak-kb-{time.strftime('%Y%m%d-%H%M%S')}"))
+        bdir = pathlib.Path(os.environ["BACKUPS"]); bdir.mkdir(parents=True, exist_ok=True)
+        bak = bdir / f"settings.json.bak-kb-{time.strftime('%Y%m%d-%H%M%S')}"
+        shutil.copy2(path, bak)
+        out.append((f"backup {bak}", True))
     path.write_text(json.dumps(d, indent=2) + "\n")
 for item, ok in out:
     print(f"{'ok' if ok else 'fix'}\t{item}")
@@ -132,6 +149,7 @@ print(f"old\t{'yes' if any('kb-root.sh' in h.get('command','') for h in had) els
 PY
 ) || { echo "kb-bootstrap: could not update $settings" >&2; exit 1; }
 echo " $settings"
+linknote "$settings"
 old_hook=no
 while IFS=$'\t' read -r st item; do
   [ "$st" = old ] && { old_hook=$item; continue; }
@@ -140,6 +158,9 @@ done <<<"$result"
 
 # 2. Git global config ----------------------------------------------------------
 echo " git config --global"
+gitcfg="$HOME/.gitconfig"   # where git writes --global: ~/.gitconfig, or the XDG file when only it exists
+[ -e "$gitcfg" ] || [ -L "$gitcfg" ] || { x="${XDG_CONFIG_HOME:-$HOME/.config}/git/config"; [ -e "$x" ] && gitcfg=$x; }
+linknote "$gitcfg"
 cur=$(git config --global --get kb.engineRoot || true)
 if [ "$cur" = "$engine" ]; then report ok kb.engineRoot
 else
@@ -165,11 +186,15 @@ if [ -z "$rc" ]; then
   echo " shell rc"; report manual "(unrecognised shell ${SHELL:-})" "add $engine/scripts to PATH yourself"
 else
   echo " $rc"
+  linknote "$rc"
   current=$( [ -f "$rc" ] && awk -v b="$BEGIN" -v e="$END" '$0==b{p=1} p{print} $0==e{p=0}' "$rc" || true)
   if [ "$current" = "$block" ]; then report ok "managed block"
   else
     if [ "$mode" = apply ]; then
-      [ -f "$rc" ] && cp -p "$rc" "$rc.bak-kb-$(date +%Y%m%d-%H%M%S)"
+      if [ -f "$rc" ]; then
+        mkdir -p "$backups"; bak="$backups/$(basename "$rc").bak-kb-$(date +%Y%m%d-%H%M%S)"
+        cp -p "$rc" "$bak" && report ok "backup $bak"
+      fi
       tmp=$(mktemp)
       if [ -n "$current" ]; then
         BLOCK="$block" awk -v b="$BEGIN" -v e="$END" '$0==b{print ENVIRON["BLOCK"]; s=1; next} s&&$0==e{s=0; next} !s{print}' "$rc" > "$tmp"
@@ -190,6 +215,7 @@ fi
 # hook until it is wired. Wiring is local config: nothing is written into a library.
 echo " libraries (registered on this machine)"
 registry="$HOME/.config/ai-kb/libraries"
+linknote "$registry"
 hooks="$engine/library-hooks"
 cur_home=$(git config --file "$registry" --get kb.libraryHome 2>/dev/null || true)
 new_home=${want_home:-${cur_home:-$engine/kb}}

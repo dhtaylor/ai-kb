@@ -703,6 +703,7 @@ case_run "triage-tier file declaring Read fails" 1 "outside the 'triage' tier's 
 # HOME, so this test can never touch the real ~/.claude or ~/.gitconfig.
 BFX="$TMP/bootstrap-fx"; mkdir -p "$BFX/scripts" "$BFX/.claude-plugin"
 cp "$ENGINE/scripts/kb-bootstrap" "$BFX/scripts/kb-bootstrap"; chmod +x "$BFX/scripts/kb-bootstrap"
+cp "$ENGINE/scripts/kb-libraries" "$BFX/scripts/kb-libraries"   # kb-bootstrap asks it which targets are links
 printf '# fixture contract\n' > "$BFX/CONVENTIONS.md"
 printf '{"name":"fx-market","plugins":[{"name":"fx-plugin"}]}\n' > "$BFX/.claude-plugin/marketplace.json"
 printf '#!/usr/bin/env bash\ntrue\n' > "$BFX/scripts/kb-session-start"
@@ -3851,6 +3852,42 @@ printf '\n## Open question from 2026-10-22\n' > "$TR/lib4/fx-open-questions.md"
 printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n\n## Pricing for 2026\n\n## Contract v2.3\n' >> "$TR/lib4/widgets.md"
 case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
 case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"
+
+# ------------------------------------------- a home directory managed by Stow or similar (#138) ----
+# A dotfiles manager links files, or whole folders, from a repository synced across machines. Every
+# engine write goes through the link, so this machine's paths land in that repository. The engine
+# says so, and keeps its backups out of the linked folder.
+LH="$TMP/linkhome"; LD="$TMP/linkdot"; mkdir -p "$LH" "$LD/claude" "$LD/config"
+printf '[user]\n\tname = x\n' > "$LD/gitconfig"; printf '# rc\n' > "$LD/bashrc"; printf '{}\n' > "$LD/claude/settings.json"
+ln -s "$LD/gitconfig" "$LH/.gitconfig"; ln -s "$LD/bashrc" "$LH/.bashrc"
+ln -s "$LD/claude" "$LH/.claude"; ln -s "$LD/config" "$LH/.config"
+mkdir -p "$LD/config/ai-kb"; printf '[kb]\n\tmigrated = true\n' > "$LD/config/ai-kb/libraries"
+lboot() { env -i HOME="$LH" SHELL=/bin/bash PATH="$PATH" "$BFX/scripts/kb-bootstrap" "$@"; }
+case_run "linked home: --check names a linked ~/.gitconfig and its real file" 1 "is a link to $LD/gitconfig" -- lboot --check
+case_run "linked home: --check names settings.json under a linked ~/.claude" 1 "is a link to $LD/claude/settings.json" -- lboot --check
+case_run "linked home: --check names a linked shell rc" 1 "is a link to $LD/bashrc" -- lboot --check
+lboot --apply >/dev/null 2>&1
+case_run "linked home: --apply leaves no settings backup in the linked folder" 0 "" -- \
+  bash -c '! ls "$1"/settings.json.bak-kb-* >/dev/null 2>&1' _ "$LD/claude"
+case_run "linked home: --apply keeps the settings backup in the state folder" 0 "" -- \
+  bash -c 'ls "$1"/settings.json.bak-kb-* >/dev/null 2>&1' _ "$LH/.local/state/ai-kb/backups"
+case_run "linked home: --apply keeps the rc backup in the state folder, not beside the rc" 0 "" -- \
+  bash -c '! ls "$1"/.bashrc.bak-kb-* >/dev/null 2>&1 && ls "$2"/.bashrc.bak-kb-* >/dev/null 2>&1' _ "$LH" "$LH/.local/state/ai-kb/backups"
+case_run "linked home: --apply still writes through every link" 0 "" -- \
+  bash -c '[ -L "$1/.gitconfig" ] && [ -L "$1/.bashrc" ] && [ -L "$1/.claude" ] && grep -q engineRoot "$2/gitconfig"' _ "$LH" "$LD"
+case_run "plain home: no link is reported" 0 "Everything is configured." -- \
+  bash -c 'out=$(env -i HOME="$1" PATH="$PATH" "$2" --check 2>&1); printf "%s" "$out" | grep -q "is a link" && exit 1; printf "%s" "$out"' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
+mkdir -p "$TMP/realhome"; ln -s "$TMP/realhome" "$TMP/homelink"
+case_run "a HOME that is itself a link is not reported" 1 "would-set" -- \
+  bash -c 'out=$(env -i HOME="$1" PATH="$PATH" "$2" --check 2>&1); printf "%s" "$out" | grep -q "is a link" && exit 3; printf "%s" "$out"; exit 1' _ "$TMP/homelink" "$BFX/scripts/kb-bootstrap"
+build_clean "$TMP/linklib"
+case_run "linked home: kb-library add names a registry under a linked ~/.config" 0 "is a link to $LD/config/ai-kb/libraries" -- \
+  env HOME="$LH" "$ENGINE/scripts/kb-library" add "$TMP/linklib"
+case_run "linked home: kb-schedule install names its units under a linked ~/.config" 0 "is a link to $LD/config/systemd/user/ai-kb-schedule.timer" -- \
+  env HOME="$LH" KS_LOG="$KS/log" KS_CRON="$KS/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" "$ENGINE/scripts/kb-schedule" install --backend systemd
+env HOME="$LH" KS_LOG="$KS/log" KS_CRON="$KS/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" "$ENGINE/scripts/kb-schedule" remove >/dev/null 2>&1
+case_run "kb-libraries --linked: a plain path prints nothing" 0 "" -- \
+  bash -c 'o=$("$1" --linked "$2/.gitconfig") && [ -z "$o" ]' _ "$ENGINE/scripts/kb-libraries" "$BHOME"
 
 # The contract's header names the newest version §14 defines. It said 2.3 through three releases
 # of §14 (2.4 to 2.6), and a reader takes the header as the contract's version.
