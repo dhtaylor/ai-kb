@@ -269,7 +269,7 @@ def plural(n: int, word: str) -> str:
 
 # The --summary categories, in the order they are shown: (key, heading).
 SUMMARY = (("report", "weekly report"), ("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
-           ("queue", "queue"), ("distill", "to distill"), ("unstamped", "unstamped"), ("unsourced", "unsourced"),
+           ("queue", "queue"), ("queue_unreadable", "unreadable queue"), ("distill", "to distill"), ("unstamped", "unstamped"), ("unsourced", "unsourced"),
            ("contract", "contract"))
 
 
@@ -330,6 +330,14 @@ def nudge_for(s: dict, kb_verify, kb_watch, check_kb, packets=(), retire=None):
         counts["queue"] = qn
         by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
         parts.append(f"{plural(qn, 'open queue item')} ({by_cat})")
+    try:   # records the parser skips are not counted above, so they are named here (#168)
+        qpath = tree / "needs-attention.md"
+        bad = kb_watch.unreadable_records(qpath.read_text(errors="replace")) if qpath.is_file() else []
+    except Exception:
+        bad = []
+    if bad:
+        counts["queue_unreadable"] = len(bad)
+        parts.append(f"{plural(len(bad), 'unreadable queue record')} (check-kb names the lines)")
 
     try:
         en = episodic_count(tree)

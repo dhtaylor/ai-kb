@@ -371,6 +371,35 @@ def parse_records(text: str):
     return records
 
 
+def unreadable_records(text: str):
+    """[(line number, line)] for each record in a ```yaml fence that parse_records does not read:
+    the first line of each run of data lines it skips, such as a bare mapping with `id:` at column 0
+    (#168). It walks the text exactly as parse_records does, so the two cannot disagree."""
+    out, in_yaml, in_rec, run = [], False, False, False
+    for n, raw in enumerate(text.splitlines(), 1):
+        s = raw.strip()
+        if s.startswith("```"):
+            in_yaml = s == "```yaml" and not in_yaml
+            in_rec = run = False
+            continue
+        if not in_yaml or s == "" :
+            run = False
+            continue
+        if ID_RE.match(raw):
+            in_rec, run = True, False
+            continue
+        if in_rec and (KV_RE.match(raw) or raw.startswith("  ")):
+            continue
+        in_rec = False
+        if s.startswith("#"):
+            run = False
+            continue
+        if not run:
+            out.append((n, raw))
+        run = True
+    return out
+
+
 # ------------------------------------------------------------------------------------ main ----
 def process_entry(entry: dict, dry_run: bool):
     """Returns (findings_written_or_would_write, errors, findings_found) for this one source."""

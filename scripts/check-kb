@@ -545,6 +545,16 @@ def main(root: pathlib.Path) -> int:
     for lib in sorted(set(declared) - named):
         warnings.append(f"{index}: links_to names '{lib}', which no link uses — remove it (§3)")
 
+    # Queue records the readers skip (#168): kb-due and kb-report read only kb-watch's record shape,
+    # so a record in any other is missing from the nudge and the report. A warning at every version:
+    # the contract never defined the shape.
+    queue = root / "needs-attention.md"
+    if queue.is_file():
+        for n, line in engine_module("kb_watch", "kb-watch").unreadable_records(queue.read_text(errors="replace")):
+            warnings.append(f"{queue}:{n}: a queue line kb-due and kb-report cannot read: '{line.strip()[:60]}'. "
+                            f"Write each record as `- id: <8 hex>` followed by two-space-indented "
+                            f"`key: value` lines (kb-audit Step 3)")
+
     defects += orphans(root, files)
 
     for n in notes:

@@ -3860,6 +3860,38 @@ printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n
 case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
 case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"
 
+# ---------------------------------------- queue records the parser cannot read (#168) ----
+# parse_records reads one shape: `- id: <8 hex>`, then two-space-indented `key: value` lines. A record
+# in another shape (a bare mapping, keys at column 0) was skipped in silence: missing from the nudge
+# and the weekly report, and check-kb passed it. Now check-kb warns, naming the line, and the nudge
+# counts it. A warning at every contract version: the contract never defined the shape.
+QG="$TMP/queue-grammar"; build_clean "$QG"
+python3 - "$QG" <<'PY'
+import sys, pathlib
+root = pathlib.Path(sys.argv[1])
+fm = ("---\nname: needs-attention\ndescription: q\nmemory_type: reference\ndomain: queue-grammar\nscope: general\n"
+      "metadata:\n  type: index\n  node_type: memory\n  created: 2026-11-09\ntags: [meta]\nkeywords: [queue]\n---\n# Needs attention\n\n")
+bare = "```yaml\nid: aaaaaaaa\ncategory: unstamped fact\nstatus: open\nfile: widgets.md\n```\n\n"
+listed = "```yaml\n- id: bbbbbbbb\n  category: unstamped fact\n  status: open\n  file: widgets.md\n```\n"
+(root / "needs-attention.md").write_text(fm + bare + listed)
+idx = root / "INDEX.md"; idx.write_text(idx.read_text() + "- [needs-attention](needs-attention.md) — the queue\n")
+PY
+case_run "check-kb warns about a queue record the parser cannot read, naming its line" 0 "needs-attention.md:17: a queue line kb-due and kb-report cannot read" -- \
+  "$ENGINE/scripts/check-kb" "$QG"
+case_run "check-kb: ...one warning per unread record, not per line" 0 "" -- \
+  bash -c '[ "$("$1" "$2" | grep -c "cannot read")" = 1 ]' _ "$ENGINE/scripts/check-kb" "$QG"
+case_run "kb-due --nudge counts the unreadable record beside the open one" 0 "1 unreadable queue record" -- \
+  "$ENGINE/scripts/kb-due" "$QG" --nudge
+case_run "kb-due --summary shows it in the line the person sees" 0 "unreadable queue: " -- \
+  "$ENGINE/scripts/kb-due" "$QG" --nudge --summary
+sed -i '/^```yaml$/{N;s/^```yaml\nid: aaaaaaaa$/```yaml\n- id: aaaaaaaa/}' "$QG/needs-attention.md"
+sed -i 's/^\(category\|status\|file\): /  \1: /' "$QG/needs-attention.md"
+case_run "check-kb: a queue in the list shape draws no warning" 0 "" -- \
+  bash -c '! "$1" "$2" | grep -q "cannot read"' _ "$ENGINE/scripts/check-kb" "$QG"
+case_run "kb-due --nudge: ...and both records count as open" 0 "2 open queue items" -- "$ENGINE/scripts/kb-due" "$QG" --nudge
+case_run "kb-audit Step 3 shows the record shape the readers accept" 0 "" -- \
+  bash -c 'sed -n "/^## Step 3/,/^## Step 4/p" "$1" | grep -q "read nothing else"' _ "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
+
 # ------------------------------------- kb-schedule: the job runs with the installing PATH (#165) ----
 # A systemd user unit, and cron, start with a bare system PATH, which leaves out ~/.local/bin, where
 # the claude installer puts claude. A Recheck calling such a tool then failed under the timer and was
