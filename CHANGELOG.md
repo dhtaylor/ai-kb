@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A queue record the readers can't parse is no longer silent (#168). `kb-due` and `kb-report` read
+  one shape, `- id: <8 hex>` with two-space-indented `key: value` lines; a record in another, such as
+  a bare mapping a sweep once wrote, was missing from the nudge and the weekly report, and `check-kb`
+  passed the file. Now `check-kb` warns, naming each such record's line, the nudge and its one-line
+  summary count them, and kb-audit Step 3 shows the exact shape to write. A warning at every contract
+  version: the contract never defined the shape. The parser itself is unchanged.
+
 - An unattended recheck finds a tool installed per user, such as `claude` in `~/.local/bin` (#165).
   Two things hid it: `kb-verify --unattended` ran every assertion with a fixed `/usr/bin:/bin`, and
   a systemd unit or crontab line starts with a bare system `PATH` anyway. Such an assertion failed

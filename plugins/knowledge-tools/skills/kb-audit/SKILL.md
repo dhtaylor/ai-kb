@@ -137,6 +137,22 @@ Copy `domain:` and `scope:` from the library's own `INDEX.md` — never write `g
 that is not. Every file in a library carries the library's scope (§1), the queue included, and
 `check-scope` fails the library — and blocks the next commit — on one that does not.
 
+**Write each record in exactly this shape.** `kb-due` and `kb-report` read nothing else, so a record
+in any other shape (a bare mapping with `id:` at column 0, keys without the two-space indent) is
+missing from the nudge and the weekly report, and `check-kb` warns about it:
+
+```yaml
+- id: 3f2a9c1e
+  category: unstamped fact
+  status: open
+  file: widgets.md
+  section: "Limits"
+  severity: 4
+```
+
+One fenced `yaml` block holds the records, each opened by `- id: <8 hex>` and filled by
+two-space-indented `key: value` lines. Records already in the file keep their shape and their ids.
+
 Each item carries:
 
 - a **stable ID** — the first 8 hex characters of the SHA-1 of `<category>|<file>|<locus>` — so
