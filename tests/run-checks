@@ -3852,6 +3852,16 @@ printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n
 case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
 case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"
 
+# The contract's header names the newest version §14 defines. It said 2.3 through three releases
+# of §14 (2.4 to 2.6), and a reader takes the header as the contract's version.
+contract_header() {
+  local head newest
+  head=$(sed -n 's/^\*\*Contract version \([0-9][0-9]*\.[0-9][0-9]*\)\*\*.*/\1/p' "$ENGINE/CONVENTIONS.md" | head -1)
+  newest=$(awk '/^## [0-9]+\. Contract versions/{p=1;next} /^## /{p=0} p && /^### [0-9]+\.[0-9]+ *$/{print $2}' "$ENGINE/CONVENTIONS.md" | sort -t. -k1,1n -k2,2n | tail -1)
+  [ -n "$head" ] && [ "$head" = "$newest" ] && echo "header $head matches §14" || { echo "header says ${head:-nothing}, §14's newest is $newest"; return 1; }
+}
+case_run "CONVENTIONS: the header names the newest contract version in §14" 0 "matches §14" -- contract_header
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0

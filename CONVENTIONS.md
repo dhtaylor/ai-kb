@@ -14,7 +14,7 @@ keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, proven
 ---
 # Knowledge Conventions
 
-**Contract version 2.3** (§14). A library declares the version it was built to in its root `INDEX.md`
+**Contract version 2.6** (§14). A library declares the version it was built to in its root `INDEX.md`
 (§3); what each version adds is in §14. Supersedes [knowledge-conventions-v1](documents/legacy/knowledge-conventions-v1.md) (the inherited work-system contract, preserved at
 `documents/legacy/knowledge-conventions-v1.md`). v1 governed a single-root, annotation-only KB; v2 folds in
 the scope tiers, cross-root resolution, currency stamping, and retrieval contract required by the

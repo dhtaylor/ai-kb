@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The contract's header says version 2.6. It had said 2.3 since 2.4 was added; `tests/run-checks`
+  now fails when the header and the newest version in §14 disagree.
+
 - Contract 2.6: a link says where its library comes from (ADR-0020 step 2, #148). A tree that links
   across libraries lists each one under `links_to:` in its root `INDEX.md`, with the git remote it
   was linked against. `check-kb` fails a link whose library isn't listed, from 2.6, and warns below
