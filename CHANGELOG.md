@@ -6,6 +6,17 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A consumer's read-only copy can be pinned to a release (ADR-0020 step 3, #148):
+  `kb-library add <git-url> --read-only --ref <tag>` clones at the tag and records it as `ref` in
+  the registry. It refuses, and clones nothing, if the remote has no such tag.
+  - `kb-library list` shows `read-only @<tag>`, and says `(checkout moved: HEAD <sha>)` on the row
+    if the clone is no longer at that tag. `kb-libraries` reads `ref` too.
+  - To move to a newer release, check the tag out in the clone, then run
+    `kb-library add <path> --read-only --ref <tag>`. It checks HEAD is at the tag and changes
+    nothing if not. Re-adding without `--ref` clears the pin.
+  - `--ref` goes with `--read-only`; without it, `add` is a usage error. `export` and `import` do
+    not carry the ref.
+
 - A section that cites one source on two `Source:` lines no longer queues the same finding twice
   (#172). Both stale (or unstamped) stamps hash to one ID, and a sweep wrote a record for each, so
   `needs-attention.md` held two identical records and the session nudge counted the item twice.
