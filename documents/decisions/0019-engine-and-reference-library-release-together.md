@@ -21,6 +21,7 @@ those rules, the two releases have never shared a number:
 |---|---|---|
 | 2026-10-16 | v0.2.0 | v0.1.0 |
 | 2026-10-31 | v0.3.0 | v0.2.0 |
+| 2026-11-11 | v0.4.0 | v0.4.0 |
 
 The owner treats the two as one release package. Two version numbers for one package make a reader
 ask which library goes with which engine, and the only answer is a line in the release notes.

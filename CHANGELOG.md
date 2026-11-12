@@ -4,7 +4,12 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
-## Unreleased
+## v0.4.0 — 2026-11-11
+
+Changes since v0.3.0. A minor release: it adds contract 2.6 and the checks that go with it (ADR-0015).
+This engine serves libraries that declare `kb_contract` 2.0 to 2.6 (ADR-0016); a library that declares
+none is read as 2.0. ADR-0020 ships whole: the read-only role, `links_to` (contract 2.6) and `--ref`
+pinning.
 
 - A consumer's read-only copy can be pinned to a release (ADR-0020 step 3, #148):
   `kb-library add <git-url> --read-only --ref <tag>` clones at the tag and records it as `ref` in
@@ -88,7 +93,8 @@ engine release it was last verified against in its own release notes.
   different origin is reported as a dependency mismatch and warns, rather than failing as a dead
   link the consumer can't fix. A read-only library is served as usual, but this machine doesn't
   curate it: the hook refuses commits, nothing writes into it, and nothing nudges about it.
-  Delivered in steps: the read-only role, then `links_to` (contract 2.6), then `--ref` pinning.
+  Delivered in three steps, all in this release: the read-only role, then `links_to` (contract 2.6),
+  then `--ref` pinning.
 
 - A project's `knowledge/` tree kept as a read-only archive can drop out of the session-start nudge
   (#141). Declare `archived: <date or reason>` in its root `INDEX.md`. The nudge then skips it, and
