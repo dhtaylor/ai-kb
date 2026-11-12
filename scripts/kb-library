@@ -18,6 +18,16 @@ engine's library hook), which git never commits or clones.
                   as usual, but never curated here. The hook refuses commits in it, nothing writes
                   into it, and nothing nudges about it. Re-adding the same path with or without
                   the flag changes it.
+  add <git-url> --read-only --ref <tag>
+                  clone it at that release tag (a detached HEAD) and record the tag in the
+                  registry, which `list` then shows. Refused, and nothing cloned, if the remote
+                  has no such tag. --ref goes with --read-only: a copy at a tag can't take commits.
+  add <path> --read-only --ref <tag>
+                  record the tag for a copy already registered or cloned. It checks that the
+                  clone's HEAD is at the tag and changes nothing if not. To move to a newer
+                  release: check out the tag in the clone yourself, then re-add it with --ref.
+                  Re-adding without --ref clears the recorded tag. `list` says so on the row if
+                  the checkout is no longer at the tag.
   remove <name>   unregister, and unwire the hook if it points at this engine. Never deletes files.
   list            every registered library: state, name, path (see kb-libraries for the states).
   home            where new libraries are cloned: $KB_LIBRARY_HOME, else kb.libraryHome in the
@@ -153,14 +163,15 @@ URL = re.compile(r"^[a-z][a-z0-9+.-]*://|^[\w.-]+@[\w.-]+:")
 same_origin = KL.same_origin   # one comparison for import and the link checks (ADR-0020)
 
 
-def clone(url: str, dest: pathlib.Path):
-    """Clone url into dest, a folder that must not exist yet. The clone path, or None."""
+def clone(url: str, dest: pathlib.Path, branch=None):
+    """Clone url into dest (at branch, a branch or tag, if given), a folder that must not exist
+    yet. The clone path, or None."""
     if dest.exists():
         print(f"kb-library: {dest} already exists — not cloned over "
               f"(kb-library add {dest} registers what is there)")
         return None
     dest.parent.mkdir(parents=True, exist_ok=True)
-    r = git("clone", "--quiet", url, str(dest))
+    r = git("clone", "--quiet", *(["--branch", branch] if branch else []), url, str(dest))
     if r.returncode != 0:
         print(f"kb-library: cannot clone {url}: {r.stderr.strip()}")
         return None
@@ -171,13 +182,19 @@ def clone(url: str, dest: pathlib.Path):
     return dest
 
 
-def add_url(url: str, into, read_only=False) -> int:
+def add_url(url: str, into, read_only=False, ref="") -> int:
+    if ref:
+        r = git("ls-remote", "--tags", url, f"refs/tags/{ref}")
+        if r.returncode != 0:
+            print(f"kb-library: cannot read tags of {url}: {r.stderr.strip()} — nothing cloned"); return 1
+        if not r.stdout.strip():
+            print(f"kb-library: {url} has no tag {ref} — nothing cloned"); return 1
     into = pathlib.Path(into).expanduser() if into else KL.library_home(ENGINE)
     name = re.sub(r"\.git$", "", url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1])
-    path = clone(url, into / name)
+    path = clone(url, into / name, ref or None)
     if not path:
         return 1
-    rc = add(str(path), read_only)
+    rc = add(str(path), read_only, ref)
     if rc:
         print(f"kb-library: the clone at {path} was left in place")
     return rc
@@ -190,7 +207,38 @@ def set_mode(name: str, read_only: bool) -> None:
         reg("--unset", f"library.{name}.readOnly")
 
 
-def add(arg: str, read_only=False) -> int:
+def set_ref(name: str, ref: str) -> None:
+    if ref:
+        reg(f"library.{name}.ref", ref)
+    else:
+        reg("--unset", f"library.{name}.ref")
+
+
+def head_of(path: pathlib.Path) -> str:
+    """The commit the clone's HEAD is at, or ''."""
+    return git("rev-parse", "--verify", "-q", "HEAD^{commit}", cwd=path).stdout.strip()
+
+
+def tag_commit(path: pathlib.Path, ref: str) -> str:
+    """The commit tag ref names in the clone, or ''."""
+    return git("rev-parse", "--verify", "-q", f"refs/tags/{ref}^{{commit}}", cwd=path).stdout.strip()
+
+
+def at_tag(path: pathlib.Path, ref: str) -> bool:
+    """Whether --ref is true of the clone: refuses, saying what HEAD is, when it is not."""
+    head, tag = head_of(path), tag_commit(path, ref)
+    if tag and head == tag:
+        return True
+    if not tag:
+        print(f"kb-library: {path} has no tag {ref} — fetch it (git fetch --tags) and check it out; "
+              f"HEAD is {head[:12] or 'not a commit'}. Nothing changed")
+    else:
+        print(f"kb-library: HEAD of {path} is {head[:12] or 'not a commit'}, not {ref} ({tag[:12]}) — "
+              f"check out {ref} first. Nothing changed")
+    return False
+
+
+def add(arg: str, read_only=False, ref="") -> int:
     path = pathlib.Path(arg).expanduser()
     if not path.is_dir():
         print(f"kb-library: {arg} is not a directory"); return 1
@@ -201,16 +249,26 @@ def add(arg: str, read_only=False) -> int:
     if not name:
         print(f"kb-library: {path}/INDEX.md declares no domain: — a library names itself there"); return 1
 
+    if ref and not at_tag(path, ref):
+        return 1
     current = {e["name"]: e for e in KL.entries()}
     old = current.get(name)
     if old and old["path"].resolve() == path:
-        if old.get("read_only") != read_only:
+        mode_changed, ref_changed = old.get("read_only") != read_only, old.get("ref", "") != ref
+        if mode_changed:
             set_mode(name, read_only)
+        if ref_changed:
+            set_ref(name, ref)
+        pin = f", pinned to {ref}" if ref else ""
+        if mode_changed:
             print(f"kb-library: {name} at {path} is now "
-                  + ("read-only: served, never curated here" if read_only else "curated here"))
+                  + (f"read-only: served, never curated here{pin}" if read_only else "curated here"))
+        elif ref_changed:
+            print(f"kb-library: {name} at {path} is now pinned to {ref}" if ref
+                  else f"kb-library: {name} at {path} is no longer pinned (was {old['ref']})")
         else:
             print(f"kb-library: {name} is already registered at {path}"
-                  + (" (read-only)" if read_only else ""))
+                  + (" (read-only" + (f", pinned to {ref}" if ref else "") + ")" if read_only else ""))
     elif old and old["state"] == "ok":
         print(f"kb-library: {name} is already registered at {old['path']}, which is still a "
               f"library — one name, one library. Remove it first: kb-library remove {name}")
@@ -223,6 +281,7 @@ def add(arg: str, read_only=False) -> int:
                 print(f"kb-library: unregistered {e['name']} — {path} now declares {name}")
         reg(f"library.{name}.path", str(path))
         set_mode(name, read_only)
+        set_ref(name, ref)
         origin = git("remote", "get-url", "origin", cwd=path) if is_repo(path) else None
         if origin is not None and origin.returncode == 0 and origin.stdout.strip():
             reg(f"library.{name}.origin", origin.stdout.strip())
@@ -230,6 +289,7 @@ def add(arg: str, read_only=False) -> int:
             reg("--unset", f"library.{name}.origin")
         print(f"kb-library: registered {name} at {path}"
               + (" read-only: served, never curated here" if read_only else "")
+              + (f", pinned to {ref}" if ref else "")
               + (f" (was {old['state']} at {old['path']})" if old else ""))
         try:
             warn_overlap(name, path, current)
@@ -318,7 +378,15 @@ def list_() -> int:
     if not rows:
         print(f"kb-library: no libraries registered ({KL.REGISTRY})")
     for e in rows:
-        print(f"  {e['state']:<14} {e['name']:<28} {e['path']}" + ("  read-only" if e["read_only"] else ""))
+        mode = ""
+        if e["read_only"]:
+            mode = "  read-only"
+            if e["ref"]:
+                mode += f" @{e['ref']}"
+                if e["path"].is_dir() and (not tag_commit(e["path"], e["ref"])
+                                           or head_of(e["path"]) != tag_commit(e["path"], e["ref"])):
+                    mode += f" (checkout moved: HEAD {head_of(e['path'])[:7] or 'unknown'})"
+        print(f"  {e['state']:<14} {e['name']:<28} {e['path']}" + mode)
     return 0
 
 
@@ -327,14 +395,23 @@ def main(argv) -> int:
     argv = [a for a in argv if a != "--read-only"]
     if read_only and argv[:1] != ["add"]:
         print("kb-library: --read-only goes with add", file=sys.stderr); return 2
+    ref = ""
+    if "--ref" in argv:
+        i = argv.index("--ref")
+        if argv[:1] != ["add"] or i + 1 >= len(argv) or argv[i + 1].startswith("-"):
+            print("kb-library: --ref <tag> goes with add", file=sys.stderr); return 2
+        ref, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+        if not read_only:
+            print("kb-library: --ref goes with --read-only: a copy pinned to a tag can't take commits",
+                  file=sys.stderr); return 2
     into = None
     if len(argv) == 4 and argv[2] == "--into":
         into, argv = argv[3], argv[:2]
     if argv[:1] == ["add"] and len(argv) == 2:
         if URL.match(argv[1]):
-            return add_url(argv[1], into, read_only)
+            return add_url(argv[1], into, read_only, ref)
         if into is None:
-            return add(argv[1], read_only)
+            return add(argv[1], read_only, ref)
     if argv[:1] == ["import"] and len(argv) == 2:
         return import_(argv[1], into)
     if into is None:
@@ -346,7 +423,7 @@ def main(argv) -> int:
             print(KL.library_home(ENGINE)); return 0
         if argv == ["export"]:
             return export()
-    print("usage: kb-library add <path> | add <git-url> [--into DIR] [--read-only] | remove <name> | list\n"
+    print("usage: kb-library add <path> | add <git-url> [--into DIR] [--read-only [--ref <tag>]] (<path> too) | remove <name> | list\n"
           "                  | home | export | import <file> [--into DIR]", file=sys.stderr)
     return 2
 

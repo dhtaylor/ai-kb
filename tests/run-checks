@@ -3734,6 +3734,49 @@ HOME="$ROH" "$ENGINE/scripts/kb-library" add "$RO/pub" >/dev/null 2>&1
 case_run "read-only: re-adding without the flag makes it curated again" 1 "" -- \
   git config --file "$ROREG" --get library.pub.readonly
 
+# ------------------------------- --ref: pinning a consumer's copy to a release (ADR-0020 step 3) ----
+# A read-only copy cloned at a tag records it. Upgrading is the person's step: check out the new tag,
+# then re-add the path with --ref, which verifies HEAD is at that tag before recording it.
+RF="$TMP/rf"; RFH="$RF/home"; mkdir -p "$RFH"
+build_clean "$RF/origin/reflib"
+RFG="git -C $RF/origin/reflib -c user.email=t@t -c user.name=t"
+$RFG add -A; $RFG commit -qm one; $RFG tag v1.0
+printf '\nMore.\n' >> "$RF/origin/reflib/widgets.md"; $RFG commit -qam two; $RFG tag v1.1
+RFURL="file://$RF/origin/reflib"; RFREG="$RFH/.config/ai-kb/libraries"
+rfkl() { HOME="$RFH" "$ENGINE/scripts/kb-library" "$@"; }
+rfref() { git config --file "$RFREG" --get library.reflib.ref; }
+case_run "ref: add <url> --read-only --ref clones and registers" 0 "registered reflib" -- \
+  rfkl add "$RFURL" --read-only --ref v1.0 --into "$RF/clones"
+case_run "ref: ...records the ref" 0 "v1.0" -- rfref
+case_run "ref: ...and read-only" 0 "true" -- git config --file "$RFREG" --get library.reflib.readonly
+case_run "ref: ...with the checkout at the tag's commit" 0 "" -- \
+  bash -c '[ "$(git -C "$1/clones/reflib" rev-parse HEAD)" = "$(git -C "$2" rev-parse v1.0^{commit})" ]' _ "$RF" "$RF/origin/reflib"
+case_run "ref: a tag that is not on the remote is refused" 1 "v9.9" -- \
+  rfkl add "$RFURL" --read-only --ref v9.9 --into "$RF/clones2"
+case_run "ref: ...and nothing is cloned" 1 "" -- test -e "$RF/clones2/reflib"
+case_run "ref: --ref without --read-only is a usage error" 2 "--ref" -- \
+  rfkl add "$RFURL" --ref v1.0 --into "$RF/clones3"
+case_run "ref: ...and nothing is cloned there either" 1 "" -- test -e "$RF/clones3/reflib"
+case_run "ref: --ref on a path without --read-only is a usage error" 2 "--ref" -- \
+  rfkl add "$RF/clones/reflib" --ref v1.0
+case_run "ref: list shows the ref" 0 "read-only @v1.0" -- rfkl list
+git -C "$RF/clones/reflib" fetch -q --tags origin
+case_run "ref: path form with HEAD not at the tag is refused" 1 "HEAD" -- \
+  rfkl add "$RF/clones/reflib" --read-only --ref v1.1
+case_run "ref: ...and the recorded ref is unchanged" 0 "v1.0" -- rfref
+case_run "ref: path form with a tag that does not exist is refused" 1 "v7.7" -- \
+  rfkl add "$RF/clones/reflib" --read-only --ref v7.7
+git -C "$RF/clones/reflib" checkout -q v1.1
+case_run "ref: upgrade: re-adding the path at the new tag updates the ref" 0 "now pinned to v1.1" -- \
+  rfkl add "$RF/clones/reflib" --read-only --ref v1.1
+case_run "ref: ...recorded" 0 "v1.1" -- rfref
+git -C "$RF/clones/reflib" checkout -q v1.0
+case_run "ref: list flags a checkout that moved off the tag" 0 "checkout moved: HEAD" -- rfkl list
+case_run "ref: ...without changing the registry" 0 "v1.1" -- rfref
+case_run "ref: re-adding without --ref clears it" 0 "" -- rfkl add "$RF/clones/reflib" --read-only
+case_run "ref: ...cleared" 1 "" -- rfref
+case_run "ref: ...and list no longer shows a ref" 1 "" -- bash -c 'HOME="$1" "$2/scripts/kb-library" list | grep -q "@v"' _ "$RFH" "$ENGINE"
+
 # ------------------------------- links_to: where a linked library comes from (ADR-0020, 2.6) ----
 # A library names the origin of each library it links into. Origins compare by host and path, so the
 # https and ssh forms of one repository are the same; a different origin is a dependency mismatch,

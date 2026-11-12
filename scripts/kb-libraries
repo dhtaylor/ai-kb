@@ -8,6 +8,7 @@ A library is installed on a machine when it is registered there, and only then. 
         path = /mnt/c/workspace/kb/azure-devops
         origin = https://github.com/dhtaylor/azure-devops.git
         readOnly = true        # optional: a consumer's copy of someone else's library (ADR-0020)
+        ref = v0.4.0           # optional, with readOnly: the release tag the copy is pinned to
 
 A read-only library is served like any other, but this machine never curates it: nothing commits
 to it, writes into it or nudges about it. Its corrections are filed with its origin.
@@ -128,7 +129,7 @@ def state_of(name: str, path: pathlib.Path) -> str:
 
 
 def entries():
-    """[{name, path, origin, state}] for every registered library, in name order."""
+    """[{name, path, origin, read_only, ref, state}] for every registered library, in name order."""
     if not REGISTRY.is_file():
         return []
     r = subprocess.run(["git", "config", "--file", str(REGISTRY), "--null", "--list"],
@@ -149,7 +150,7 @@ def entries():
         path = pathlib.Path(libs[name]["path"])
         out.append({"name": name, "path": path, "origin": libs[name].get("origin", ""),
                     "read_only": libs[name].get("readonly", "").lower() == "true",
-                    "state": state_of(name, path)})
+                    "ref": libs[name].get("ref", ""), "state": state_of(name, path)})
     return out
 
 

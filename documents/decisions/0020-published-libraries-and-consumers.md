@@ -125,7 +125,7 @@ doesn't curate it:
 
 `kb-library add <git-url> --read-only --ref <tag>` clones at a tag. The registry records the `ref`,
 and `kb-library list` shows it, so a consumer can see which release they are on. Moving to a newer
-release is a person's step. This ADR sets the shape; it is delivered after the two steps below.
+release is a person's step. This ADR sets the shape; it is delivered in the steps below.
 
 ## Consequences
 
@@ -165,6 +165,7 @@ release is a person's step. This ADR sets the shape; it is delivered after the t
 2. **`links_to` and dependency mismatches** (v0.4.0): contract 2.6, `check-kb`, `check-xlinks`,
    the wider `same_origin`, `kb-library add`'s warnings, outbound links from a read-only library as warnings, and the library
    pull requests declaring 2.6.
-3. **`--ref` pinning** (after v0.4.0).
+3. **`--ref` pinning** (after v0.4.0): the registry `ref`, `kb-library add --read-only --ref <tag>`
+   for a URL and a path, and `kb-library list` showing the ref and a checkout that has moved off it.
 
 Tests first for each, with a fixture registry under a throwaway `HOME`, never the real one.
