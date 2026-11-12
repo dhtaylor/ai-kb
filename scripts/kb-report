@@ -102,8 +102,13 @@ def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> l
 
     qpath = root / "needs-attention.md"
     if qpath.is_file():
+        listed = set()
         for r in kb_watch.parse_records(qpath.read_text(errors="replace")):
             if r.get("status") == "open":
+                if r.get("id") is not None:   # a duplicated id is one finding, listed once (#172)
+                    if r["id"] in listed:
+                        continue
+                    listed.add(r["id"])
                 out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
                            f"Triage it in needs-attention.md.")
 

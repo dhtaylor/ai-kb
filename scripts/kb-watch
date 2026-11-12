@@ -371,6 +371,18 @@ def parse_records(text: str):
     return records
 
 
+def duplicate_ids(text: str):
+    """{id: [line numbers]} for each id that opens two or more records (#172). It walks the text
+    exactly as parse_records does, so the two cannot disagree: a line opens a record when ID_RE
+    matches it, wherever it sits."""
+    seen = {}
+    for n, raw in enumerate(text.splitlines(), 1):
+        m = ID_RE.match(raw)
+        if m:
+            seen.setdefault(m.group(1), []).append(n)
+    return {i: ns for i, ns in seen.items() if len(ns) > 1}
+
+
 def unreadable_records(text: str):
     """[(line number, line)] for each record in a ```yaml fence that parse_records does not read:
     the first line of each run of data lines it skips, such as a bare mapping with `id:` at column 0

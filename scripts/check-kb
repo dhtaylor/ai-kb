@@ -550,10 +550,16 @@ def main(root: pathlib.Path) -> int:
     # the contract never defined the shape.
     queue = root / "needs-attention.md"
     if queue.is_file():
-        for n, line in engine_module("kb_watch", "kb-watch").unreadable_records(queue.read_text(errors="replace")):
+        qtext, kw = queue.read_text(errors="replace"), engine_module("kb_watch", "kb-watch")
+        for n, line in kw.unreadable_records(qtext):
             warnings.append(f"{queue}:{n}: a queue line kb-due and kb-report cannot read: '{line.strip()[:60]}'. "
                             f"Write each record as `- id: <8 hex>` followed by two-space-indented "
                             f"`key: value` lines (kb-audit Step 3)")
+        # Two records with one id are one finding (#172): the nudge and the report count it once.
+        # A warning at every version, for the same reason.
+        for rid, ns in sorted(kw.duplicate_ids(qtext).items()):
+            warnings.append(f"{queue}: id {rid} appears at lines {', '.join(map(str, ns[:-1]))} and {ns[-1]}: "
+                            f"one finding, so keep one record and delete the rest")
 
     defects += orphans(root, files)
 
