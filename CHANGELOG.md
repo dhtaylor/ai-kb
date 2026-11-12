@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A section that cites one source on two `Source:` lines no longer queues the same finding twice
+  (#172). Both stale (or unstamped) stamps hash to one ID, and a sweep wrote a record for each, so
+  `needs-attention.md` held two identical records and the session nudge counted the item twice.
+  Now a sweep writes one record per ID, covering every `Source:` line of that source in the section;
+  kb-audit Step 3 says so. For a queue that already holds duplicates, `check-kb` warns, naming the id
+  and each line, and `kb-due` and `kb-report` count and list the id once. A warning at every contract
+  version, never a failure. IDs are unchanged: no ordinal was added to the locus.
+
 - A queue record the readers can't parse is no longer silent (#168). `kb-due` and `kb-report` read
   one shape, `- id: <8 hex>` with two-space-indented `key: value` lines; a record in another, such as
   a bare mapping a sweep once wrote, was missing from the nudge and the weekly report, and `check-kb`

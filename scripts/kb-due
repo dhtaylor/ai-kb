@@ -168,7 +168,15 @@ def queue_due(root: pathlib.Path, kb_watch):
         return 0, {}
     text = qpath.read_text(errors="replace")
     records = kb_watch.parse_records(text)
-    open_recs = [r for r in records if r.get("status") == "open"]
+    open_recs, seen = [], set()
+    for r in records:
+        if r.get("status") != "open":
+            continue
+        if r.get("id") is not None:   # one finding, one count: a copy of an id already seen is skipped (#172)
+            if r["id"] in seen:
+                continue
+            seen.add(r["id"])
+        open_recs.append(r)
     cats = {}
     for r in open_recs:
         cats[r.get("category", "?")] = cats.get(r.get("category", "?"), 0) + 1

@@ -3892,6 +3892,37 @@ case_run "kb-due --nudge: ...and both records count as open" 0 "2 open queue ite
 case_run "kb-audit Step 3 shows the record shape the readers accept" 0 "" -- \
   bash -c 'sed -n "/^## Step 3/,/^## Step 4/p" "$1" | grep -q "read nothing else"' _ "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
 
+# ------------------------------------- one queue record per ID, counted once (#172) ----
+# A section citing one source on two `Source:` lines hashes both stale stamps to the same ID, and a
+# sweep once wrote both. kb-audit now writes one record per ID; for a queue that already holds two,
+# check-kb warns (at every contract version, naming the id and each line) and the nudge and the
+# weekly report count the finding once.
+QD="$TMP/queue-dup"; build_clean "$QD"
+python3 - "$QD" <<'PY'
+import sys, pathlib
+root = pathlib.Path(sys.argv[1])
+fm = ("---\nname: needs-attention\ndescription: q\nmemory_type: reference\ndomain: queue-dup\nscope: general\n"
+      "metadata:\n  type: index\n  node_type: memory\n  created: 2026-11-09\ntags: [meta]\nkeywords: [queue]\n---\n# Needs attention\n\n")
+rec = lambda i: f"- id: {i}\n  category: stale fact\n  status: open\n  file: widgets.md\n"
+(root / "needs-attention.md").write_text(fm + "```yaml\n" + rec("cccccccc") + rec("cccccccc") + rec("dddddddd") + "```\n")
+idx = root / "INDEX.md"; idx.write_text(idx.read_text() + "- [needs-attention](needs-attention.md) — the queue\n")
+PY
+case_run "check-kb warns about two queue records sharing an id, naming the id and both lines" 0 "id cccccccc appears at lines 17 and 21" -- \
+  "$ENGINE/scripts/check-kb" "$QD"
+case_run "check-kb: ...a warning only, exit 0 and no FAIL" 0 "" -- \
+  bash -c '"$1" "$2" | grep -q "^FAIL" && exit 1; exit 0' _ "$ENGINE/scripts/check-kb" "$QD"
+case_run "check-kb: ...one warning for the id, not one per copy" 0 "" -- \
+  bash -c '[ "$("$1" "$2" | grep -c "appears at lines")" = 1 ]' _ "$ENGINE/scripts/check-kb" "$QD"
+case_run "kb-due --nudge counts the duplicated record once" 0 "2 open queue items" -- "$ENGINE/scripts/kb-due" "$QD" --nudge
+case_run "kb-report lists the duplicated record once" 0 "" -- \
+  bash -c 'out=$(HOME="$4-home" "$1" "$2" --out "$3" 2>&1; cat "$3"/*.md); [ "$(printf "%s" "$out" | grep -c "Queue item cccccccc")" = 1 ] && printf "%s" "$out" | grep -q "Queue item dddddddd"' _ "$ENGINE/scripts/kb-report" "$QD" "$QD-out" "$QD"
+sed -i '0,/^- id: cccccccc$/!{s/^- id: cccccccc$/- id: eeeeeeee/}' "$QD/needs-attention.md"
+case_run "check-kb: a queue whose ids are all distinct draws no duplicate warning" 0 "" -- \
+  bash -c '! "$1" "$2" | grep -q "appears at lines"' _ "$ENGINE/scripts/check-kb" "$QD"
+case_run "kb-due --nudge: ...and counts all three" 0 "3 open queue items" -- "$ENGINE/scripts/kb-due" "$QD" --nudge
+case_run "kb-audit Step 3 writes an ID proposed twice in a sweep once" 0 "" -- \
+  bash -c 'sed -n "/^## Step 3/,/^## Step 4/p" "$1" | grep -q "write it once"' _ "$ENGINE/plugins/knowledge-tools/skills/kb-audit/SKILL.md"
+
 # ------------------------------------- kb-schedule: the job runs with the installing PATH (#165) ----
 # A systemd user unit, and cron, start with a bare system PATH, which leaves out ~/.local/bin, where
 # the claude installer puts claude. A Recheck calling such a tool then failed under the timer and was
