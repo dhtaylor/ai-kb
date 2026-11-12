@@ -1,11 +1,13 @@
 # ADR-0020: A library says where the libraries it links to come from, and a consumer's copy is read-only
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-11-11 by the owner (see the note under the title)
 - **Date:** 2026-11-09
 - **Deciders:** Dandy Taylor
 - **Amends:** [0014](0014-library-registry.md) (a registered name can now be checked against the
   origin a link expects); answers part of [0015](0015-releases-and-pinning.md)'s review trigger
 - **Issue:** [#148](https://github.com/dhtaylor/ai-kb/issues/148)
+
+> **Amended 2026-11-11 by the owner:** `--ref` pinning ships in v0.4.0 with steps 1 and 2.
 
 ## Context and problem statement
 
@@ -165,7 +167,7 @@ release is a person's step. This ADR sets the shape; it is delivered in the step
 2. **`links_to` and dependency mismatches** (v0.4.0): contract 2.6, `check-kb`, `check-xlinks`,
    the wider `same_origin`, `kb-library add`'s warnings, outbound links from a read-only library as warnings, and the library
    pull requests declaring 2.6.
-3. **`--ref` pinning** (after v0.4.0): the registry `ref`, `kb-library add --read-only --ref <tag>`
+3. **`--ref` pinning** (v0.4.0): the registry `ref`, `kb-library add --read-only --ref <tag>`
    for a URL and a path, and `kb-library list` showing the ref and a checkout that has moved off it.
 
 Tests first for each, with a fixture registry under a throwaway `HOME`, never the real one.
