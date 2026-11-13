@@ -7,6 +7,7 @@ Covers, within a single root:
   * slug uniqueness   — within-root filename uniqueness; no [[slug]] at a path-addressed file
   * orphans           — every file reachable from the root INDEX.md by router links
   * stamp placement   — no indented Verified:/Recheck: line outside a code fence
+  * recheck syntax    — a Recheck: command that `/bin/sh -n` rejects fails, at every version (§7)
   * verified: floor   — a declared floor equals the one derived from the section stamps (§7);
                         no stamp is dated in the future
   * section provenance — a section with content in a fact file has a Source: line (§6);
@@ -39,7 +40,7 @@ no knowledge content, so there is no sensible default and a silent one would
 report a clean run over zero files.
 Exit 0 clean, 1 on any defect.
 """
-import datetime, pathlib, re, sys
+import datetime, pathlib, re, subprocess, sys
 from collections import Counter
 
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
@@ -243,6 +244,15 @@ def engine_module(name: str, filename: str):
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
     return mod
+
+
+def sh_syntax_error(cmd: str):
+    """The shell's complaint if /bin/sh -n cannot parse `cmd` (nothing runs), else None."""
+    r = subprocess.run(["/bin/sh", "-n", "-c", cmd], capture_output=True, text=True,
+                       env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
+    return (r.stderr.strip() or f"exit {r.returncode}") if r.returncode else None
+
+
 CONTRACT_SECTION = re.compile(r"^## \d+\. Contract versions\n(.*?)(?=^## |\Z)", re.M | re.S)
 CONTRACT_HEADING = re.compile(r"^### (0|[1-9]\d*)\.(0|[1-9]\d*)\s*$")
 
@@ -412,6 +422,8 @@ def main(root: pathlib.Path) -> int:
             warnings.append(f"{message} — fails from contract {fmt(since)} (this library declares "
                             f"{fmt(version)})")
 
+    verify = engine_module("kb_verify", "kb-verify")   # RECHECK: the one definition of what a Recheck: is
+
     # sources/ holds only .md citation stubs (§6); the artifacts they cite are archived under
     # documents/. Only .md files are read below, so a raw file here would pass unseen (issue #71).
     for p in sorted((root / "sources").rglob("*")) if (root / "sources").is_dir() else []:
@@ -461,6 +473,12 @@ def main(root: pathlib.Path) -> int:
         for n, line in enumerate(text.split("\n"), 1):
             if FENCE.match(line):
                 fenced = not fenced
+            elif not fenced and (m := verify.RECHECK.match(line)):
+                # kb-verify runs this under /bin/sh; an unparsable command never ran (#182).
+                # Not gated by contract: it is broken under every version, like an indented stamp.
+                err = sh_syntax_error(m.group(2))
+                if err:
+                    defects.append(f"{f}:{n}: Recheck: command does not parse under /bin/sh: {err}")
             elif not fenced and (m := INDENTED_STAMP.match(line)):
                 defects.append(f"{f}:{n}: indented {m.group(1)}: line — kb-verify reads it only "
                                f"at the start of a line, so this one certifies nothing")

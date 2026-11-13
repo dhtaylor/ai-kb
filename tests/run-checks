@@ -147,6 +147,22 @@ build_clean "$TMP/fencedstamp"
 printf '\n## Example\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n\n- How a stamp looks:\n\n  ```\n  Verified: 2026-09-22 · by: agent · method: manual\n  ```\n' >> "$TMP/fencedstamp/widgets.md"
 case_run "an indented stamp inside a code fence is an example, not a stamp" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fencedstamp"
 
+# Issue #182: kb-verify runs a Recheck under /bin/sh; one the shell cannot parse never ran. check-kb
+# runs `sh -n` on it and names file:line, at every contract version.
+STAMPS='\n## Check\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n'
+build_clean "$TMP/shbad"
+printf "$STAMPS"'Recheck: grep -q '"'"'unterminated widgets.md\n' >> "$TMP/shbad/widgets.md"
+case_run "an unparsable Recheck: fails check-kb, naming file:line" 1 "widgets.md:$(($(wc -l < "$TMP/shbad/widgets.md")+0)): Recheck: command does not parse under /bin/sh" -- "$ENGINE/scripts/check-kb" "$TMP/shbad"
+build_clean "$TMP/shbadatt"
+printf "$STAMPS"'Recheck (attended): grep -q '"'"'unterminated widgets.md\n' >> "$TMP/shbadatt/widgets.md"
+case_run "an unparsable Recheck (attended): fails check-kb too" 1 "Recheck: command does not parse under /bin/sh" -- "$ENGINE/scripts/check-kb" "$TMP/shbadatt"
+build_clean "$TMP/shold"; cp "$TMP/shbad/widgets.md" "$TMP/shold/widgets.md"; sed -i 's/^kb_contract: "2.6"$/kb_contract: "2.0"/' "$TMP/shold/INDEX.md"
+case_run "an unparsable Recheck: fails check-kb under an old contract too" 1 "does not parse under /bin/sh" -- "$ENGINE/scripts/check-kb" "$TMP/shold"
+build_clean "$TMP/shgood"
+printf "$STAMPS"'Recheck: grep -q '"'"'Widgets'"'"' widgets.md && [ -f widgets.md ]\n' >> "$TMP/shgood/widgets.md"
+printf "$STAMPS"'Recheck (attended): [ -n "$HOME" ] || exit 1\n' | sed 's/## Check/## Check two/' >> "$TMP/shgood/widgets.md"
+case_run "parsable Recheck: and Recheck (attended): lines pass check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/shgood"
+
 # Issue #71: sources/ holds only .md citation stubs (§6); a raw artifact (DDL, an ERD export, a
 # PDF) is archived under documents/ and cited with a stub. check-kb read only .md files, so a raw
 # file under sources/ passed silently and the user never learned it was in the wrong place.
