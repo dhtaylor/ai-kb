@@ -17,6 +17,11 @@ engine release it was last verified against in its own release notes.
   before approval, not at the commit hook (#177). The same two fixes, where the defect was present,
   in `kb-update-domain`, `kb-create-domain`, `kb-organize-domain` and `kb-audit`.
 
+- `check-kb` fails a `Recheck:` or `Recheck (attended):` command that `/bin/sh` cannot parse (#182),
+  naming the file, the line and the shell's error. A command with a quoted string split across lines
+  stopped at an unterminated quote and never ran. It checks with `sh -n -c`, the shell `kb-verify`
+  runs it under, using `kb-verify`'s own `RECHECK` pattern. It fails at every contract version, like
+  an indented stamp: no contract bump, because such an assertion was broken under all of them.
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is

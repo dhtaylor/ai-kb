@@ -456,6 +456,10 @@ Verified: 2026-09-19 · by: agent · method: query
   holds only in the default layout and elsewhere fails as though the fact were stale. `kb-verify`
   reports such a path on every run.
 
+  The command must parse: `check-kb` runs `/bin/sh -n -c` on it (the shell `kb-verify` runs it under)
+  and fails one the shell rejects, at every contract version. The assertion is one line, so a quoted
+  string cannot span lines.
+
   An assertion that needs a person (a login, a credential, or a live system the library's owner
   can reach and a stranger cannot) is written `Recheck (attended):`. An attended `kb-verify --yes`
   runs it like any other. A scheduled run (`kb-verify --yes --unattended`) skips it and counts it,
@@ -758,6 +762,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | raw artifacts in `sources/` | `sources/` holds only `.md` citation stubs; an artifact is archived under `documents/` (§6). Fails from contract 2.1, warns below it (§14) | **built** — `check-kb` |
 | contract version | `kb_contract` is a quoted `MAJOR.MINOR`; rules apply by it; a library behind is told what newer versions add, one ahead by a minor is checked by the newest rules known, and an unsupported major fails and is not served (§14) | **built** — `check-kb`, `kb-libraries`, `kb-due` |
 | stamp placement | no indented `Verified:` / `Recheck:` line outside a code fence (§7) | **built** — `check-kb` |
+| re-check syntax | a `Recheck:` / `Recheck (attended):` command parses under `/bin/sh -n`, at every contract version (§7) | **built** — `check-kb` |
 | `verified:` floor | a declared floor equals the one derived from the section stamps; no stamp dated in the future (§7) | **built** — `check-kb` |
 | section provenance | every section with content in a fact file carries a `Source:` line; the intro, parent headings and `CONFLICTED` sections are exempt (§6). Fails from contract 2.5, warns below it (§14) | **built** — `check-kb`, `kb-due` |
 | embedded-fact lint | no facts inlined in the behaviour layer | **built** — `check-embedded-facts` |
@@ -779,7 +784,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one, or a redirect to a sign-in page, as `source-unreachable`, each with its dependants; a `Liveness: manual` stub is counted, never fetched; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
-All twenty-seven are built. A library passing the built checks is **structurally sound within itself**
+All twenty-eight are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
 routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.
 
