@@ -38,6 +38,14 @@ engine release it was last verified against in its own release notes.
   tag and registers it read-only and pinned. A tag the remote no longer has refuses that library
   alone and the rest are still imported, with exit 1 as for any library not imported. An export
   without the keys imports as before.
+- `check-secrets` no longer flags a plain slug in a frontmatter flow list (#183). The `]` closing
+  `keywords: [a2a-setup-external]` was counted as a symbol, so a lowercase hyphenated slug with a digit
+  looked like a mixed-class token. A trailing `]` on a lowercase slug is now ignored; a credential in
+  `keywords:` or `tags:` is still caught. `--file` now resolves its path against the enclosing library,
+  so a non-`.md` file under `documents/` gets the same raw-artifact exemption as `--worktree`; a file
+  outside any library is still checked strictly. `--file PATH --strict` switches the exemption off,
+  and `kb-capture` uses it, so `--from` a library's `documents/` file cannot borrow the exemption for
+  a note filed elsewhere.
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is

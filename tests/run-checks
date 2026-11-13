@@ -2786,6 +2786,61 @@ case_run "check-secrets --file catches a secret" 1 "SECRET?" -- "$ENGINE/scripts
 case_run "check-secrets --file catches PII" 1 "PII?" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-pii.txt"
 case_run "check-secrets --file passes a clean file" 0 "clean" -- "$ENGINE/scripts/check-secrets" --file "$TMP/f-clean.txt"
 
+# #183: a flow-list slug in frontmatter `keywords:`/`tags:` is not a secret, and a real credential in
+# the same field still is. Credentials are assembled at run time, as above.
+kw_lib() { # kw_lib <dir> <keywords-line> -- a library repo with one note carrying that line
+  arc_lib "$1" note.md "$(printf -- '---\nname: n\n%s\n---\nbody' "$2")"
+}
+kw_lib "$TMP/kw1" 'keywords: [a2a-setup-external]'
+case_run "a hyphenated slug in keywords: is not flagged (#183)" 0 "clean" -- \
+  sh -c "cd '$TMP/kw1' && '$ENGINE/scripts/check-secrets' --worktree"
+kw_lib "$TMP/kw2" 'keywords: [alpha, tutorial1-create-helpdesk]'
+printf 'tags: [tutorial1-create-helpdesk, a2a-setup-external]\n' >> "$TMP/kw2/note.md"
+case_run "slugs in a multi-item keywords: and in tags: are not flagged (#183)" 0 "clean" -- \
+  sh -c "cd '$TMP/kw2' && '$ENGINE/scripts/check-secrets' --worktree"
+KWAK=$(printf '%s%s' AKIA ABCDEFGHIJKLMNOP)
+KWGH=$(printf '%s%s' ghp_ abcdefghijklmnopqrstuvwxyz0123456789)
+KWB64="Xk9mQ2vL8n""R4tY7uW1eB""5cH3jF6dA0""sGpZqT7bNx"  # split so this file does not trip the rule
+for kwcase in "aws:keywords: [$KWAK]" "github:keywords: [setup, $KWGH]" "b64:keywords: [setup, $KWB64]" "b64-tail:tags: [$KWB64]"; do
+  kw_lib "$TMP/kw3-${kwcase%%:*}" "${kwcase#*:}"
+  case_run "a real credential in a keywords:/tags: list is still flagged: ${kwcase%%:*} (#183)" 1 "SECRET?" -- \
+    sh -c "cd '$TMP/kw3-${kwcase%%:*}' && '$ENGINE/scripts/check-secrets' --worktree"
+done
+# --file resolves the file against its enclosing library, so it agrees with --worktree (#183).
+arc_lib "$TMP/kw4" documents/schema/dump.sql "$IDENTS"
+case_run "--worktree passes a documents/ artifact in a library (#183)" 0 "clean" -- \
+  sh -c "cd '$TMP/kw4' && '$ENGINE/scripts/check-secrets' --worktree"
+case_run "--file agrees: the same artifact passes, given by relative path (#183)" 0 "clean" -- \
+  sh -c "cd '$TMP/kw4' && '$ENGINE/scripts/check-secrets' --file documents/schema/dump.sql"
+case_run "--file agrees: the same artifact passes, given by absolute path from elsewhere (#183)" 0 "clean" -- \
+  sh -c "cd / && '$ENGINE/scripts/check-secrets' --file '$TMP/kw4/documents/schema/dump.sql'"
+printf '%s\n' "$IDENTS" > "$TMP/kw4/dump.sql"
+case_run "--file still checks a non-documents/ file in a library strictly (#183)" 1 "SECRET?" -- \
+  "$ENGINE/scripts/check-secrets" --file "$TMP/kw4/dump.sql"
+mkdir -p "$TMP/kw5/documents"; printf '%s\n' "$IDENTS" > "$TMP/kw5/documents/dump.sql"
+case_run "--file on the same content outside any library is still flagged (#183)" 1 "SECRET?" -- \
+  "$ENGINE/scripts/check-secrets" --file "$TMP/kw5/documents/dump.sql"
+mkdir -p "$TMP/kw6/documents"; git init -q "$TMP/kw6"; printf '%s\n' "$IDENTS" > "$TMP/kw6/documents/dump.sql"
+case_run "--file on the same content in a git repo that is not a library is still flagged (#183)" 1 "SECRET?" -- \
+  "$ENGINE/scripts/check-secrets" --file "$TMP/kw6/documents/dump.sql"
+printf 'x\n%s = %s\n' "pass""word" "$CAPPW" > "$TMP/kw4/documents/leak.sql"
+case_run "--file on a library artifact still catches a labelled secret (#183)" 1 "SECRET?" -- \
+  "$ENGINE/scripts/check-secrets" --file "$TMP/kw4/documents/leak.sql"
+# The exemption follows where content is STORED: kb-capture files an episodic note, so its scan is
+# --strict and a --from file under a library's documents/ gets no exemption (#183).
+cap_tree "$TMP/kw7"
+printf 'row id %s\n' "$KWB64" > "$TMP/kw4/documents/token.sql"
+case_run "--file without --strict exempts a bare token in a library's documents/ file (#183)" 0 "clean" -- \
+  "$ENGINE/scripts/check-secrets" --file "$TMP/kw4/documents/token.sql"
+case_run "--file --strict flags it (#183)" 1 "SECRET?" -- \
+  "$ENGINE/scripts/check-secrets" --file "$TMP/kw4/documents/token.sql" --strict
+case_run "kb-capture --from a library's documents/ artifact with a bare token is refused (#183)" 1 "REFUSED" -- \
+  bash -c "cd '$TMP/kw7' && '$ENGINE/scripts/kb-capture' --title 'artifact' --from '$TMP/kw4/documents/token.sql'"
+# A stray GIT_DIR/GIT_WORK_TREE must not make --file believe a file sits in a library (#183).
+mkdir -p "$TMP/kw8/documents"; printf -- '---\ndomain: x\n---\n' > "$TMP/kw8/INDEX.md"; printf '%s\n' "$IDENTS" > "$TMP/kw8/documents/dump.sql"
+case_run "--file stays strict when GIT_DIR/GIT_WORK_TREE point at a library for a non-repo directory (#183)" 1 "SECRET?" -- \
+  env GIT_DIR="$TMP/kw4/.git" GIT_WORK_TREE="$TMP/kw8" "$ENGINE/scripts/check-secrets" --file "$TMP/kw8/documents/dump.sql"
+
 # ------------------------------------------------------------ grade-routing ----
 # The agent tier of the routing check, graded from a subagent transcript's tool calls. The
 # transcripts are SYNTHETIC: assistant records whose message.content holds tool_use blocks,
