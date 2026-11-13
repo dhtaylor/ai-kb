@@ -4,6 +4,13 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
+## Unreleased
+
+- `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
+  one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
+  A fixture origin written into a temp library, with the grep run on a local script's output, is
+  left alone. A fetch is still judged against the URL it fetches, not a fixture URL beside it.
+
 ## v0.4.0 — 2026-11-12
 
 Changes since v0.3.0. A minor release: it adds contract 2.6 and the checks that go with it (ADR-0015).

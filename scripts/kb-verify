@@ -121,6 +121,9 @@ STAMP = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})\s*·\s*by:\s*(\S+)\s*·\s*
 RECHECK = re.compile(r"^Recheck(\s*\(attended\))?:\s*(.+?)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 URL = re.compile(r"https?://[^\s'\"|;)<>]+")
+# A command fetches when it runs one of these (issue #185); a URL that is only text in it (a
+# fixture origin, an echoed string) does not make it a fetch.
+FETCHER = re.compile(r"(?<![\w./-])(curl|wget|https?|xh)(?![\w.-]|://)|\b(urlopen|urlretrieve|urllib|requests|httpx|aiohttp)\b")
 SHORT_FRAGMENT = 4      # words; 26 of 31 fragments in the #34 sample were 1-4 words long
 REUSE_LIMIT = 2         # sections one (url, fragment) pair may back, all in one file (#41)
 TODAY = datetime.date.today()
@@ -419,13 +422,17 @@ def weak_rechecks(root: pathlib.Path, sections: list) -> list:
     (url, fragment) pair backing many sections or sections in several files. Either passes
     for as long as the page exists, which says nothing about the claim. Static — nothing is
     fetched or run — and a warning, never a failure: a heuristic must not block a sweep.
-    Only commands that name a URL and grep it are judged; a local query is left alone.
+    Only commands that fetch a URL (run curl, wget, http, xh, or a python urllib, requests or
+    httpx call) and grep it are judged. A URL that is only text in the command, such as a fixture
+    origin written to a temp library, is not a fetch, and nor is a local query (issue #185).
     A short pattern that binds two runs of text — split by markup, or outside -F by regex —
     tests a relation (a field and its value), not a title, and is not flagged; an
     alternation is as weak as its weakest branch (issue #65)."""
     out, pairs = [], {}
     for s in sections:
-        url, frag = URL.search(s["cmd"] or ""), grep_fragment(s["cmd"] or "")
+        cmd = s["cmd"] or ""
+        fetch, frag = FETCHER.search(cmd), grep_fragment(cmd)
+        url = fetch and (URL.search(cmd, fetch.end()) or URL.search(cmd))
         if not (url and frag):
             continue
         where = f"{s['file'].relative_to(root)} § {s['heading']}"
