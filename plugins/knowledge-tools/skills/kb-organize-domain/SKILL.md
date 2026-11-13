@@ -119,12 +119,12 @@ the domain has no oracle at all.
 
 Run the engine's checks and report each one's output verbatim:
 
-- `scripts/check-kb <library>`;
-- `scripts/check-golden <library>` — the golden set still names files that exist and excerpts they
+- `scripts/check-kb <library-path>` (the library's path, not its name);
+- `scripts/check-golden <library-path>` — the golden set still names files that exist and excerpts they
   contain, which is Step 6 proved rather than asserted;
 - `scripts/check-xlinks --installed` — no registered library still points at an old slug
   (add its path after `--installed` if it is not registered yet, or if it is a project tree);
-- `scripts/check-scope <library>`.
+- `scripts/check-scope <library-path>`.
 
 **A check that already failed before you started is not yours to fix.** Run the checks before your
 first change as well as after; report a pre-existing failure as pre-existing, and leave it. Fixing it

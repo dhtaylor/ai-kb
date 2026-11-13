@@ -11,6 +11,12 @@ engine release it was last verified against in its own release notes.
   `GIT_CONFIG_GLOBAL`/`SYSTEM`/`NOSYSTEM` and author and committer variables at start, as it clears
   git's repository environment (#127), and a case fails if one survives. With `KB_LIBRARY_HOME`
   exported, five `kb-library` cases had failed.
+- `kb-distill` Step 7 and its "Resuming from a review packet" now name `check-kb`'s argument as the
+  library's path (a bare name finds no files), and run `check-golden` before the approval gate and
+  again after any edit the reviewer makes there, so a golden case quoting removed text is caught
+  before approval, not at the commit hook (#177). The same two fixes, where the defect was present,
+  in `kb-update-domain`, `kb-create-domain`, `kb-organize-domain` and `kb-audit`.
+
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is

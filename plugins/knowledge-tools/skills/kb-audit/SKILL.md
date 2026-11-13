@@ -26,15 +26,15 @@ holding exactly one. Write facts into a library, never into the engine.
 
 Run the engine's checks and report each one's output verbatim:
 
-- `scripts/check-kb <library>` — frontmatter completeness, `name`/filename agreement, link
+- `scripts/check-kb <library-path>` — frontmatter completeness, `name`/filename agreement, link
   resolution, within-library slug uniqueness, and **orphans**: every file reachable from the root
   `INDEX.md` by router links (the golden set and `documents/` exempt);
-- `scripts/check-scope <library>` — scope values well-formed and in agreement with the library;
-- `scripts/check-golden <library>` — every golden record well-formed, its file present, its excerpt
+- `scripts/check-scope <library-path>` — scope values well-formed and in agreement with the library;
+- `scripts/check-golden <library-path>` — every golden record well-formed, its file present, its excerpt
   present in that file;
 - `scripts/check-xlinks --installed` — `[[library:slug]]` references into the libraries registered
   on this machine, wherever each lives (add its path after `--installed` if it is not registered yet, or if it is a project tree);
-- `scripts/check-transient <library>` — fact-file headings carrying a date or a ticket id, the
+- `scripts/check-transient <library-path>` — fact-file headings carrying a date or a ticket id, the
   shapes a changelog or a snapshot takes in a file that should state current state (#136). Each
   hit is a `transient content` finding. Judge each one: a dated heading can be right, such as a
   release date or a legal effective date. Queue it unless the date is the subject.
@@ -298,7 +298,7 @@ When a person asks you to review a packet, this is the decide half, and it is al
    has decided.
 4. Write only the approved records, as Step 3 says (the queue's frontmatter and its router line).
    Set `last_swept` to the packet's `prepared:` date, when the sweep was done, as Step 4 says.
-5. Run `scripts/check-kb <library>`, show the diff, and commit only on approval.
+5. Run `scripts/check-kb <library-path>`, show the diff, and commit only on approval.
 6. Run `kb-apply done <packet> applied`, or `rejected` if the person discards the sweep.
 
 ## Refusals
