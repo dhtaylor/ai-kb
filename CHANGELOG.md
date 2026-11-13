@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `tests/run-checks` no longer depends on the caller's environment for the engine's own variables
+  (#181). It clears `KB_LIBRARY_HOME`, `KB_ENGINE_ROOT`, `KB_SYSTEMCTL`, `KB_CRONTAB` and git's
+  `GIT_CONFIG_GLOBAL`/`SYSTEM`/`NOSYSTEM` and author and committer variables at start, as it clears
+  git's repository environment (#127), and a case fails if one survives. With `KB_LIBRARY_HOME`
+  exported, five `kb-library` cases had failed.
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is
