@@ -267,6 +267,24 @@ at install (`--watch`; the engine's `watcher/allowlist.json` by default). Then i
 report, open it. For a packet, ask a session to review it: the skill re-checks it, asks you to
 decide each item, and only then writes.
 
+If you work through the report in one weekly sitting, you can keep the nudge out of the other days.
+`kb.nudge` in the machine registry sets when session start shows it (`$KB_NUDGE` overrides it):
+
+```bash
+git config --file ~/.config/ai-kb/libraries kb.nudge weekly:mon   # or: always (default), off
+```
+
+| Value | Session start |
+|---|---|
+| `always` | the nudge every session (the default) |
+| `weekly:<day>` | the nudge on that local weekday (`mon`..`sun`, or the full name, any case); other days, one line saying so, with the latest `kb-report` |
+| `off` | never; one line saying so |
+
+A value that is not one of these is named in the session-start message and treated as `always`. The
+setting changes only what session start shows. A library that is not served, an unreadable registry
+and an unmigrated machine are reported whatever it says, and `kb-due --nudge`, `kb-schedule` and
+`kb-report` ignore it.
+
 ### Commands you can schedule
 
 A command is **schedulable** when it is safe to run unattended, from cron, a systemd timer or

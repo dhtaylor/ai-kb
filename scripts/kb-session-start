@@ -98,13 +98,50 @@ fi
 # One kb-due run gives the full nudge (for the model) and, as its last line, the same nudge
 # condensed for the person (issue #79: additionalContext reaches only the model). A kb-due that
 # fails gives neither: a partial nudge is worse than none, and the session must still start.
+#
+# When the nudge is shown is the person's choice (issue #174): kb.nudge in the registry, or $KB_NUDGE
+# over it. always (default) | weekly:<day> | off. It gates only this hook; kb-due --nudge on demand,
+# kb-schedule and kb-report are unaffected, and the library-health messages above and below are
+# never gated, because they change what retrieval can serve. $KB_TODAY (YYYY-MM-DD) stands in for
+# today's date, so a test need not depend on the weekday it runs on.
+nudge_setting="${KB_NUDGE:-$(git config --file "$HOME/.config/ai-kb/libraries" --get kb.nudge 2>/dev/null || true)}"
+nudge_setting="$(printf '%s' "${nudge_setting:-always}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+show_nudge=1; nudge_line=""; nudge_warn=""
+case "$nudge_setting" in
+  always) ;;
+  off) show_nudge=0
+       nudge_line="The librarian's nudge is off on this machine (kb.nudge=off). Do not start upkeep unprompted; kb-due --nudge reports what is due on demand." ;;
+  weekly:*)
+    want="${nudge_setting#weekly:}"
+    case "$want" in
+      mon|monday) want=mon ;; tue|tues|tuesday) want=tue ;; wed|wednesday) want=wed ;;
+      thu|thur|thurs|thursday) want=thu ;; fri|friday) want=fri ;; sat|saturday) want=sat ;;
+      sun|sunday) want=sun ;; *) want="" ;;
+    esac
+    if [ -z "$want" ]; then
+      nudge_warn="kb.nudge '${nudge_setting}' is not a weekday (use weekly:mon .. weekly:sun) — showing the nudge every session."
+    else
+      today=$(LC_ALL=C date ${KB_TODAY:+-d "$KB_TODAY"} +%a 2>/dev/null | tr '[:upper:]' '[:lower:]')
+      if [ "$today" != "$want" ]; then
+        show_nudge=0
+        latest=$(ls -1 "${KB_REPORTS:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-kb/reports}"/*.md 2>/dev/null | sort | tail -n 1)
+        nudge_line="The librarian's nudge is weekly (kb.nudge=weekly:${want}) and is not shown today. Do not start upkeep unprompted; kb-due --nudge reports what is due on demand.${latest:+ Latest kb-report: ${latest}}"
+      fi
+    fi ;;
+  *) nudge_warn="kb.nudge '${nudge_setting}' is not one of always, weekly:<day>, off — showing the nudge every session." ;;
+esac
 due=""; summary=""
-if [ "$event" = SessionStart ] && out=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge --summary 2>/dev/null); then
+if [ "$event" = SessionStart ] && [ "$show_nudge" = 1 ] && out=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge --summary 2>/dev/null); then
   due="$out"
   case "${out##*$'\n'}" in
     "KB due — "*) summary="${out##*$'\n'}"; due="${out%$'\n'*}" ;;
   esac
 fi
+[ "$event" = SessionStart ] || { nudge_line=""; nudge_warn=""; }
+[ -n "$nudge_line" ] && nudge_line="
+${nudge_line}"
+[ -n "$nudge_warn" ] && nudge_line="
+WARNING: ${nudge_warn}"
 [ -n "$due" ] && due="
 Due for a librarian's attention — nothing printed here means nothing is due:
 ${due}"
@@ -114,8 +151,9 @@ msg=""
   msg="${nbroken} registered knowledge librar$([ "$nbroken" -eq 1 ] && echo y || echo ies) not available — run kb-library list."
 case "$registry" in unreadable*) [ "$event" = SessionStart ] && msg="The knowledge library registry could not be read — run kb-library list." ;; esac
 [ -n "$unmigrated" ] && [ "$event" = SessionStart ] && msg="Knowledge libraries in ${engine}/kb/ are not registered yet — run kb-bootstrap --apply."
+[ -n "$nudge_warn" ] && msg="${msg:+$msg · }${nudge_warn}"
 [ -n "$summary" ] && msg="${msg:+$msg · }${summary}"   # an error first, then what is due
 emit "Knowledge engine resolves to: ${engine}
 Contract: ${engine}/CONVENTIONS.md — load it before curating or retrieving. Use these absolute paths directly with the Read tool; it does not expand \$KB_ENGINE_ROOT.
 Domain libraries registered on this machine (${count}):${libs}${broken}${unmigrated}
-Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${rohint}${due}" "$msg"
+Each library is its own repository and is self-contained: its facts, its sources, its evidence and its golden set travel together. A reference of the form repo:path (e.g. ai-kb:CONVENTIONS.md) names another repository and is not a filesystem path.${rohint}${nudge_line}${due}" "$msg"
