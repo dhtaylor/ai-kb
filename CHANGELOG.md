@@ -22,6 +22,10 @@ engine release it was last verified against in its own release notes.
   stopped at an unterminated quote and never ran. It checks with `sh -n -c`, the shell `kb-verify`
   runs it under, using `kb-verify`'s own `RECHECK` pattern. It fails at every contract version, like
   an indented stamp: no contract bump, because such an assertion was broken under all of them.
+- CONVENTIONS §6 says a source may appear on more than one `Source:` line in a section when each line
+  backs a different claim, each with its own `Verified:` stamp (#175). The stale and unstamped-fact
+  locus `<heading>|<source>` gives those stamps one ID, so one queue record covers them and resolving
+  it means re-checking each one. `kb-audit` Step 3 says the same. No check changed.
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is

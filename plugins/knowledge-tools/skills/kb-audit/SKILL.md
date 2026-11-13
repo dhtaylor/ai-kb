@@ -180,7 +180,8 @@ Each item carries:
   Compute it (`printf '%s' 'orphan|webhooks.md|-' | sha1sum | cut -c1-8`); never invent it;
   - **an ID already proposed in this sweep is the same finding**: write it once. That record covers
     every `Source:` line of that source in the section, so a section citing one source twice is one
-    record, and resolving it means fixing each such stamp;
+    record (§6 allows one source to back two claims, each with its own stamp), and resolving it means
+    re-checking, and re-stamping, each such stamp;
 - a **status**: `open`, `acknowledged`, `resolved`. An acknowledged item is not re-raised unless its
   underlying source changes;
 - the **owner**, resolved with `scripts/kb-owner <tree> <file>` — never by reading CODEOWNERS
