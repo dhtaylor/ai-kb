@@ -33,6 +33,11 @@ engine release it was last verified against in its own release notes.
   one of these warns in the session-start message and acts as `always`. A library that is not served,
   an unreadable registry and an unmigrated machine are reported whatever the setting; `kb-due --nudge`
   by hand, `kb-schedule` and `kb-report` ignore it.
+- `kb-library export` and `import` carry a library's read-only mode and pinned tag (#178). Export
+  writes `readOnly` and `ref` for each library that has them; import clones such a library at its
+  tag and registers it read-only and pinned. A tag the remote no longer has refuses that library
+  alone and the rest are still imported, with exit 1 as for any library not imported. An export
+  without the keys imports as before.
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is
