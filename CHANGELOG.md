@@ -26,6 +26,13 @@ engine release it was last verified against in its own release notes.
   backs a different claim, each with its own `Verified:` stamp (#175). The stale and unstamped-fact
   locus `<heading>|<source>` gives those stamps one ID, so one queue record covers them and resolving
   it means re-checking each one. `kb-audit` Step 3 says the same. No check changed.
+- Session start can show the librarian's nudge less often (#174). `kb.nudge` in
+  `~/.config/ai-kb/libraries` (or `$KB_NUDGE` over it) is `always` (default, output unchanged),
+  `weekly:<day>` or `off`. On the days it is not shown, the block and the `KB due —` line are replaced
+  by one line to the model saying so, with the path of the latest `kb-report`. A value that is not
+  one of these warns in the session-start message and acts as `always`. A library that is not served,
+  an unreadable registry and an unmigrated machine are reported whatever the setting; `kb-due --nudge`
+  by hand, `kb-schedule` and `kb-report` ignore it.
 - `kb-verify`'s `WEAK` check no longer judges an assertion that only contains a URL (#185). It judges
   one that fetches it: `curl`, `wget`, `http`, `xh`, or a python `urllib`, `requests` or `httpx` call.
   A fixture origin written into a temp library, with the grep run on a local script's output, is

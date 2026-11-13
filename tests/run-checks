@@ -1928,6 +1928,67 @@ case_run "kb-session-start --subagent: carries no librarian nudge" 1 "" -- \
   bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" --subagent | grep -qF "Due for a librarian"' _ \
   "$TMP/session-cwd" "$SHOME" "$SFX/scripts/kb-session-start"
 
+# Issue #174: when the session-start nudge is shown is a per-user setting, kb.nudge in the registry
+# (or $KB_NUDGE over it): always (default) | weekly:<day> | off. Only the hook reads it. The date is
+# injected as $KB_TODAY (2026-11-09 is a Monday), so nothing here depends on the weekday it runs.
+# SHOME's libfuture is not served, so every case also shows a blocking problem that must survive.
+snudge() { # snudge <msg|ctx> <env VAR=val ...>  (SHOME, SFX; a fresh hermetic env each time)
+  local w="$1"; shift
+  (cd "$TMP/session-cwd" && env -i HOME="$SHOME" PATH="$PATH" "$@" "$SFX/scripts/kb-session-start") |
+    python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("systemMessage","<none>") if sys.argv[1]=="msg" else d["hookSpecificOutput"]["additionalContext"])' "$w"
+}
+export -f snudge; export SHOME SFX
+case_run "nudge setting: default shows the block, byte-identical with 'always'" 0 "" -- \
+  bash -c 'a=$(snudge ctx); b=$(snudge ctx KB_NUDGE=always); [ "$a" = "$b" ] && grep -q "Due for a librarian" <<<"$a" && ! grep -q "kb.nudge" <<<"$a"'
+case_run "nudge setting: off drops the block" 1 "" -- \
+  bash -c 'snudge ctx KB_NUDGE=off | grep -qF "Due for a librarian"'
+case_run "nudge setting: off drops the KB due summary" 1 "" -- \
+  bash -c 'snudge msg KB_NUDGE=off | grep -qF "KB due"'
+case_run "nudge setting: off still shows a library that is not served" 0 "1 registered knowledge library not available" -- \
+  snudge msg KB_NUDGE=off
+case_run "nudge setting: off still names the library in the context" 0 "Registered but NOT served" -- \
+  snudge ctx KB_NUDGE=off
+case_run "nudge setting: off says so, without claiming nothing is due" 0 "kb.nudge=off" -- \
+  snudge ctx KB_NUDGE=off
+case_run "nudge setting: weekly:mon on a Monday shows the full nudge" 0 "libdue: 1 fact due for recheck" -- \
+  snudge ctx KB_NUDGE=weekly:mon KB_TODAY=2026-11-09
+case_run "nudge setting: weekly:mon on a Monday shows the KB due summary" 0 "KB due — " -- \
+  snudge msg KB_NUDGE=weekly:mon KB_TODAY=2026-11-09
+case_run "nudge setting: a full day name, any case, matches" 0 "libdue: 1 fact due for recheck" -- \
+  snudge ctx KB_NUDGE=Weekly:Monday KB_TODAY=2026-11-09
+case_run "nudge setting: weekly:mon on a Tuesday drops the block" 1 "" -- \
+  bash -c 'snudge ctx KB_NUDGE=weekly:mon KB_TODAY=2026-11-10 | grep -qF "Due for a librarian"'
+case_run "nudge setting: weekly:mon on a Tuesday drops the summary" 1 "" -- \
+  bash -c 'snudge msg KB_NUDGE=weekly:mon KB_TODAY=2026-11-10 | grep -qF "KB due"'
+case_run "nudge setting: weekly:mon on a Tuesday says it is weekly, without claiming nothing is due" 0 "weekly:mon) and is not shown today" -- \
+  snudge ctx KB_NUDGE=weekly:mon KB_TODAY=2026-11-10
+case_run "nudge setting: ...and still shows the unserved library" 0 "1 registered knowledge library not available" -- \
+  snudge msg KB_NUDGE=weekly:mon KB_TODAY=2026-11-10
+NHOME="$TMP/session-home-reports"; mkdir -p "$NHOME/reports"; touch "$NHOME/reports/2026-W44.md" "$NHOME/reports/2026-W45.md"
+case_run "nudge setting: the quiet line points at the latest kb-report" 0 "Latest kb-report: $NHOME/reports/2026-W45.md" -- \
+  snudge ctx KB_NUDGE=weekly:mon KB_TODAY=2026-11-10 KB_REPORTS="$NHOME/reports"
+case_run "nudge setting: an invalid value warns to the person" 0 "kb.nudge 'weekly:someday' is not a weekday" -- \
+  snudge msg KB_NUDGE=weekly:someday
+case_run "nudge setting: ...and falls back to showing the nudge" 0 "libdue: 1 fact due for recheck" -- \
+  snudge ctx KB_NUDGE=weekly:someday
+case_run "nudge setting: an unknown word warns and falls back" 0 "is not one of always, weekly:<day>, off" -- \
+  snudge msg KB_NUDGE=sometimes
+# The registry key is what a person sets; $KB_NUDGE only overrides it.
+NHOME2="$TMP/session-home-nudge"; rm -rf "$NHOME2"; cp -r "$SHOME" "$NHOME2"
+git config --file "$NHOME2/.config/ai-kb/libraries" kb.nudge off
+case_run "nudge setting: kb.nudge in the registry is read" 1 "" -- \
+  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
+  "$TMP/session-cwd" "$NHOME2" "$SFX/scripts/kb-session-start"
+case_run "nudge setting: \$KB_NUDGE overrides the registry" 0 "Due for a librarian" -- \
+  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" KB_NUDGE=always "$3"' _ \
+  "$TMP/session-cwd" "$NHOME2" "$SFX/scripts/kb-session-start"
+case_run "nudge setting: --subagent is unchanged by a setting" 0 "libdue -> $SFX/kb/libdue" -- \
+  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" --subagent' _ \
+  "$TMP/session-cwd" "$NHOME2" "$SFX/scripts/kb-session-start"
+# On demand, kb-due --nudge ignores the setting entirely.
+case_run "nudge setting: kb-due --nudge by hand ignores kb.nudge=off" 0 "libdue: 1 fact due for recheck" -- \
+  env HOME="$NHOME2" KB_NUDGE=off "$SFX/scripts/kb-due" --nudge
+
 # --------------------------------------------------------- check-secrets ----
 # The check with the most expensive failure, and until now the only one with no
 # case here. The fixture's credential is ASSEMBLED at run time: written literally,
