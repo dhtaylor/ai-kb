@@ -2778,6 +2778,21 @@ printf 'Example only: %s = %s  lint-allow: documented example\n' "pass""word" "$
 case_run "kb-capture files a note whose flagged line carries lint-allow" 0 "filed" -- \
   bash -c "cd '$TMP/cap4' && '$ENGINE/scripts/kb-capture' --title 'example' --from '$TMP/cap-allow.txt'"
 
+# Issue #194: the empty-note check removed comments by line range, so a one-line <!-- … --> opened a
+# range that ran to the next `-->` or end of file, and a note with content was refused as empty.
+cap_tree "$TMP/cap194"
+printf '## What happened\n\nHost INST01 was read. <!-- lint-allow: instance name -->\n' > "$TMP/cap194-a.txt"
+case_run "kb-capture files a note whose only content line has an inline comment (#194)" 0 "filed" -- \
+  bash -c "cd '$TMP/cap194' && '$ENGINE/scripts/kb-capture' --title 'inline a' --from '$TMP/cap194-a.txt'"
+printf '## What happened\n\n<!-- a note to self -->\n- A later observation.\n' > "$TMP/cap194-b.txt"
+case_run "kb-capture counts content after a one-line comment (#194)" 0 "filed" -- \
+  bash -c "cd '$TMP/cap194' && '$ENGINE/scripts/kb-capture' --title 'inline b' --from '$TMP/cap194-b.txt'"
+printf '## What happened\n\n<!-- one -->\n<!-- two\n     lines -->\n\n## Also\n' > "$TMP/cap194-c.txt"
+case_run "kb-capture still refuses a note of headings and comments only (#194)" 1 "no content" -- \
+  bash -c "cd '$TMP/cap194' && '$ENGINE/scripts/kb-capture' --title 'empty c' --from '$TMP/cap194-c.txt'"
+case_run "kb-capture still refuses the template saved unchanged (#194)" 1 "no content" -- \
+  bash -c "cd '$TMP/cap194' && EDITOR=true VISUAL=true '$ENGINE/scripts/kb-capture' --title 'empty d' </dev/null"
+
 # check-secrets --file: the same three passes on one file.
 printf 'ok\n%s = %s\n' "pass""word" "$CAPPW" > "$TMP/f-secret.txt"
 printf 'mail jane.doe@corp''mail.io please\n' > "$TMP/f-pii.txt"
