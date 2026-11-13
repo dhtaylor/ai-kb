@@ -3034,6 +3034,38 @@ case_run "import: ...the existing entry is untouched" 0 "$P2/c/delta" -- \
   git config --file "$P2C/.config/ai-kb/libraries" --get library.delta.path
 case_run "import: ...and the other library still came in" 0 "ok	epsilon	" -- env HOME="$P2C" "$ENGINE/scripts/kb-libraries"
 
+# Issue #178: export and import carry a library's read-only mode and its pinned tag
+build_clean "$P2/up/pinned"; git -C "$P2/up/pinned" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
+git -C "$P2/up/pinned" tag v1; PIN_V1="$(git -C "$P2/up/pinned" rev-parse v1)"
+git -C "$P2/up/pinned" -c user.email=t@t -c user.name=t commit -q --allow-empty -m later >/dev/null 2>&1
+P2D="$P2/home-d"; p2d() { HOME="$P2D" "$ENGINE/scripts/kb-library" "$@"; }
+p2d add "file://$P2/up/pinned" --read-only --ref v1 --into "$P2/machine-d" >/dev/null
+p2d add "file://$P2/up/delta" --into "$P2/machine-d" >/dev/null
+p2d export > "$P2/export-pin"
+case_run "export: a pinned read-only library carries readOnly" 0 "true" -- git config --file "$P2/export-pin" --get library.pinned.readOnly
+case_run "export: ...and its ref" 0 "v1" -- git config --file "$P2/export-pin" --get library.pinned.ref
+case_run "export: a curated library has neither key" 1 "" -- git config --file "$P2/export-pin" --get-regexp '^library\.delta\.(readonly|ref)$'
+P2E="$P2/home-e"; p2e() { HOME="$P2E" "$ENGINE/scripts/kb-library" "$@"; }
+case_run "import: recreates a pinned library" 0 "2 registered" -- p2e import "$P2/export-pin" --into "$P2/machine-e"
+case_run "import: ...registered read-only" 0 "true" -- git config --file "$P2E/.config/ai-kb/libraries" --get library.pinned.readOnly
+case_run "import: ...with the ref recorded" 0 "v1" -- git config --file "$P2E/.config/ai-kb/libraries" --get library.pinned.ref
+case_run "import: ...HEAD at the tag's commit, not the branch tip" 0 "$PIN_V1" -- git -C "$P2/machine-e/pinned" rev-parse HEAD
+case_run "import: ...a curated library stays curated" 1 "" -- git config --file "$P2E/.config/ai-kb/libraries" --get library.delta.readOnly
+# a tag the remote no longer has refuses that library alone
+git config --file "$P2/export-gone" library.pinned.origin "file://$P2/up/pinned"
+git config --file "$P2/export-gone" library.pinned.readOnly true
+git config --file "$P2/export-gone" library.pinned.ref v9
+git config --file "$P2/export-gone" library.epsilon.origin "file://$P2/up/epsilon"
+P2F="$P2/home-f"
+case_run "import: a ref missing on the remote refuses that library (exit 1)" 1 "has no tag v9" -- \
+  env HOME="$P2F" "$ENGINE/scripts/kb-library" import "$P2/export-gone" --into "$P2/machine-f"
+case_run "import: ...and the others still came in" 0 "ok	epsilon	" -- env HOME="$P2F" "$ENGINE/scripts/kb-libraries"
+case_run "import: ...the refused one was not cloned or registered" 1 "" -- test -e "$P2/machine-f/pinned"
+git config --file "$P2/export-old" library.epsilon.origin "file://$P2/up/epsilon"
+case_run "import: an export without readOnly or ref imports as before" 0 "1 registered" -- \
+  env HOME="$P2/home-g" "$ENGINE/scripts/kb-library" import "$P2/export-old" --into "$P2/machine-g"
+case_run "import: ...curated, on its default branch" 1 "" -- git config --file "$P2/home-g/.config/ai-kb/libraries" --get-regexp '^library\.epsilon\.(readonly|ref)$'
+
 # ----------------------------------------- consumers read the registry (ADR-0014) ----
 # Two libraries registered OUTSIDE any engine's kb/, in different folders, one through a
 # symlink; and an unregistered library sitting in the engine's kb/, which nothing may see.

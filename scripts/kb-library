@@ -34,10 +34,14 @@ engine's library hook), which git never commits or clones.
                   registry (kb-bootstrap records it), else <engine>/kb.
   export          every registered library's name and origin, never its path (paths differ
                   between machines), in git-config format. A library with no origin is a comment.
+                  A read-only library also gets `readOnly = true`, and a pinned one its `ref`.
   import <file> [--into DIR]
                   clone every library in an export that is not registered here into the library
                   home (or DIR), and register it. A name registered here with another origin is
-                  reported and skipped, never overwritten.
+                  reported and skipped, never overwritten. A library the export marks `readOnly`
+                  is registered read-only, and one with a `ref` is cloned at that tag (and pinned
+                  to it); a tag the remote no longer has refuses that library alone, and the rest
+                  are still imported. An export without those keys imports as it always did.
 
 When `add` registers a library, it compares the library's root `keywords:` and `tags:` with every
 other registered library's, and warns when two overlap enough to blur routing (see OVERLAP below).
@@ -182,13 +186,19 @@ def clone(url: str, dest: pathlib.Path, branch=None):
     return dest
 
 
+def tag_on_remote(url: str, ref: str) -> bool:
+    """Whether url has tag ref; says why and returns False when it cannot tell or it has not."""
+    r = git("ls-remote", "--tags", url, f"refs/tags/{ref}")
+    if r.returncode != 0:
+        print(f"kb-library: cannot read tags of {url}: {r.stderr.strip()} — nothing cloned"); return False
+    if not r.stdout.strip():
+        print(f"kb-library: {url} has no tag {ref} — nothing cloned"); return False
+    return True
+
+
 def add_url(url: str, into, read_only=False, ref="") -> int:
-    if ref:
-        r = git("ls-remote", "--tags", url, f"refs/tags/{ref}")
-        if r.returncode != 0:
-            print(f"kb-library: cannot read tags of {url}: {r.stderr.strip()} — nothing cloned"); return 1
-        if not r.stdout.strip():
-            print(f"kb-library: {url} has no tag {ref} — nothing cloned"); return 1
+    if ref and not tag_on_remote(url, ref):
+        return 1
     into = pathlib.Path(into).expanduser() if into else KL.library_home(ENGINE)
     name = re.sub(r"\.git$", "", url.rstrip("/").rsplit("/", 1)[-1].rsplit(":", 1)[-1])
     path = clone(url, into / name, ref or None)
@@ -331,8 +341,12 @@ def export() -> int:
         for e in rows:
             if e["origin"]:
                 git("config", "--file", str(out), f"library.{e['name']}.origin", e["origin"])
+                if e["read_only"]:
+                    git("config", "--file", str(out), f"library.{e['name']}.readOnly", "true")
+                if e["ref"]:
+                    git("config", "--file", str(out), f"library.{e['name']}.ref", e["ref"])
         body = out.read_text()
-    print("# kb-library export: name and origin of each library registered on a machine.")
+    print("# kb-library export: name and origin of each library registered on a machine, and its read-only mode and pinned ref when it has them.")
     print("# Paths are left out, because they differ between machines. On another machine:")
     print("#   kb-library import <this file> [--into DIR]")
     for e in rows:
@@ -346,11 +360,15 @@ def import_(file: str, into) -> int:
     r = git("config", "--file", file, "--null", "--list")
     if r.returncode != 0:
         print(f"kb-library: cannot read {file}: {r.stderr.strip()}"); return 1
-    wanted = {}
+    wanted, modes, pins = {}, {}, {}
     for rec in r.stdout.split("\0"):
         key, _, value = rec.partition("\n")
         if key.startswith("library.") and key.endswith(".origin"):
             wanted[key[len("library."):-len(".origin")]] = value
+        elif key.startswith("library.") and key.endswith(".readonly"):   # git lowercases the variable
+            modes[key[len("library."):-len(".readonly")]] = value.lower() == "true"
+        elif key.startswith("library.") and key.endswith(".ref"):
+            pins[key[len("library."):-len(".ref")]] = value
     into = pathlib.Path(into).expanduser() if into else KL.library_home(ENGINE)
     current = {e["name"]: e for e in KL.entries()}
     done = already = refused = 0
@@ -363,8 +381,16 @@ def import_(file: str, into) -> int:
             print(f"kb-library: {name} is already registered at {e['path']} from "
                   f"{e['origin'] or 'no origin'} — not imported from {url}"); refused += 1
             continue
-        path = clone(url, into / name)
-        if path and add(str(path)) == 0:
+        ref, read_only = pins.get(name, ""), modes.get(name, False)
+        if ref and not read_only:
+            print(f"kb-library: {name} is pinned to {ref} in the export but not read-only — "
+                  f"a copy at a tag can't take commits; not imported"); refused += 1
+            continue
+        if ref and not tag_on_remote(url, ref):
+            refused += 1
+            continue
+        path = clone(url, into / name, ref or None)
+        if path and add(str(path), read_only, ref) == 0:
             done += 1
         else:
             refused += 1
