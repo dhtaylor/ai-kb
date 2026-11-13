@@ -842,6 +842,29 @@ printf -- '- [gadgets](gadgets.md) — gadgets\n' >> "$TMP/vweak/INDEX.md"
   printf '\n## Alternation\n\nSource: manual\n%s\n' "$S"
   printf "Recheck: curl -fsSL %s | grep -qE 'Widgets|Max</td><td>12'\n" "$U"
 } >> "$TMP/vweak/widgets.md"
+# Issue #185: only an assertion that FETCHES a URL is judged. A URL that is just text in the
+# command (a fixture origin written to a temp library, greped from a local script's output) is not.
+U2='https://docs.example.test/gizmos'
+{
+  printf '\n## Fixture origin\n\nSource: manual\n%s\n' "$S"
+  printf 'Recheck: o=https://example.com/x.git; echo "origin $o not listed" | grep -qF '"'not listed'"'\n'
+  printf '\n## Fetch urllib\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: python3 -c \"import urllib.request as r; print(r.urlopen('%s').read().decode())\" | grep -qF 'Gizmos list'\n" "$U2"
+  printf '\n## Fetch wget\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: wget -qO- %s | grep -qF 'Sprockets'\n" "$U2"
+  printf '\n## Fixture beside fetch\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: printf 'origin https://example.com/a.git\\\\n' > o.txt; curl -fsSL %s | grep -qF 'Cogs'\n" "$U2"
+} >> "$TMP/vweak/widgets.md"
+{ printf '\n## Fixture beside fetch two\n\nSource: manual\n%s\n' "$S"
+  printf "Recheck: printf 'origin https://example.com/b.git\\\\n' > o.txt; curl -fsSL %s | grep -qF 'Cogs'\n" "$U2"; } >> "$TMP/vweak/gadgets.md"
+case_run "weak recheck: a URL that is only text in a local assertion is not flagged (#185)" 1 "" -- \
+  bash -c '"$1" "$2" | grep -qE "WEAK .*Fixture origin"' _ "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: a python urlopen of a URL, grepped for 2 words, is flagged (#185)" 0 "WEAK widgets.md § Fetch urllib: greps 2 words" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: a wget of a URL, grepped for 1 word, is flagged (#185)" 0 "WEAK widgets.md § Fetch wget: greps 1 word" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vweak"
+case_run "weak recheck: reuse is keyed on the fetched URL, not a fixture URL beside it (#185)" 0 "WEAK one fragment backs 2 sections in 2 files ('Cogs' at $U2)" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vweak"
 case_run "weak recheck: a short fragment is flagged" 0 "WEAK widgets.md § Title grep: greps 1 word" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vweak"
 case_run "weak recheck: one (url, fragment) backing three sections in two files is flagged" 0 "WEAK one fragment backs 3 sections in 2 files" -- \
