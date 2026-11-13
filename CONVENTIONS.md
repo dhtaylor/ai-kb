@@ -343,6 +343,11 @@ for them.
   stack, they do not merge. Two sources checked on different dates by different methods are two
   pieces of evidence, and flattening them into one stamp discards which was verified when.
   (Conflicting sources are a different case entirely — §8.)
+- **One source may back two claims in a section.** The same source can appear on more than one
+  `Source:` line in a section when each line backs a different claim, each with its own `Verified:`
+  stamp (and its own `Recheck:`, if it has one). The stale and unstamped-fact locus is
+  `<heading>|<source>`, so those stamps share one ID: one queue record covers them all, and resolving
+  it means re-checking, and re-stamping, each one.
 - **Sources are `[[slug]]` backlinks.** Episodic notes already *are* sources — link straight to them
   (`[[YYYY-MM-DD-domain-notes]]`). An external artifact with no home in the KB (a spec, vendor page, PDF)
   gets a lightweight stub under the library's **`sources/`** so its backlink resolves. Don't create a
