@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-capture` no longer refuses a note as empty because of a one-line `<!-- … -->` comment (#194),
+  such as an inline `<!-- lint-allow: … -->`. The empty-note check removed comments by line range,
+  so a comment opened and closed on one line ran on to the next `-->` or the end of the note. It now
+  removes them by content. A note of only headings and comments, and the template saved unchanged,
+  are still refused. The filed note was never truncated; only the check was wrong.
 - `tests/run-checks` no longer depends on the caller's environment for the engine's own variables
   (#181). It clears `KB_LIBRARY_HOME`, `KB_ENGINE_ROOT`, `KB_SYSTEMCTL`, `KB_CRONTAB` and git's
   `GIT_CONFIG_GLOBAL`/`SYSTEM`/`NOSYSTEM` and author and committer variables at start, as it clears

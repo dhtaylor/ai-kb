@@ -89,8 +89,11 @@ TPL
   "${EDITOR:-${VISUAL:-vi}}" "$tmp" || { echo "kb-capture: editor exited with an error — nothing filed" >&2; exit 1; }
 fi
 
-# An empty note is noise, and a template saved unchanged is an empty note.
-body_text=$(sed -e '/<!--/,/-->/d' -e '/^#/d' -e '/^[[:space:]]*$/d' "$tmp")
+# An empty note is noise, and a template saved unchanged is an empty note. Comments are removed
+# by content, not by line, so a one-line <!-- … --> closes where it ends (#194); an unclosed one
+# runs to the end of the note.
+body_text=$(python3 -c 'import re,sys; sys.stdout.write(re.sub(r"<!--.*?(?:-->|\Z)", "", open(sys.argv[1], encoding="utf-8", errors="replace").read(), flags=re.S))' "$tmp" |
+  sed -e '/^#/d' -e '/^[[:space:]]*$/d')
 if [ -z "$body_text" ]; then
   echo "kb-capture: the note has no content — nothing filed." >&2; exit 1
 fi
