@@ -223,16 +223,18 @@ so a human can see a dropped qualifier or a rounded number. Call out explicitly:
 - every secret recorded by reference, with confirmation that no literal value and no personal
   identifier was copied, and that the archived source is redacted.
 
-Only after that review do you commit.
+Run Step 9's checks before you present, so a defect is caught before approval and not at the commit.
+Only after that review do you commit, and if the reviewer edits anything at the gate, re-run
+`scripts/check-kb <library-path>` and `scripts/check-golden <library-path>` first.
 
 ## Step 9 — Verify
 
 Run the engine's checks against the library you wrote to, before your first write and again after,
 and report each one's output verbatim:
 
-- `scripts/check-kb <library>` (the target is required);
-- `scripts/check-scope <library>`;
-- `scripts/check-golden <library>`;
+- `scripts/check-kb <library-path>` (the target is required, and it is the library's path, not its name);
+- `scripts/check-scope <library-path>`;
+- `scripts/check-golden <library-path>`;
 - `scripts/check-xlinks --installed` — add its path after `--installed` if it is not registered yet, or if it is a project tree.
 
 **A check that already failed before you started is not yours to fix.** Report it as pre-existing

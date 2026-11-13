@@ -183,13 +183,19 @@ Present, before committing:
 - every secret you recorded by reference, with confirmation that no literal value and no personal
   identifier was copied (§6).
 
-Then run the engine's `scripts/check-kb <library>` and `scripts/check-transient <library>`, and
-report each result and its limits. A `check-transient` hit in a section you wrote is yours to
-rewrite before review. A hit you did not cause is reported.
+Then run the engine's `scripts/check-kb <library-path>`, `scripts/check-golden <library-path>` and
+`scripts/check-transient <library-path>`, and report each result and its limits. The argument is the
+library's path, not its name: `check-kb` given a bare name finds no files. `check-golden` is run here,
+before review, because `check-kb` leaves golden-set integrity to it: a case whose excerpt your
+section no longer contains would otherwise block the commit after the human has approved. A
+`check-transient` hit in a section you wrote is yours to rewrite before review. A hit you did not
+cause is reported.
 
 **Stop here for review. Only after the human approves do you commit.** The facts above are already
 written into the library's working tree, not the library's history — that is the draft, the same
-gate `kb-update-domain` applies to a fold. If nothing is approved, leave the working tree as it is
+gate `kb-update-domain` applies to a fold. If the reviewer edits a promoted section at the gate,
+re-run `scripts/check-kb <library-path>` and `scripts/check-golden <library-path>` before you commit:
+an edit can remove text a golden case quotes. If nothing is approved, leave the working tree as it is
 and say so; an uncommitted distillation costs nothing to discard or revise.
 
 ## Prepare mode
@@ -250,7 +256,8 @@ When a person asks you to review a packet, this is the decide half, and it is al
 4. Apply only the approved items, by Steps 3 to 6: the observation's date on the stamp, a suggested
    `Recheck:` written only after you run its negative control, the note marked `## Distilled`,
    routers and the golden set updated.
-5. Run `scripts/check-kb <library>`, show the diff, and commit only on approval, as Step 7 says.
+5. Run `scripts/check-kb <library-path>` and `scripts/check-golden <library-path>`, show the diff, and
+   commit only on approval, as Step 7 says. Run both again after any edit the person makes at the gate.
 6. Run `kb-apply done <packet> applied`, or `rejected` if nothing was approved.
 
 ## Refusals

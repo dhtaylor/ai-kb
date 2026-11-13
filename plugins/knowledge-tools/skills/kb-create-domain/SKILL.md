@@ -301,8 +301,8 @@ report as an accepted risk rather than leaving the file out.
 Run the engine's `scripts/check-kb` **against the library path** — the target is required, because
 the engine holds no knowledge of its own and a silent default would report a clean run over zero
 files. It checks frontmatter,
-link resolution and slug uniqueness. Then run `scripts/check-scope <library>`. Report both
-results verbatim.
+link resolution and slug uniqueness. Then run `scripts/check-golden <library-path>` on the golden
+set Step 6 seeded, and `scripts/check-scope <library-path>`. Report each result verbatim.
 
 State plainly what is **not** covered: a new domain has no facts yet, so nothing about currency,
 contradictions or retrieval has been tested. A domain passing these checks is structurally sound —
@@ -311,7 +311,8 @@ it is not verified, and should not be described as if it were.
 **Stop here for approval before committing.** Everything so far exists only in an uncommitted
 working tree — that is the draft, the same way `kb-update-domain` gates a fold at its own review
 step. Show what was created (the file list, and, if seeded, Step 4's fact-by-fact comparison against
-its source) and do not run `git commit` inside the new library until the human approves it. If they
+its source), re-run `scripts/check-kb <library-path>` and `scripts/check-golden <library-path>` after
+any edit the human makes, and do not run `git commit` inside the new library until the human approves it. If they
 do not, leave it uncommitted and say so — an uncommitted `git init` costs nothing to discard.
 
 ## Refusals
