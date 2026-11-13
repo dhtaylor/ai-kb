@@ -40,6 +40,12 @@ unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_DATA_HOME XDG_CACHE_HOME KB_PACKETS KB_
 # to: a commit from a linked worktree once set that repository's core.bare and core.hooksPath and
 # staged the deletion of every file (#127). Clear each variable git itself calls repository-local.
 unset $(git rev-parse --local-env-vars)
+# The engine's own variables, and git's identity and config overrides, from a caller's shell. They win
+# over what a fixture sets: KB_LIBRARY_HOME over a registry's kb.libraryHome and <engine>/kb, so five
+# kb-library cases failed with it exported (#181). KB_ENGINE_ROOT is set explicitly, with env, by the
+# cases that need it. HOME is already a throwaway, but GIT_CONFIG_GLOBAL/SYSTEM bypass it.
+SUITE_CLEARED_VARS="KB_LIBRARY_HOME KB_ENGINE_ROOT KB_SYSTEMCTL KB_CRONTAB GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE"
+unset $SUITE_CLEARED_VARS
 
 fm() { # frontmatter: name, scope, [extra]
   printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
@@ -107,6 +113,8 @@ echo "run-checks: $ENGINE"
 # ------------------------------------------------------ the suite's own environment ----
 case_run "suite clears git's repository environment, so a hook cannot aim fixtures at its repo (#127)" 0 "" -- \
   bash -c 'for v in $(git rev-parse --local-env-vars); do [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done'
+case_run "suite clears the engine's own environment, so a caller's shell cannot change a result (#181)" 0 "" -- \
+  bash -c 'for v in $0; do [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done' "$SUITE_CLEARED_VARS"
 
 # ---------------------------------------------------------------- check-kb ----
 build_clean "$TMP/clean"
