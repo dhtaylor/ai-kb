@@ -96,8 +96,10 @@ if [ -z "$body_text" ]; then
 fi
 
 # 2b. Refuse a note that holds a credential or identifier. Nothing is written. -----
+# --strict: the note is filed as an episodic note, where the documents/ exemption never applies,
+# so a --from file under a library's documents/ must not borrow it (#183).
 scan_target="$tmp"; [ -n "$from" ] && [ "$from" != "-" ] && scan_target="$from"
-if ! scan_out=$("$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/check-secrets" --file "$scan_target" 2>&1); then
+if ! scan_out=$("$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$0")")/check-secrets" --file "$scan_target" --strict 2>&1); then
   printf '%s\n' "$scan_out" >&2
   {
     echo
