@@ -235,6 +235,12 @@ case_run "malformed frontmatter is reported, not skipped" 1 "unparseable frontma
 case_run "no script depends on a third-party module" 1 "" -- \
   grep -rlE "^import (yaml|requests|jinja2)|^from (yaml|requests|jinja2) " "$ENGINE/scripts"
 
+# The fact-file reader (scripts/kbengine, #200, #201) is tested in process: markdown text in,
+# sections out. scripts/ is on the path for this one command only, as Python puts it there for
+# a script that runs from it.
+case_run "kbengine: the in-process tests pass (tests/test_factfiles.py)" 0 "OK" -- \
+  env PYTHONPATH="$ENGINE/scripts" python3 -m unittest discover -s "$ENGINE/tests" -p 'test_*.py'
+
 # ------------------------------------------------------------- check-scope ----
 build_clean "$TMP/scopeok"
 case_run "clean library passes check-scope" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/scopeok"
