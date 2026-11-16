@@ -78,6 +78,8 @@ HEADING = re.compile(r"^#{1,6}\s+(.*)$")
 SOURCE_LINE = re.compile(r"^Source:")
 STOP = re.compile(r"^(Source:|Verified:|Recheck(?:\s*\(attended\))?:|#{1,6}\s)")
 LINK = re.compile(r"\[\[([^\]|#]+)")
+# Inside a code fence a heading or Source: line is an example, as check-kb reads it (#199).
+FENCE = re.compile(r"^\s*(```|~~~)")
 TODAY = __import__("datetime").date.today().isoformat()
 
 
@@ -144,7 +146,13 @@ def dependants(lib, slugs):
             continue
         heading, lines, i = "(file)", f.read_text(errors="replace").split("\n"), 0
         rel = str(f.relative_to(lib))
+        fenced = False
         while i < len(lines):
+            if FENCE.match(lines[i]):
+                fenced = not fenced
+                i += 1; continue
+            if fenced:
+                i += 1; continue
             m = HEADING.match(lines[i])
             if m:
                 heading = m.group(1).strip()
