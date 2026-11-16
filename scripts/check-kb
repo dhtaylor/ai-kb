@@ -43,14 +43,16 @@ Exit 0 clean, 1 on any defect.
 import datetime, pathlib, re, subprocess, sys
 from collections import Counter
 
+from kbengine import factfiles
+
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
-PATH_ADDRESSED = {"INDEX.md", "CONVENTIONS.md"}
-# Directories inside the knowledge repo that are NOT part of the knowledge base:
-# decision records, the behaviour plugin, tooling and CI config. They are ordinary
-# files with no frontmatter contract, and linting them would fail every run.
-NON_KB_DIRS = {"documents", "plugins", "scripts", ".github", ".githooks",
-               ".claude-plugin", ".claude", ".git"}
+PATH_ADDRESSED = factfiles.PATH_ADDRESSED
+NON_KB_DIRS = factfiles.EXCLUDED_DIRS   # kb-due reads these two until it adopts the reader
+
+
+def fact_file(root: pathlib.Path, f: pathlib.Path) -> bool:
+    return factfiles.kind_of(f.relative_to(root).parts) == "fact"
 
 # Illustrative syntax inside the contract's own examples, not real links.
 EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}
@@ -61,80 +63,22 @@ TODAY = datetime.date.today().isoformat()
 
 
 ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
-# kb-verify reads a stamp or an assertion only at column 0. Indented, it looks stamped and
-# certifies nothing, and its Recheck never runs (§7). Inside a code fence it is an example.
-INDENTED_STAMP = re.compile(r"^\s+(Verified|Recheck)(?:\s*\(attended\))?:")
-FENCE = re.compile(r"^\s*(```|~~~)")
-HEADING = re.compile(r"^#{1,6}\s")
-SOURCE = re.compile(r"^Source:")
-STAMP_DATE = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})")
-CONFLICTED = re.compile(r"^\s*status:\s*CONFLICTED\b")
-UNCORROBORATED = re.compile(r"^\s*status:\s*UNCORROBORATED\b")
 
 
-def marked_sections(body: str, marker=UNCORROBORATED) -> list:
-    """The text of each section a status marker sits directly under (§8: a marker applies to
-    the heading it sits under, never to the headings enclosing it). check-golden reads an
+def marked_sections(body: str) -> list:
+    """The text of each section an UNCORROBORATED marker sits directly under (§8: a marker applies
+    to the heading it sits under, never to the headings enclosing it). check-golden reads an
     uncorroborated case's excerpt through this, so the case tests the claim that is marked."""
-    sections, cur, fenced = [], [], False
-    for line in body.split("\n"):
-        if FENCE.match(line):
-            fenced = not fenced
-        elif not fenced and HEADING.match(line):
-            sections.append(cur); cur = []
-        cur.append(line)
-    sections.append(cur)
-    out, fenced = [], False
-    for s in sections:
-        marked = False
-        for line in s:
-            if FENCE.match(line):
-                fenced = not fenced
-            elif not fenced and marker.match(line):
-                marked = True
-        if marked:
-            out.append("\n".join(s))
-    return out
-
-
-def served_sections(body: str) -> list:
-    """The sections of a file's body that are served — not CONFLICTED (§8) — each as
-    {sourced, dates, sources}. `sources` holds one flag per Source: line, true once a Verified:
-    stamp follows it before the next Source: line: §6 stacks one stamp per source, so a second
-    source under one stamp is unstamped though its section is not (issue #64). derived_floor
-    and kb-due's unstamped count read sections through this, so "unstamped" means one thing
-    everywhere."""
-    new = lambda h="": {"heading": h, "sourced": False, "dates": [], "conflicted": False, "sources": [],
-                        "source_lines": []}
-    sections, cur, fenced = [], new(), False
-    for line in body.split("\n"):
-        if FENCE.match(line):
-            fenced = not fenced
-        elif fenced:
-            continue
-        elif HEADING.match(line):
-            sections.append(cur)
-            cur = new(line.strip())
-        elif SOURCE.match(line):
-            cur["sourced"] = True
-            cur["sources"].append(False)
-            cur["source_lines"].append(line.strip())
-        elif m := STAMP_DATE.match(line):
-            cur["dates"].append(m.group(1))
-            if cur["sources"]:
-                cur["sources"][-1] = True
-        elif CONFLICTED.match(line):
-            cur["conflicted"] = True
-    sections.append(cur)
-    return [s for s in sections if not s["conflicted"]]
+    return [s.text for s in factfiles.sections(body) if s.uncorroborated]
 
 
 def unstamped_keys(body: str) -> list:
-    """(heading, Source: line) for each Source: line in a served section with no Verified: stamp
-    of its own: unknown, not fresh (§7). One per source, not per section (§6 stacks one stamp per
-    source; #64). kb-due compares these with the last sweep's to name only new ones (#142)."""
-    return [(s["heading"], line) for s in served_sections(body)
-            for line, stamped in zip(s["source_lines"], s["sources"]) if not stamped]
+    """(heading, Source: line) for each Source: line in a served section (not CONFLICTED, §8) with
+    no Verified: stamp of its own: unknown, not fresh (§7). One per source, not per section (§6
+    stacks one stamp per source; #64). kb-due compares these with the last sweep's to name only
+    new ones (#142)."""
+    return [(s.heading, src.text) for s in factfiles.sections(body) if not s.conflicted
+            for src in s.sources if src.stamp is None]
 
 
 def unstamped(body: str) -> int:
@@ -147,51 +91,18 @@ def derived_floor(body: str) -> str:
     sections that are not CONFLICTED, or 'unknown' when one of those sections cites a Source:
     that carries no stamp of its own, or when nothing is stamped. Absent is not fresh. kb-verify imports
     this to move the floor when it restamps, so there is one derivation, not two."""
-    served = served_sections(body)
     if unstamped(body):
         return "unknown"
-    return min((d for s in served for d in s["dates"]), default="unknown")
-
-
-STATE_LEAF = re.compile(r"-(golden|open-questions|contradictions)\.md$")
-
-
-def fact_file(root: pathlib.Path, f: pathlib.Path) -> bool:
-    """A file whose sections state facts (§6). Routers, the golden set, the queue, the state
-    leaves (§2), episodic notes and source stubs are records: their sections cite nothing."""
-    rel = f.relative_to(root).parts
-    return not (f.name in PATH_ADDRESSED or f.name == "needs-attention.md"
-                or STATE_LEAF.search(f.name) or {"episodic", "sources"} & set(rel[:-1]))
+    return min((st.date for s in factfiles.sections(body) if not s.conflicted for st in s.stamps),
+               default="unknown")
 
 
 def unsourced(body: str) -> list:
     """Headings of served sections that hold content and no Source: line (§6, issue #154). They
     are unchecked, and derived_floor never sees them. Exempt: the intro under a level-1 title,
     a heading with only subheadings under it, and a CONFLICTED section, which is not served."""
-    out, cur, fenced = [], None, False
-    def close():
-        if cur and cur["content"] and not cur["sourced"] and not cur["conflicted"]:
-            out.append(cur["heading"])
-    for line in body.split("\n"):
-        if FENCE.match(line):
-            fenced = not fenced
-            if cur:
-                cur["content"] = True
-        elif not fenced and HEADING.match(line):
-            close()
-            level = len(line) - len(line.lstrip("#"))
-            cur = None if level == 1 else {"heading": line.lstrip("#").strip(), "content": False,
-                                            "sourced": False, "conflicted": False}
-        elif cur is None:
-            continue
-        elif not fenced and SOURCE.match(line):
-            cur["sourced"] = True
-        elif not fenced and CONFLICTED.match(line):
-            cur["conflicted"] = True
-        elif line.strip():
-            cur["content"] = True
-    close()
-    return out
+    return [s.title for s in factfiles.sections(body)
+            if s.level >= 2 and s.has_content and not s.sources and not s.conflicted]
 
 
 def agent_ttl(declared, horizon: int) -> int:
@@ -321,9 +232,8 @@ def supported_majors() -> str:
 
 
 def kb_files(root: pathlib.Path) -> list:
-    """The markdown files that are part of the knowledge base (everything but NON_KB_DIRS)."""
-    return sorted(f for f in root.rglob("*.md")
-                  if not NON_KB_DIRS & set(f.relative_to(root).parts))
+    """The markdown files that are part of the knowledge base (everything but the excluded folders)."""
+    return [f for f, _ in factfiles.files(root)]
 
 
 def reachable(root: pathlib.Path, files: list) -> set:
@@ -386,7 +296,8 @@ def frontmatter(block: str):
 
 
 def main(root: pathlib.Path) -> int:
-    files = kb_files(root)
+    kinds = dict(factfiles.files(root))
+    files = list(kinds)
     if not files:
         print(f"no markdown files under {root}")
         return 1
@@ -421,8 +332,6 @@ def main(root: pathlib.Path) -> int:
         else:
             warnings.append(f"{message} — fails from contract {fmt(since)} (this library declares "
                             f"{fmt(version)})")
-
-    verify = engine_module("kb_verify", "kb-verify")   # RECHECK: the one definition of what a Recheck: is
 
     # sources/ holds only .md citation stubs (§6); the artifacts they cite are archived under
     # documents/. Only .md files are read below, so a raw file here would pass unseen (issue #71).
@@ -469,21 +378,21 @@ def main(root: pathlib.Path) -> int:
             elif bare not in slugs:
                 defects.append(f"{f}: dead [[{link}]]")
 
-        fenced = False
-        for n, line in enumerate(text.split("\n"), 1):
-            if FENCE.match(line):
-                fenced = not fenced
-            elif not fenced and (m := verify.RECHECK.match(line)):
+        found = []
+        for sec in factfiles.sections(text):
+            for rc in [st.recheck for st in sec.stamps if st.recheck] + sec.orphan_rechecks:
                 # kb-verify runs this under /bin/sh; an unparsable command never ran (#182).
                 # Not gated by contract: it is broken under every version, like an indented stamp.
-                err = sh_syntax_error(m.group(2))
+                err = sh_syntax_error(rc.cmd)
                 if err:
-                    defects.append(f"{f}:{n}: Recheck: command does not parse under /bin/sh: {err}")
-            elif not fenced and (m := INDENTED_STAMP.match(line)):
-                defects.append(f"{f}:{n}: indented {m.group(1)}: line — kb-verify reads it only "
-                               f"at the start of a line, so this one certifies nothing")
-            elif not fenced and (m := STAMP_DATE.match(line)) and m.group(1) > TODAY:
-                defects.append(f"{f}:{n}: stamp dated in the future ({m.group(1)})")
+                    found.append((rc.line, f"{f}:{rc.line}: Recheck: command does not parse under /bin/sh: {err}"))
+            for n, word in sec.indented:
+                found.append((n, f"{f}:{n}: indented {word}: line — kb-verify reads it only "
+                                 f"at the start of a line, so this one certifies nothing"))
+            for st in sec.stamps:
+                if st.date > TODAY:
+                    found.append((st.line, f"{f}:{st.line}: stamp dated in the future ({st.date})"))
+        defects += [d for _, d in sorted(found, key=lambda x: x[0])]
 
         if f == root / "INDEX.md" and "agent_ttl" in fm:
             h = re.match(r"(\d+)d", fm.get("freshness_horizon", ""))
@@ -514,7 +423,7 @@ def main(root: pathlib.Path) -> int:
             except ValueError as e:
                 defects.append(f"{f}: {e}")
 
-        if fact_file(root, f):
+        if kinds[f] == "fact":
             for heading in unsourced(block[2]):
                 rule((2, 5), f"{f}: section '{heading}' has no Source: line — cite where it came "
                              f"from, or move it out of the fact file (§6)")
@@ -533,7 +442,7 @@ def main(root: pathlib.Path) -> int:
 
     # A folder name is reserved (CONVENTIONS §5), so a file may not share a directory's name.
     dir_slugs = {d.name: d for d in root.rglob("*")
-                 if d.is_dir() and not NON_KB_DIRS & set(d.relative_to(root).parts)}
+                 if d.is_dir() and not factfiles.EXCLUDED_DIRS & set(d.relative_to(root).parts)}
     for f in files:
         if f.name in PATH_ADDRESSED:
             continue

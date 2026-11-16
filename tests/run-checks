@@ -1846,6 +1846,7 @@ SFX="$TMP/session-fx"; mkdir -p "$SFX/scripts" "$SFX/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX/scripts/$f"; chmod +x "$SFX/scripts/$f"
 done
+cp -r "$ENGINE/scripts/kbengine" "$SFX/scripts/kbengine"   # check-kb and kb-due import it
 cp "$ENGINE/CONVENTIONS.md" "$SFX/CONVENTIONS.md"   # the engine reads its contract versions (§14) here
 SHOME="$TMP/session-home"; mkdir -p "$SHOME" "$TMP/session-cwd"
 
@@ -1918,6 +1919,7 @@ SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX2/scripts/$f"; chmod +x "$SFX2/scripts/$f"
 done
+cp -r "$ENGINE/scripts/kbengine" "$SFX2/scripts/kbengine"   # check-kb and kb-due import it
 cp "$ENGINE/CONVENTIONS.md" "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
