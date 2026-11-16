@@ -809,6 +809,13 @@ build_clean "$TMP/vfail"
 printf 'Recheck: false\n' >> "$TMP/vfail/widgets.md"
 case_run "failing assertion exits 1" 1 "FAILED" -- "$ENGINE/scripts/kb-verify" "$TMP/vfail" --all --yes
 
+# Issue #199: a stamp and Recheck inside a code fence are an example (check-kb skips them), not
+# an assertion. kb-verify ran them, and the weekly job passes --yes --unattended.
+build_clean "$TMP/vfence"
+printf '\n## Writing an assertion\n\nSource: manual\n\n```\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n```\n' >> "$TMP/vfence/widgets.md"
+case_run "a fenced example Recheck is not an assertion, and is never run (#199)" 0 "0 with a Recheck assertion" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vfence" --all --yes
+
 build_clean "$TMP/vfail2"
 printf 'Recheck: false\n' >> "$TMP/vfail2/widgets.md"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vfail2/widgets.md"
@@ -1338,6 +1345,11 @@ case_run "kb-sources: no --yes lists the three stub URL forms" 0 "/nohead" -- \
 case_run "kb-sources: no --yes made no request (server log empty)" 0 "" -- \
   test ! -s "$SRV/access.log"
 case_run "kb-sources: no --yes writes no queue" 1 "" -- test -e "$TMP/ksrc/needs-attention.md"
+# Issue #199: a heading or Source: line inside a code fence is an example, not a dependant.
+cp -r "$TMP/ksrc" "$TMP/ksrc-fence"
+printf '\n## Delta\n\nA delta claim.\n\n```\n## Fenced example\n\nSource: [[s-ok]]\n```\n' >> "$TMP/ksrc-fence/widgets.md"
+case_run "kb-sources: a fenced Source: line or heading is not a dependant (#199)" 0 "" -- \
+  sh -c '! "$1" "$2" | grep -qE "§ (Fenced example|Delta)"' _ "$ENGINE/scripts/kb-sources" "$TMP/ksrc-fence"
 case_run "kb-sources: an unknown flag is a usage error" 2 "" -- "$ENGINE/scripts/kb-sources" "$TMP/ksrc" --fetch
 mkdir -p "$TMP/ksrc-empty"
 case_run "kb-sources: a non-library is a usage error" 2 "" -- "$ENGINE/scripts/kb-sources" "$TMP/ksrc-empty"

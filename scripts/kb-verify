@@ -120,7 +120,9 @@ STAMP = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})\s*·\s*by:\s*(\S+)\s*·\s*
 # system (contract 2.2). An attended run executes it like any other; --unattended skips it.
 RECHECK = re.compile(r"^Recheck(\s*\(attended\))?:\s*(.+?)\s*$")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
-URL = re.compile(r"https?://[^\s'\"|;)<>]+")
+# Inside a code fence a stamp or Recheck is an example, as check-kb reads it (#199).
+FENCE = re.compile(r"^\s*(```|~~~)")
+URL =re.compile(r"https?://[^\s'\"|;)<>]+")
 # A command fetches when it runs one of these (issue #185); a URL that is only text in it (a
 # fixture origin, an echoed string) does not make it a fetch.
 FETCHER = re.compile(r"(?<![\w./-])(curl|wget|https?|xh)(?![\w.-]|://)|\b(urlopen|urlretrieve|urllib|requests|httpx|aiohttp)\b")
@@ -292,8 +294,13 @@ def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=
 def sections(path: pathlib.Path):
     """Every stamped section: its heading, stamp line number, date, by, and assertion."""
     lines = path.read_text(errors="replace").split("\n")
-    heading, out = "(file)", []
+    heading, out, fenced = "(file)", [], False
     for i, line in enumerate(lines):
+        if FENCE.match(line):
+            fenced = not fenced
+            continue
+        if fenced:
+            continue
         m = HEADING.match(line)
         if m:
             heading = m.group(2).strip()

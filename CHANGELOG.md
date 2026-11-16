@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-verify` no longer treats a `Verified:` stamp and `Recheck:` inside a code fence as an
+  assertion (#199). It read every column-0 stamp, so an example in a fence was listed as due and
+  ran under `--yes`, including the weekly job's `--yes --unattended`. `check-kb` already read a
+  fenced stamp as an example; `kb-verify` now does too. `kb-sources` no longer counts a fenced
+  heading or `Source:` line when it lists a stub's dependants.
 - `kb-capture` no longer refuses a note as empty because of a one-line `<!-- … -->` comment (#194),
   such as an inline `<!-- lint-allow: … -->`. The empty-note check removed comments by line range,
   so a comment opened and closed on one line ran on to the next `-->` or the end of the note. It now
