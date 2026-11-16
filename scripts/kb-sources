@@ -66,20 +66,15 @@ Usage: kb-sources <library-or-tree> [--yes]
 Exit 0 when every URL is alive (or nothing was fetched), 1 when any was dead or unreachable,
 2 on usage error.
 """
-import hashlib, importlib.machinery, importlib.util, os, pathlib, re, sys
+import hashlib, importlib.machinery, importlib.util, pathlib, re, sys
+
+from kbengine import factfiles
 
 UA = "kb-sources/1 (knowledge-base liveness check; HEAD only unless refused)"
 TIMEOUT = 10
-NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
-          ".claude-plugin", ".claude", ".git", "episodic"}
 LIVENESS_MANUAL = re.compile(r"^\s*-\s*\*\*Liveness:\*\*\s*manual\s*$")
 URL_LINE = re.compile(r"^\s*-\s*\*\*(?:URL[^:*]*|Artifact location):\*\*\s*(https?://[^\s<>`]+)")
-HEADING = re.compile(r"^#{1,6}\s+(.*)$")
-SOURCE_LINE = re.compile(r"^Source:")
-STOP = re.compile(r"^(Source:|Verified:|Recheck(?:\s*\(attended\))?:|#{1,6}\s)")
 LINK = re.compile(r"\[\[([^\]|#]+)")
-# Inside a code fence a heading or Source: line is an example, as check-kb reads it (#199).
-FENCE = re.compile(r"^\s*(```|~~~)")
 TODAY = __import__("datetime").date.today().isoformat()
 
 
@@ -96,13 +91,9 @@ def load_kb_watch():
 
 
 def markdown_files(root):
-    out = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in NON_KB]
-        out += [pathlib.Path(dirpath) / n for n in filenames
-                if n.endswith(".md") and not n.endswith("-golden.md")
-                and n not in ("INDEX.md", "needs-attention.md")]
-    return sorted(out)
+    """Every file that can hold a stub or cite one: not the golden set, a router, the queue or an
+    episodic note (the reader prunes the folders that are not the knowledge base)."""
+    return [f for f, kind in factfiles.files(root) if kind not in ("golden", "router", "queue", "episodic")]
 
 
 def stubs(lib):
@@ -144,28 +135,13 @@ def dependants(lib, slugs):
     for f in markdown_files(lib):
         if "sources" in f.relative_to(lib).parts[:-1]:
             continue
-        heading, lines, i = "(file)", f.read_text(errors="replace").split("\n"), 0
         rel = str(f.relative_to(lib))
-        fenced = False
-        while i < len(lines):
-            if FENCE.match(lines[i]):
-                fenced = not fenced
-                i += 1; continue
-            if fenced:
-                i += 1; continue
-            m = HEADING.match(lines[i])
-            if m:
-                heading = m.group(1).strip()
-            if SOURCE_LINE.match(lines[i]):
-                j, cite = i, lines[i]
-                while j + 1 < len(lines) and lines[j + 1].strip() and not STOP.match(lines[j + 1]):
-                    j += 1; cite += "\n" + lines[j]
-                for slug in set(LINK.findall(cite)):
-                    entry = f"{rel} § {heading}"
+        for sec in factfiles.sections(f.read_text(errors="replace")):
+            entry = f"{rel} § {sec.title if sec.level else '(file)'}"
+            for src in sec.sources:
+                for slug in set(LINK.findall(src.cite)):
                     if slug in deps and entry not in deps[slug]:
                         deps[slug].append(entry)
-                i = j
-            i += 1
     return deps
 
 
