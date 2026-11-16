@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `check-transient` no longer reads `.claude/` or `.claude-plugin/` (#201). It listed its own excluded
+  folders, which lacked those two, so a dated or ticket-titled heading in a library's Claude Code
+  settings or plugin folder was reported as a fact file's. It now prunes the same folders as
+  `check-kb`, `kb-verify`, `kb-due` and `kb-sources`, and reads fact files by the rule they share, so
+  a `CONVENTIONS.md` inside a library is not read either.
 - `kb-due` no longer counts a stamp-less `Source:` line in an `INDEX.md` as an unstamped source
   (#201). It took every file that was not a record by name, so a router counted; it now counts fact
   files only, by the same rule `check-kb` applies, which a router is not (§6). A `CONVENTIONS.md`

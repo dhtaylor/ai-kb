@@ -29,35 +29,20 @@ Exit 0 when nothing is found, 1 when anything is, 2 on a usage error.
 """
 import pathlib, re, sys
 
-SKIP_DIRS = {"episodic", "documents", "sources", ".git", ".github", ".githooks", "plugins", "scripts"}
-SKIP_NAME = re.compile(r"^(INDEX|needs-attention)\.md$|-(golden|open-questions|contradictions)\.md$")
-HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+from kbengine import factfiles
+
 DATE = re.compile(r"(?<![\d-])(19|20)\d{2}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?(?![\d-])")
 TICKET = re.compile(r"\b(PR|MR|WI)\s?#?\d{1,6}\b")
 
 
-def fact_files(lib: pathlib.Path):
-    for f in sorted(lib.rglob("*.md")):
-        rel = f.relative_to(lib)
-        if SKIP_DIRS & set(rel.parts[:-1]) or SKIP_NAME.search(f.name):
+def hits(text: str):
+    for sec in factfiles.sections(text):
+        if not sec.level:
             continue
-        yield f, rel
-
-
-def hits(path: pathlib.Path):
-    fence = False
-    for n, line in enumerate(path.read_text(errors="replace").splitlines(), 1):
-        if line.lstrip().startswith(("```", "~~~")):
-            fence = not fence
-            continue
-        m = None if fence else HEADING.match(line)
-        if not m:
-            continue
-        text = m.group(2)
-        if DATE.search(text):
-            yield n, "dated heading", line.strip()
-        elif TICKET.search(text):
-            yield n, "ticket heading", line.strip()
+        if DATE.search(sec.title):
+            yield sec.line, "dated heading", sec.heading
+        elif TICKET.search(sec.title):
+            yield sec.line, "ticket heading", sec.heading
 
 
 def main(argv) -> int:
@@ -66,9 +51,12 @@ def main(argv) -> int:
         return 2
     lib = pathlib.Path(argv[0])
     found, files = 0, set()
-    for f, rel in fact_files(lib):
-        for n, kind, line in hits(f):
-            print(f"{rel}:{n}  {kind}  {line}")
+    for f, kind in factfiles.files(lib):
+        if kind != "fact":
+            continue
+        rel = f.relative_to(lib)
+        for n, what, line in hits(f.read_text(errors="replace")):
+            print(f"{rel}:{n}  {what}  {line}")
             found += 1
             files.add(rel)
     if not found:

@@ -4163,6 +4163,9 @@ printf '\n## kb-audit sweep — 2026-10-22\n' > "$TR/lib4/needs-attention.md"
 printf '\n# Amended 2026-10-28\n' >> "$TR/lib4/fx-golden.md"
 printf '\n## Routed 2026-10-22\n' >> "$TR/lib4/INDEX.md"
 printf '\n## Open question from 2026-10-22\n' > "$TR/lib4/fx-open-questions.md"
+mkdir -p "$TR/lib4/.claude" "$TR/lib4/.claude-plugin"   # tooling folders, not the knowledge base (#201)
+printf '## Run 2026-10-22\n' > "$TR/lib4/.claude/notes.md"
+printf '## PR 412 — limit raised\n' > "$TR/lib4/.claude-plugin/notes.md"
 printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n\n## Pricing for 2026\n\n## Contract v2.3\n' >> "$TR/lib4/widgets.md"
 case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
 case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"
