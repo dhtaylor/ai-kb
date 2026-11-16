@@ -1708,6 +1708,11 @@ printf '# Open questions\n\n## Is it blue?\n\nNo source says.\n\nSource: manual\
 printf -- '- [fx-open-questions](fx-open-questions.md) — open questions\n' >> "$NFX/kb/unstamped-due/INDEX.md"
 case_run "nudge: unstamped sources are counted, CONFLICTED, episodic and state leaves excluded" 0 \
   "2 unstamped sources (never verified)" -- "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-due" --nudge
+# #201: a router is not a fact file, so a Source: line in INDEX.md is no unstamped source.
+build_clean "$NFX/kb/unstamped-index"
+printf '\n## Where it came from\n\nSource: manual\n' >> "$NFX/kb/unstamped-index/INDEX.md"
+case_run "nudge: a Source: line in INDEX.md is not counted as unstamped (#201)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-index"
 case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
 # Issue #64: §6 stacks one stamp per source, so a Source: line with no Verified: of its own is

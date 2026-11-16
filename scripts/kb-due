@@ -81,6 +81,8 @@ Exit 0 always: being due is a nudge, never a failure.
 """
 import collections, datetime, importlib.machinery, importlib.util, pathlib, re, shlex, subprocess, sys
 
+from kbengine import factfiles
+
 DEFAULT_INTERVAL = 30
 TODAY = datetime.date.today()
 
@@ -198,14 +200,6 @@ def episodic_count(root: pathlib.Path):
                 if f.name != "INDEX.md" and not DISTILLED.search(f.read_text(errors="replace"))])
 
 
-def holds_facts(rel: tuple) -> bool:
-    """Whether a library-relative path counts toward unstamped sources. Facts only: the golden set,
-    the queue, the state leaves (open questions and the contradiction register, §2), episodic notes
-    and source stubs are records, and no stamp could ever clear them."""
-    return not (rel[-1].endswith(("-golden.md", "-open-questions.md", "-contradictions.md"))
-                or rel[-1] == "needs-attention.md" or "episodic" in rel[:-1] or "sources" in rel[:-1])
-
-
 def body_of(text: str) -> str:
     return text.split("---\n", 2)[2] if text.startswith("---\n") else text
 
@@ -215,8 +209,8 @@ def unstamped_keys(root: pathlib.Path, check_kb) -> collections.Counter:
     each as (heading, Source: line). Only a kb-audit sweep surfaced these before, though §7 ranks
     unknown ahead of stale."""
     keys = collections.Counter()
-    for f in check_kb.kb_files(root):
-        if holds_facts(f.relative_to(root).parts):
+    for f, kind in factfiles.files(root):
+        if kind == "fact":       # the golden set, queue, state leaves, routers and records are no fact's home
             keys.update(check_kb.unstamped_keys(body_of(f.read_text(errors="replace"))))
     return keys
 
@@ -248,8 +242,7 @@ def sweep_baseline(root: pathlib.Path, check_kb):
         return unstamped_keys(root, check_kb)
     names = git(root, "ls-tree", "-r", "--name-only", "--full-name", commit, "--", ".").stdout.decode().splitlines()
     wanted = [n for n in names if n.endswith(".md") and n.startswith(prefix)
-              and not check_kb.NON_KB_DIRS & set(n[len(prefix):].split("/"))
-              and holds_facts(tuple(n[len(prefix):].split("/")))]
+              and factfiles.kind_of(tuple(n[len(prefix):].split("/"))) == "fact"]
     out = git(root, "cat-file", "--batch", data="".join(f"{commit}:{n}\n" for n in wanted).encode()).stdout
     keys, i = collections.Counter(), 0
     for _ in wanted:   # each blob: "<sha> blob <size>\n<content>\n"
@@ -264,8 +257,8 @@ def unsourced_count(root: pathlib.Path, check_kb):
     """Sections with content and no Source: line, in fact files only, by check-kb's own rules
     (§6, issue #154). A sourceless section is never counted as unstamped, so it needs its own count."""
     n = 0
-    for f in check_kb.kb_files(root):
-        if check_kb.fact_file(root, f):
+    for f, kind in factfiles.files(root):
+        if kind == "fact":
             text = f.read_text(errors="replace")
             n += len(check_kb.unsourced(text.split("---\n", 2)[2] if text.startswith("---\n") else text))
     return n

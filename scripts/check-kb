@@ -48,11 +48,6 @@ from kbengine import factfiles
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
 PATH_ADDRESSED = factfiles.PATH_ADDRESSED
-NON_KB_DIRS = factfiles.EXCLUDED_DIRS   # kb-due reads these two until it adopts the reader
-
-
-def fact_file(root: pathlib.Path, f: pathlib.Path) -> bool:
-    return factfiles.kind_of(f.relative_to(root).parts) == "fact"
 
 # Illustrative syntax inside the contract's own examples, not real links.
 EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}

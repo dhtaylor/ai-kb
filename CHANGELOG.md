@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-due` no longer counts a stamp-less `Source:` line in an `INDEX.md` as an unstamped source
+  (#201). It took every file that was not a record by name, so a router counted; it now counts fact
+  files only, by the same rule `check-kb` applies, which a router is not (§6). A `CONVENTIONS.md`
+  inside a library is not counted either.
 - `kb-verify` reads a stamp that names no `by:` or `method:` (#201). It read only a stamp with both,
   so a bare `Verified: 2026-09-22` was invisible to it: never listed, never due, never rechecked. It
   now sees one, and a missing `by:` counts as an agent's, so the shorter agent TTL applies. It also
