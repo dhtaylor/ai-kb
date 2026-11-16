@@ -235,6 +235,12 @@ case_run "malformed frontmatter is reported, not skipped" 1 "unparseable frontma
 case_run "no script depends on a third-party module" 1 "" -- \
   grep -rlE "^import (yaml|requests|jinja2)|^from (yaml|requests|jinja2) " "$ENGINE/scripts"
 
+# The fact-file reader (scripts/kbengine, #200, #201) is tested in process: markdown text in,
+# sections out. scripts/ is on the path for this one command only, as Python puts it there for
+# a script that runs from it.
+case_run "kbengine: the in-process tests pass (tests/test_factfiles.py)" 0 "OK" -- \
+  env PYTHONPATH="$ENGINE/scripts" python3 -m unittest discover -s "$ENGINE/tests" -p 'test_*.py'
+
 # ------------------------------------------------------------- check-scope ----
 build_clean "$TMP/scopeok"
 case_run "clean library passes check-scope" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/scopeok"
@@ -815,6 +821,24 @@ build_clean "$TMP/vfence"
 printf '\n## Writing an assertion\n\nSource: manual\n\n```\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n```\n' >> "$TMP/vfence/widgets.md"
 case_run "a fenced example Recheck is not an assertion, and is never run (#199)" 0 "0 with a Recheck assertion" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vfence" --all --yes
+
+# #201: a stamp that names no by: or method: is still a stamp, and a missing by: reads as an agent's
+# (the shorter TTL). The default 2026-09-22 stamp is 9d past an agent's TTL and inside a human's.
+build_clean "$TMP/vnoby"
+sed -i 's/^Verified: .*$/Verified: 2026-09-22/' "$TMP/vnoby/widgets.md"
+printf 'Recheck: true\n' >> "$TMP/vnoby/widgets.md"
+case_run "a stamp with no by: or method: is seen, and due as an agent's (#201)" 0 "1 with a Recheck assertion, 1 due to run" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vnoby"
+# #201: only fact files hold assertions. A Recheck in an episodic note, a source stub or a router
+# is an example or a record, and was run.
+build_clean "$TMP/vnonfact"
+mkdir -p "$TMP/vnonfact/episodic" "$TMP/vnonfact/sources"
+for f in episodic/note.md sources/stub.md; do
+  printf '# Note\n\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n' > "$TMP/vnonfact/$f"
+done
+printf '\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n' >> "$TMP/vnonfact/INDEX.md"
+case_run "a Recheck in an episodic note, a source stub or INDEX.md is not read (#201)" 0 "1 stamped section(s), 0 with a Recheck" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vnonfact" --all --yes
 
 build_clean "$TMP/vfail2"
 printf 'Recheck: false\n' >> "$TMP/vfail2/widgets.md"
@@ -1684,6 +1708,11 @@ printf '# Open questions\n\n## Is it blue?\n\nNo source says.\n\nSource: manual\
 printf -- '- [fx-open-questions](fx-open-questions.md) — open questions\n' >> "$NFX/kb/unstamped-due/INDEX.md"
 case_run "nudge: unstamped sources are counted, CONFLICTED, episodic and state leaves excluded" 0 \
   "2 unstamped sources (never verified)" -- "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-due" --nudge
+# #201: a router is not a fact file, so a Source: line in INDEX.md is no unstamped source.
+build_clean "$NFX/kb/unstamped-index"
+printf '\n## Where it came from\n\nSource: manual\n' >> "$NFX/kb/unstamped-index/INDEX.md"
+case_run "nudge: a Source: line in INDEX.md is not counted as unstamped (#201)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/unstamped-index"
 case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "unstamped"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
 # Issue #64: §6 stacks one stamp per source, so a Source: line with no Verified: of its own is
@@ -1786,6 +1815,7 @@ case_run "nudge: a stale fact WITH a Recheck is not also counted as having none"
 # rest intact.
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
+cp -r "$ENGINE/scripts/kbengine" "$TMP/due-nockb/kbengine"   # kb-verify imports it; check-kb is what is left out
 case_run "nudge: without check-kb the other categories still print" 0 "episodic notes awaiting distillation" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/episodic-due" --nudge
 case_run "nudge: without check-kb the recheck count is a one-line warning" 0 "could not compute facts due for recheck" -- \
@@ -1840,6 +1870,7 @@ SFX="$TMP/session-fx"; mkdir -p "$SFX/scripts" "$SFX/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX/scripts/$f"; chmod +x "$SFX/scripts/$f"
 done
+cp -r "$ENGINE/scripts/kbengine" "$SFX/scripts/kbengine"   # check-kb and kb-due import it
 cp "$ENGINE/CONVENTIONS.md" "$SFX/CONVENTIONS.md"   # the engine reads its contract versions (§14) here
 SHOME="$TMP/session-home"; mkdir -p "$SHOME" "$TMP/session-cwd"
 
@@ -1912,6 +1943,7 @@ SFX2="$TMP/session-fx-clean"; mkdir -p "$SFX2/scripts" "$SFX2/kb"
 for f in kb-session-start kb-due kb-verify kb-watch check-kb kb-libraries; do
   cp "$ENGINE/scripts/$f" "$SFX2/scripts/$f"; chmod +x "$SFX2/scripts/$f"
 done
+cp -r "$ENGINE/scripts/kbengine" "$SFX2/scripts/kbengine"   # check-kb and kb-due import it
 cp "$ENGINE/CONVENTIONS.md" "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean"
 sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
@@ -4131,6 +4163,9 @@ printf '\n## kb-audit sweep — 2026-10-22\n' > "$TR/lib4/needs-attention.md"
 printf '\n# Amended 2026-10-28\n' >> "$TR/lib4/fx-golden.md"
 printf '\n## Routed 2026-10-22\n' >> "$TR/lib4/INDEX.md"
 printf '\n## Open question from 2026-10-22\n' > "$TR/lib4/fx-open-questions.md"
+mkdir -p "$TR/lib4/.claude" "$TR/lib4/.claude-plugin"   # tooling folders, not the knowledge base (#201)
+printf '## Run 2026-10-22\n' > "$TR/lib4/.claude/notes.md"
+printf '## PR 412 — limit raised\n' > "$TR/lib4/.claude-plugin/notes.md"
 printf '\n```\n## Update 2026-10-22\n```\n\n## UTF-16 files and ISO-8601 dates\n\n## Pricing for 2026\n\n## Contract v2.3\n' >> "$TR/lib4/widgets.md"
 case_run "check-transient: dated-by-design files, fences and lookalikes are not reported" 0 "no dated or ticket-titled headings" -- ctr4
 case_run "check-transient: it takes one library" 2 "usage" -- "$ENGINE/scripts/check-transient"

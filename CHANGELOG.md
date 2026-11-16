@@ -6,6 +6,20 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `check-transient` no longer reads `.claude/` or `.claude-plugin/` (#201). It listed its own excluded
+  folders, which lacked those two, so a dated or ticket-titled heading in a library's Claude Code
+  settings or plugin folder was reported as a fact file's. It now prunes the same folders as
+  `check-kb`, `kb-verify`, `kb-due` and `kb-sources`, and reads fact files by the rule they share, so
+  a `CONVENTIONS.md` inside a library is not read either.
+- `kb-due` no longer counts a stamp-less `Source:` line in an `INDEX.md` as an unstamped source
+  (#201). It took every file that was not a record by name, so a router counted; it now counts fact
+  files only, by the same rule `check-kb` applies, which a router is not (§6). A `CONVENTIONS.md`
+  inside a library is not counted either.
+- `kb-verify` reads a stamp that names no `by:` or `method:` (#201). It read only a stamp with both,
+  so a bare `Verified: 2026-09-22` was invisible to it: never listed, never due, never rechecked. It
+  now sees one, and a missing `by:` counts as an agent's, so the shorter agent TTL applies. It also
+  reads Rechecks in fact files only: a `Recheck:` in an episodic note, a source stub, an `INDEX.md`
+  or another record is no longer listed or run under `--yes`.
 - `kb-verify` no longer treats a `Verified:` stamp and `Recheck:` inside a code fence as an
   assertion (#199). It read every column-0 stamp, so an example in a fence was listed as due and
   ran under `--yes`, including the weekly job's `--yes --unattended`. `check-kb` already read a
