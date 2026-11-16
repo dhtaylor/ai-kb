@@ -113,15 +113,8 @@ Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
 import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
 
-NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
-          ".claude-plugin", ".claude", ".git"}
-STAMP = re.compile(r"^Verified:\s*(\d{4}-\d{2}-\d{2})\s*·\s*by:\s*(\S+)\s*·\s*method:\s*(\S+)\s*$")
-# `Recheck (attended):` marks an assertion that needs a person: a login, a credential or a live
-# system (contract 2.2). An attended run executes it like any other; --unattended skips it.
-RECHECK = re.compile(r"^Recheck(\s*\(attended\))?:\s*(.+?)\s*$")
-HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
-# Inside a code fence a stamp or Recheck is an example, as check-kb reads it (#199).
-FENCE = re.compile(r"^\s*(```|~~~)")
+from kbengine import factfiles
+
 URL =re.compile(r"https?://[^\s'\"|;)<>]+")
 # A command fetches when it runs one of these (issue #185); a URL that is only text in it (a
 # fixture origin, an echoed string) does not make it a fetch.
@@ -264,27 +257,15 @@ def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
     return age > (agent_ttl if s["by"] == "agent" else horizon)
 
 
-def kb_markdown(root: pathlib.Path):
-    """The tree's knowledge files, sorted. Excluded directories are PRUNED during the walk,
-    not filtered after it: rglob would descend into .git and the archived evidence, and on a
-    slow filesystem (a Windows drive under WSL) that walk alone took seconds on every session
-    start, since kb-due's nudge calls this from the SessionStart hook."""
-    out = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in NON_KB]
-        out += [pathlib.Path(dirpath) / n for n in filenames
-                if n.endswith(".md") and not n.endswith("-golden.md")]
-    return sorted(out)
-
-
 def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=False):
     """(due_sorted, found, with_cmd): every stamped section in the tree (`found`), the ones
     that carry a Recheck: assertion (`with_cmd`), and the due subset — oldest stamp first,
     NOT yet capped to a budget (`due_sorted`). Exposed so kb-due's nudge can report the same
     'due to run' set this script would select by default, without re-deriving staleness."""
     found = []
-    for f in kb_markdown(root):
-        found += sections(f)
+    for f, kind in factfiles.files(root):
+        if kind == "fact":       # a Recheck in a note, a stub or a router is an example, not an assertion
+            found += sections(f)
     with_cmd = [s for s in found if s["cmd"]]
     due = [s for s in with_cmd if all_sections or is_due(s, horizon, agent_ttl)]
     due.sort(key=lambda s: s["date"])
@@ -292,33 +273,13 @@ def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=
 
 
 def sections(path: pathlib.Path):
-    """Every stamped section: its heading, stamp line number, date, by, and assertion."""
-    lines = path.read_text(errors="replace").split("\n")
-    heading, out, fenced = "(file)", [], False
-    for i, line in enumerate(lines):
-        if FENCE.match(line):
-            fenced = not fenced
-            continue
-        if fenced:
-            continue
-        m = HEADING.match(line)
-        if m:
-            heading = m.group(2).strip()
-            continue
-        s = STAMP.match(line)
-        if not s:
-            continue
-        cmd, attended = None, False
-        for nxt in lines[i + 1:i + 3]:          # the assertion sits directly beneath the stamp
-            r = RECHECK.match(nxt)
-            if r:
-                cmd, attended = r.group(2), bool(r.group(1)); break
-            if nxt.strip():
-                break
-        out.append({"file": path, "heading": heading, "line": i,
-                    "date": datetime.date.fromisoformat(s.group(1)),
-                    "by": s.group(2), "method": s.group(3), "cmd": cmd, "attended": attended})
-    return out
+    """Every stamped section of a fact file: its heading, stamp line number (0-based), date, by,
+    method, and assertion. A stamp that names no `by:` is read as an agent's, the shorter TTL."""
+    return [{"file": path, "heading": sec.title if sec.level else "(file)", "line": st.line - 1,
+             "date": datetime.date.fromisoformat(st.date), "by": st.by or "agent",
+             "method": st.method or "unknown", "cmd": st.recheck and st.recheck.cmd,
+             "attended": bool(st.recheck and st.recheck.attended)}
+            for sec in factfiles.sections(path.read_text(errors="replace")) for st in sec.stamps]
 
 
 def last_grep(cmd: str):

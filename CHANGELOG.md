@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-verify` reads a stamp that names no `by:` or `method:` (#201). It read only a stamp with both,
+  so a bare `Verified: 2026-09-22` was invisible to it: never listed, never due, never rechecked. It
+  now sees one, and a missing `by:` counts as an agent's, so the shorter agent TTL applies. It also
+  reads Rechecks in fact files only: a `Recheck:` in an episodic note, a source stub, an `INDEX.md`
+  or another record is no longer listed or run under `--yes`.
 - `kb-verify` no longer treats a `Verified:` stamp and `Recheck:` inside a code fence as an
   assertion (#199). It read every column-0 stamp, so an example in a fence was listed as due and
   ran under `--yes`, including the weekly job's `--yes --unattended`. `check-kb` already read a

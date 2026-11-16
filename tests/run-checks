@@ -822,6 +822,24 @@ printf '\n## Writing an assertion\n\nSource: manual\n\n```\nVerified: 2026-01-01
 case_run "a fenced example Recheck is not an assertion, and is never run (#199)" 0 "0 with a Recheck assertion" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vfence" --all --yes
 
+# #201: a stamp that names no by: or method: is still a stamp, and a missing by: reads as an agent's
+# (the shorter TTL). The default 2026-09-22 stamp is 9d past an agent's TTL and inside a human's.
+build_clean "$TMP/vnoby"
+sed -i 's/^Verified: .*$/Verified: 2026-09-22/' "$TMP/vnoby/widgets.md"
+printf 'Recheck: true\n' >> "$TMP/vnoby/widgets.md"
+case_run "a stamp with no by: or method: is seen, and due as an agent's (#201)" 0 "1 with a Recheck assertion, 1 due to run" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vnoby"
+# #201: only fact files hold assertions. A Recheck in an episodic note, a source stub or a router
+# is an example or a record, and was run.
+build_clean "$TMP/vnonfact"
+mkdir -p "$TMP/vnonfact/episodic" "$TMP/vnonfact/sources"
+for f in episodic/note.md sources/stub.md; do
+  printf '# Note\n\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n' > "$TMP/vnonfact/$f"
+done
+printf '\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck: false\n' >> "$TMP/vnonfact/INDEX.md"
+case_run "a Recheck in an episodic note, a source stub or INDEX.md is not read (#201)" 0 "1 stamped section(s), 0 with a Recheck" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vnonfact" --all --yes
+
 build_clean "$TMP/vfail2"
 printf 'Recheck: false\n' >> "$TMP/vfail2/widgets.md"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vfail2/widgets.md"
@@ -1792,6 +1810,7 @@ case_run "nudge: a stale fact WITH a Recheck is not also counted as having none"
 # rest intact.
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
+cp -r "$ENGINE/scripts/kbengine" "$TMP/due-nockb/kbengine"   # kb-verify imports it; check-kb is what is left out
 case_run "nudge: without check-kb the other categories still print" 0 "episodic notes awaiting distillation" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/episodic-due" --nudge
 case_run "nudge: without check-kb the recheck count is a one-line warning" 0 "could not compute facts due for recheck" -- \
