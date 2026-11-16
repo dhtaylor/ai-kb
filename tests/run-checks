@@ -2062,6 +2062,16 @@ case_run "dotted JWT-shaped token is still flagged (#140)" 1 "SECRET?" -- \
 sec_stage "$TMP/sec11" "read \`db.dbo.Xk9fQ2mZ7p""L4vR8tN3wB\` today"
 case_run "dotted name with one random-looking segment is still flagged (#140)" 1 "SECRET?" -- \
   sh -c "cd '$TMP/sec11' && '$ENGINE/scripts/check-secrets'"
+# Issue #196: an arXiv identifier is a citation, not a secret. Only the exact
+# `arXiv:NNNN.NNNNN[vN]` shape is let go; the near-miss is assembled so this file stays clean.
+sec_stage "$TMP/sec12" "$(printf '%s\n' \
+  'Cited in the survey (arXiv:2412.18531) and again as arXiv:2412.18531v2.' \
+  'The 2007 paper arxiv:0704.0001 and the old-style arXiv:hep-th/9901001.')"
+case_run "arXiv identifiers are not flagged (#196)" 0 "clean" -- \
+  sh -c "cd '$TMP/sec12' && '$ENGINE/scripts/check-secrets'"
+sec_stage "$TMP/sec13" "see (arXiv:aB3xQ9zK7""mP2wR5t) for details"
+case_run "arXiv prefix does not hide a random-looking token (#196)" 1 "SECRET?" -- \
+  sh -c "cd '$TMP/sec13' && '$ENGINE/scripts/check-secrets'"
 case_run "entropy pass runs in --worktree mode" 1 "SECRET?" -- \
   sh -c "cd '$TMP/sec3' && '$ENGINE/scripts/check-secrets' --worktree"
 git -C "$TMP/sec3" -c user.email=t@t -c user.name=t commit -qm add >/dev/null 2>&1
