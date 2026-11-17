@@ -12,6 +12,8 @@ listing per library only what a person has to decide:
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
 - while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
 - a library behind the contract, ahead of this engine's, or on one this engine cannot serve;
+- anything about a library this could not work out, named as an item under it: a failure in one
+  library never stops the report, so a person finds out instead of reading a report that left it out;
 - kb-retrieve runs in the past 7 days that answered `fact not found` (kb-telemetry, #147): an absent
   topic named in the root `Not covered here:` line makes the next such question far cheaper. The
   report gives the count and cost; `kb-telemetry --not-found` lists the questions.
@@ -27,7 +29,8 @@ latest report while it is under eight days old and lists decisions.
 
 Usage: kb-report [tree ...] [--out DIR]
   With no tree, every registered library. Schedulable (#95): exit 0 nothing to decide, 1 decisions
-  written, 2 could not run.
+  written, 2 could not run (the engine's readers would not load, or the report's own folder is inside a
+  library). A library that cannot be read is an item under its name, not a failure.
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
@@ -95,15 +98,12 @@ def not_found_week(mods: dict) -> dict:
     return out
 
 
-class Unreadable(Exception):
-    """A field of the library's Attention that could not be worked out."""
-    def __init__(self, failed: Failed):
-        self.failed = failed
-
-
-def need(value):
+def computed(value, what: str, out: list):
+    """`value`, or None after listing under the library that `what` could not be worked out (#204): a
+    failure in one library is an item for a person, not the end of the report."""
     if isinstance(value, Failed):
-        raise Unreadable(value)
+        out.append(f"Could not compute {what} ({value.kind}). Run check-kb on the library to see why.")
+        return None
     return value
 
 
@@ -113,11 +113,12 @@ def decisions_for(att, mods: dict, gaps=None) -> list:
         out.append(f"Review packet: {h.get('packet', '?')}, prepared {h.get('prepared', '?')[:10]}. "
                    f"Ask a session to review it (`kb-apply show {p}`).")
 
-    for r in need(att.queue):
+    for r in computed(att.queue, "the open queue items", out) or []:
         out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
                    f"Triage it in needs-attention.md.")
 
-    attended = need(att.rechecks).attended
+    rechecks = computed(att.rechecks, "the facts due for recheck", out)
+    attended = rechecks.attended if rechecks else []
     if attended:
         out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
                    f"`kb-verify {root} --yes`.")
@@ -126,15 +127,16 @@ def decisions_for(att, mods: dict, gaps=None) -> list:
         out.append("Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule.")
     if att.sweep.due:
         # Once per sweep interval: listed while the sweep is due, gone once it is done (#120).
-        manual = need(att.manual_stubs)
+        manual = computed(att.manual_stubs, "the source stubs marked Liveness: manual", out)
         if manual:
             out.append(f"{len(manual)} source(s) marked Liveness: manual, which only a person can check: "
                        f"{', '.join(manual)}. Open each and confirm it still holds what its facts cite.")
-    notes = need(att.episodic)
+    notes = computed(att.episodic, "the notes awaiting distillation", out)
     if notes and not att.distill_covered:
         out.append(f"{notes} note(s) awaiting distillation and no packet drafted: run kb-distill.")
 
-    state, v, newest, _newer = need(att.contract)
+    found = computed(att.contract, "the contract version", out)
+    state, v, newest, _newer = found or (None, None, None, None)
     if state == "behind":
         out.append(f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
                    f"Decide whether to adopt it (CONVENTIONS §14).")
@@ -192,15 +194,14 @@ def main(argv) -> int:
     for t in trees:
         if not (t / "INDEX.md").is_file():
             continue
-        att = attention.attention(t, packets, consumed)
-        if attention.shelved(att, registered):   # a read-only archive cannot act on a decision (#141)
-            continue
         try:
+            att = attention.attention(t, packets, consumed)
+            if attention.shelved(att, registered):   # a read-only archive cannot act on a decision (#141)
+                continue
             items = decisions_for(att, mods, gaps)
         except Exception as e:
-            kind = e.failed.kind if isinstance(e, Unreadable) else type(e).__name__
-            print(f"kb-report: {t}: could not be read ({kind})", file=sys.stderr)
-            return 2
+            items = [f"Could not compute what needs a decision here ({type(e).__name__}). "
+                     f"Run check-kb on the library to see why."]
         if items:
             total += len(items)
             sections.append(f"## {attention.label(t)}\n\n" + "\n".join(f"- {x}" for x in items) + "\n")

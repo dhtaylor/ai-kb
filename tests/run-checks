@@ -3908,6 +3908,17 @@ sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/; s/^kb_contract: .*\$/kb
 case_run "kb-report: a library on a contract newer than the engine is listed (#204)" 0 "newer than this engine" -- \
   kbr "$RAH" "$RR/ahead-out" "$RB"
 
+# Issue #204 (d): a library kb-report cannot read is an item under its name; the others are still
+# reported and the exit is 1 (decisions waiting), not 2. agent_ttl as long as the horizon is unusable.
+RD="$RR/cantread"; build_clean "$RD/bad"
+sed -i 's/^verifier_budget: 5$/&\nagent_ttl: 90d/' "$RD/bad/INDEX.md"
+case_run "kb-report: a library that cannot be read does not stop the report, exit 1 (#204)" 1 "report written" -- \
+  env HOME="$RAH" "$ENGINE/scripts/kb-report" "$RD/bad" "$RL" "$RC" --out "$RD/out"
+case_run "kb-report: ...it is an item under that library (#204)" 0 "" -- \
+  bash -c 'kbr "$1" "$2" "$3" | grep -qF "Could not compute the facts due for recheck (ValueError)"' _ "$RAH" "$RD/out2" "$RD/bad"
+case_run "kb-report: ...and the libraries after it are still reported (#204)" 0 "" -- \
+  bash -c 'kbr "$1" "$2" "$3" "$4" | grep -q "^## fx"' _ "$RAH" "$RD/out3" "$RD/bad" "$RL"
+
 "$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
 case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
   "$ENGINE/scripts/kb-due" "$RC" --nudge

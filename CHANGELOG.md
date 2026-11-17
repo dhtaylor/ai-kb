@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-report` no longer stops at the first library it cannot read (#204). A malformed `agent_ttl:`
+  or an unreadable `needs-attention.md` ended the whole run with exit 2 and no report. It now writes
+  "Could not compute …" as an item under that library and reports the others. Exit 2 stays for an
+  engine that cannot load its readers, or a report folder inside a library.
 - `kb-report` lists a library whose contract is newer than the engine's (#204). It named a library
   behind the contract, or on one the engine cannot serve, but said nothing about one ahead, which
   `kb-due` already told to upgrade the engine.
