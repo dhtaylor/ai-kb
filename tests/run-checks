@@ -4303,6 +4303,10 @@ listed = "```yaml\n- id: bbbbbbbb\n  category: unstamped fact\n  status: open\n 
 (root / "needs-attention.md").write_text(fm + bare + listed)
 idx = root / "INDEX.md"; idx.write_text(idx.read_text() + "- [needs-attention](needs-attention.md) — the queue\n")
 PY
+case_run "kb-report: a queue record the parser cannot read is listed, not skipped (#204)" 0 "1 unreadable queue record(s) in needs-attention.md" -- \
+  kbr "$RAH" "$QG-out" "$QG"
+case_run "kb-report: ...and the record it can read is still listed (#204)" 0 "Queue item bbbbbbbb" -- \
+  kbr "$RAH" "$QG-out2" "$QG"
 case_run "check-kb warns about a queue record the parser cannot read, naming its line" 0 "needs-attention.md:17: a queue line kb-due and kb-report cannot read" -- \
   "$ENGINE/scripts/check-kb" "$QG"
 case_run "check-kb: ...one warning per unread record, not per line" 0 "" -- \

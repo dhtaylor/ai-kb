@@ -7,7 +7,8 @@ Reading all of them is a chore. This reads them and writes one file a week, outs
 listing per library only what a person has to decide:
 
 - a review packet waiting, and how to act on it;
-- each open queue item: its category, and where (file § section, source stub or watched source);
+- each open queue item: its category, and where (file § section, source stub or watched source),
+  and how many records of the queue could not be read at all;
 - rechecks that are due but marked `Recheck (attended):`, which only a person can run;
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
 - while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
@@ -116,6 +117,13 @@ def decisions_for(att, names: dict, gaps=None) -> list:
     for r in computed(att.queue, "the open queue items", out) or []:
         out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
                    f"Triage it in needs-attention.md.")
+
+    bad = att.queue_unreadable   # records the queue reader skips are named, not lost (#168, #204)
+    if not (isinstance(bad, Failed) and bad == att.queue):   # a queue that cannot be read is listed once
+        bad = computed(bad, "the unreadable queue records", out)
+        if bad:
+            out.append(f"{len(bad)} unreadable queue record(s) in needs-attention.md, which the report cannot "
+                       f"list: check-kb names the lines.")
 
     rechecks = computed(att.rechecks, "the facts due for recheck", out)
     attended = rechecks.attended if rechecks else []

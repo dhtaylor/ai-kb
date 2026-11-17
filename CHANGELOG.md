@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-report` lists the queue records it cannot read (#204). `kb-due` has counted them since #168,
+  but the report skipped them in silence, so an unreadable record was missing from both the queue
+  items and the decisions. It now says how many there are, and that `check-kb` names the lines.
 - `kb-due --nudge` no longer names a sweep that a pending `kb-audit` packet already covers, or the
   episodic notes a pending `kb-distill` packet covers (#204). It named both the packet and the work
   inside it, so the same decision showed twice; `kb-report` already left the second out. A packet
