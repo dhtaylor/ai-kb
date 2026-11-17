@@ -43,79 +43,35 @@ Exit 0, or 2 if the registry exists and git cannot read it.
 """
 import os, pathlib, re, subprocess, sys
 
+from kbengine import library
+
 REGISTRY = pathlib.Path.home() / ".config" / "ai-kb" / "libraries"
-DOMAIN = re.compile(r"^domain:\s*[\"']?([\w-]+)[\"']?\s*(?:#.*)?$")
+NAME = re.compile(r"[\w-]+")      # what a registered library may be called
 
 
 def declared_name(lib: pathlib.Path):
-    """The `domain:` a library's root INDEX.md declares in its frontmatter, or None."""
-    try:
-        lines = (lib / "INDEX.md").read_text(errors="replace").splitlines()
-    except OSError:
-        return None
-    if not lines or lines[0].strip() != "---":
-        return None
-    for line in lines[1:]:
-        if line.strip() == "---":
-            return None
-        m = DOMAIN.match(line.strip())
-        if m:
-            return m.group(1)
-    return None
-
-
-TERMS_KEY = re.compile(r"^(keywords|tags):\s*(.*?)\s*$")
+    """The `domain:` a library's root INDEX.md declares in its frontmatter, if it is a name a
+    library can be registered by, else None."""
+    name = library.library(lib).name
+    return name if name and NAME.fullmatch(name) else None
 
 
 def declared_terms(lib: pathlib.Path) -> set:
     """The `keywords:` and `tags:` of a library's root INDEX.md frontmatter, normalized: lowercase,
-    runs of space, `_` and `-` read as one `-`, a trailing plural `s` dropped. Reads the inline form
-    (`[a, b]`) and the block form (`- a` lines). Empty if there is none. Standard library only."""
-    try:
-        lines = (lib / "INDEX.md").read_text(errors="replace").splitlines()
-    except OSError:
-        return set()
-    if not lines or lines[0].strip() != "---":
-        return set()
-    raw, in_list = [], False
-    for line in lines[1:]:
-        if line.strip() == "---":
-            break
-        m = TERMS_KEY.match(line)
-        if m:
-            value = re.sub(r"\s+#.*$", "", m.group(2))
-            in_list = not value
-            raw += value.strip("[]").split(",")
-        elif in_list and line.lstrip().startswith("-"):
-            raw.append(re.sub(r"\s+#.*$", "", line.lstrip()[1:]))
-        elif line.strip() and not line.startswith((" ", "\t", "#")):
-            in_list = False
-    return {t for t in map(normalize_term, raw) if t}
+    runs of space, `_` and `-` read as one `-`, a trailing plural `s` dropped. Empty if there is
+    none."""
+    return set(library.library(lib).terms)
 
 
-def normalize_term(t: str) -> str:
-    t = re.sub(r"[\s_-]+", "-", t.strip().strip("\"'").lower()).strip("-")
-    return t[:-1] if len(t) > 3 and t.endswith("s") and not t.endswith("ss") else t
+normalize_term = library.normalize_term
 
 
 def contract_supported(path: pathlib.Path) -> bool:
-    """False if the library's kb_contract is an unsupported major or unreadable, by check-kb's
-    own rule (one copy). True if this engine cannot load check-kb or read its own contract
-    versions: that is an engine defect check-kb reports, not grounds to withhold every library."""
-    import importlib.machinery, importlib.util
-    sys.dont_write_bytecode = True
-    try:
-        loader = importlib.machinery.SourceFileLoader(
-            "check_kb", str(pathlib.Path(__file__).resolve().parent / "check-kb"))
-        check_kb = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
-        loader.exec_module(check_kb)
-        check_kb.known_contracts()
-    except (OSError, RuntimeError):
-        return True
-    try:
-        return check_kb.contract_status(check_kb.declared_contract(path))[0] != "unsupported"
-    except ValueError:
-        return False
+    """False if the library's kb_contract is an unsupported major or unreadable (ADR-0016). True
+    if this engine cannot read its own contract versions: that is an engine defect check-kb
+    reports, not grounds to withhold every library."""
+    status = library.library(path).contract
+    return status is None or status[0] not in ("unsupported", "malformed")
 
 
 def state_of(name: str, path: pathlib.Path) -> str:
@@ -190,22 +146,7 @@ def same_origin(a: str, b: str) -> bool:
 def links_to(root) -> dict:
     """{library: origin} from the `links_to:` block in a root INDEX.md's frontmatter (contract 2.6):
     where each library it links into comes from. {} when it declares none."""
-    try:
-        text = (pathlib.Path(root) / "INDEX.md").read_text(errors="replace")
-    except OSError:
-        return {}
-    block = text.split("---\n", 2)
-    if not text.startswith("---\n") or len(block) < 3:
-        return {}
-    out, inside = {}, False
-    for line in block[1].split("\n"):
-        if re.match(r"^links_to:\s*$", line):
-            inside = True
-        elif inside and (m := re.match(r"^[ \t]+([A-Za-z0-9][\w.-]*):[ \t]*(\S.*?)[ \t]*$", line)):
-            out[m.group(1)] = m.group(2).strip("'\"")
-        elif inside and line.strip():
-            inside = line[:1] in " \t"
-    return out
+    return library.library(root).links_to
 
 
 def read_only(path) -> dict:

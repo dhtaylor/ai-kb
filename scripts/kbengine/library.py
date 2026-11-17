@@ -18,9 +18,9 @@ from typing import NamedTuple
 
 from . import contract
 
-# Stdlib only, deliberately: this runs in every commit hook, on machines with no PyYAML (check-kb's
-# own history, #1). It reads what the contract needs: `key: value` at the top level, and under a
-# bare `key:` the indented `child: value` lines and `- item` lines of its block.
+# Stdlib only, deliberately: this runs in every commit hook, on machines with no PyYAML (check-kb
+# once imported it and was a traceback on CI). It reads what the contract needs: `key: value` at the
+# top level, and under a bare `key:` the indented `child: value` lines and `- item` lines of its block.
 KEY = re.compile(r"^([A-Za-z_][\w-]*):\s*(.*)$")
 CHILD = re.compile(r"^[ \t]+([A-Za-z0-9][\w.-]*):[ \t]*(\S.*?)[ \t]*$")
 DEFAULT_BUDGET = 5      # verifier_budget when a library declares none (or 0)

@@ -734,6 +734,7 @@ case_run "triage-tier file declaring Read fails" 1 "outside the 'triage' tier's 
 BFX="$TMP/bootstrap-fx"; mkdir -p "$BFX/scripts" "$BFX/.claude-plugin"
 cp "$ENGINE/scripts/kb-bootstrap" "$BFX/scripts/kb-bootstrap"; chmod +x "$BFX/scripts/kb-bootstrap"
 cp "$ENGINE/scripts/kb-libraries" "$BFX/scripts/kb-libraries"   # kb-bootstrap asks it which targets are links
+cp -r "$ENGINE/scripts/kbengine" "$BFX/scripts/kbengine"   # kb-libraries imports it
 printf '# fixture contract\n' > "$BFX/CONVENTIONS.md"
 printf '{"name":"fx-market","plugins":[{"name":"fx-plugin"}]}\n' > "$BFX/.claude-plugin/marketplace.json"
 printf '#!/usr/bin/env bash\ntrue\n' > "$BFX/scripts/kb-session-start"
@@ -3670,6 +3671,7 @@ case_run "kb-audit describes resuming from a review packet" 0 "" -- \
 # repository and comparing its refs to the ones recorded when it was made.
 BK="$TMP/backup"; BKH="$BK/home"; mkdir -p "$BKH" "$BK/eng/scripts"
 cp "$ENGINE/scripts/kb-backup" "$ENGINE/scripts/kb-libraries" "$BK/eng/scripts/"
+cp -r "$ENGINE/scripts/kbengine" "$BK/eng/scripts/kbengine"   # kb-libraries imports it
 git init -q "$BK/eng" && git -C "$BK/eng" add -A && git -C "$BK/eng" -c user.email=t@t -c user.name=t commit -qm engine
 build_clean "$BK/libs/fx"; git -C "$BK/libs/fx" -c user.email=t@t -c user.name=t commit -qm init
 git -C "$BK/libs/fx" tag v1
@@ -4047,6 +4049,7 @@ case_run "ref: ...and list no longer shows a ref" 1 "" -- bash -c 'HOME="$1" "$2
 # which warns (the consumer can't fix a published library) instead of failing as a dead link.
 same_origin() { python3 -c 'import importlib.machinery as m, importlib.util as u, sys
 sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[1] + "/scripts")   # kb-libraries imports kbengine, found beside it as a script finds it
 l = m.SourceFileLoader("kl", sys.argv[1] + "/scripts/kb-libraries"); s = u.spec_from_loader("kl", l)
 k = u.module_from_spec(s); l.exec_module(k); sys.exit(0 if k.same_origin(sys.argv[2], sys.argv[3]) else 1)' "$ENGINE" "$1" "$2"; }
 case_run "origins: https and ssh forms of one repository are the same" 0 "" -- same_origin https://example.com/acme/lib.git git@example.com:acme/lib
