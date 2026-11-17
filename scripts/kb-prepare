@@ -29,7 +29,7 @@ due, or the run proposed nothing), 1 a packet is waiting for a decision, 2 could
 """
 import datetime, importlib.machinery, importlib.util, json, os, pathlib, re, subprocess, sys
 
-from kbengine import attention, env, library, queue
+from kbengine import attention, clock, env, library, queue
 from kbengine.attention import Failed
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
@@ -175,4 +175,4 @@ def main(argv) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))

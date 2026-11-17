@@ -37,15 +37,14 @@ does not ask.
 kb-verify (due sections), check-kb (the section readers), kb-sources (manual stubs) are scripts, not
 modules yet: they are loaded here, in one place, on first use, rather than by each caller.
 """
-import collections, datetime, importlib.machinery, importlib.util, pathlib, re, subprocess, sys
+import collections, importlib.machinery, importlib.util, pathlib, re, subprocess, sys
 from dataclasses import dataclass
 from functools import cached_property
 from typing import NamedTuple
 
-from . import contract, factfiles, library, queue
+from . import clock, contract, factfiles, library, queue
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent.parent
-TODAY = datetime.date.today()
 DISTILLED = re.compile(r"^##\s+Distill", re.M)
 
 
@@ -200,7 +199,8 @@ class Attention:
         self.sweep_covered = "kb-audit" in covered
         self.distill_covered = "kb-distill" in covered
         lib = self.lib
-        age = (TODAY - lib.last_swept).days if lib.last_swept is not None else None
+        today = clock.today()
+        age = (today - lib.last_swept).days if lib.last_swept is not None else None
         self.sweep = Sweep(age is None or age > lib.sweep_interval, age, lib.sweep_interval)
 
     # -- facts past their horizon: one pass over the fact files serves rechecks and stale --

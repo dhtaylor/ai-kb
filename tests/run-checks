@@ -4434,6 +4434,33 @@ printf -- '---\npacket: kb-distill\nlibrary: fx\nlibrary_path: %s\nlibrary_head:
 case_run "kb-apply list: XDG_STATE_HOME does not move the packets" 1 "1 packet(s) waiting" -- \
   env HOME="$XHH" XDG_STATE_HOME="$XOTHER/state" "$ENGINE/scripts/kb-apply" list
 
+# ------------------------------------------------ KB_TODAY moves the engine's date logic (#205) ----
+# Staleness and sweep age are judged against kbengine.clock.today(), which reads KB_TODAY each time it
+# is asked. The library is stamped 2026-09-22 and swept the same day, so the same files are clean, or
+# stale, or dated in the future, depending only on the day the engine is told it is.
+CK="$TMP/clock"; mkdir -p "$CK"; build_clean "$CK/clocklib"
+sed -i 's/^last_swept: never$/last_swept: 2026-09-22/' "$CK/clocklib/INDEX.md"
+case_run "KB_TODAY: check-kb finds a stamp dated in the future when today is earlier" 1 "stamp dated in the future" -- \
+  env KB_TODAY=2026-09-01 "$ENGINE/scripts/check-kb" "$CK/clocklib"
+case_run "KB_TODAY: check-kb is clean the day after the stamp" 0 "clean" -- env KB_TODAY=2026-09-23 "$ENGINE/scripts/check-kb" "$CK/clocklib"
+case_run "KB_TODAY: kb-due sees a sweep one day old" 0 "" -- \
+  bash -c 'KB_TODAY=2026-09-23 "$1" "$2" | grep -Eq "clocklib +swept 1d ago"' _ "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: kb-due sees the same sweep seventy days old" 0 "" -- \
+  bash -c 'KB_TODAY=2026-12-01 "$1" "$2" | grep -Eq "clocklib +swept 70d ago"' _ "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: kb-due --nudge names the stale fact once the day is late enough" 0 "clocklib: sweep due (last swept 70d ago, every 30d); 1 stale fact" -- \
+  env KB_TODAY=2026-12-01 "$ENGINE/scripts/kb-due" "$CK/clocklib" --nudge
+case_run "KB_TODAY: kb-due --nudge says nothing of it the day after the stamp" 0 "" -- \
+  bash -c '! KB_TODAY=2026-09-23 "$1" "$2" --nudge | grep -q "clocklib: .*stale fact"' _ "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: a malformed value is exit 2 naming the variable, in check-kb" 2 "KB_TODAY" -- env KB_TODAY=tomorrow "$ENGINE/scripts/check-kb" "$CK/clocklib"
+case_run "KB_TODAY: ...and in kb-due, which does not fall back to the real date" 2 "KB_TODAY" -- env KB_TODAY=tomorrow "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: ...and in kb-verify" 2 "KB_TODAY" -- env KB_TODAY=tomorrow "$ENGINE/scripts/kb-verify" "$CK/clocklib" --yes
+cap_tree "$CK/cap"
+case_run "KB_TODAY: kb-capture dates the note it files" 0 "" -- \
+  bash -c 'cd "$1" && echo "Saw a thing." | KB_TODAY=2026-03-04 "$2/scripts/kb-capture" --title "clocked" --from - >/dev/null 2>&1; ls "$1"/knowledge/episodic/2026-03-04-* >/dev/null' _ "$CK/cap" "$ENGINE"
+mkdir -p "$CK/init"; git init -q "$CK/init"
+case_run "KB_TODAY: kb-init dates the router it scaffolds" 0 "" -- \
+  bash -c 'KB_TODAY=2026-03-04 "$1/scripts/kb-init" "$2" >/dev/null 2>&1; grep -q "created: 2026-03-04" "$2/knowledge/INDEX.md"' _ "$ENGINE" "$CK/init"
+
 # ------------------------------------------- a home directory managed by Stow or similar (#138) ----
 # A dotfiles manager links files, or whole folders, from a repository synced across machines. Every
 # engine write goes through the link, so this machine's paths land in that repository. The engine

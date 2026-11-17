@@ -74,7 +74,7 @@ last_swept: never
 metadata:
   type: index
   node_type: router
-  created: $(date +%F)
+  created: $(date ${KB_TODAY:+-d "$KB_TODAY"} +%F)
 tags: [${name}]
 keywords: [${name}, deployment, operations, known issues, runbook]
 ---

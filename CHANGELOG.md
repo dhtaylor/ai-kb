@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `KB_TODAY` (YYYY-MM-DD) now sets the date for the engine's Python as well as session start (#205).
+  `check-kb`, `kb-verify`, `kb-due`, `kb-report`, `kb-prepare`, `kb-watch` and `kb-sources` read it
+  through `kbengine.clock.today()` at the moment they need it, where each had frozen the real date at
+  start; `kb-init` and `kb-capture` use it for the date they write. Timestamps (a report's `generated`
+  and ISO week, logs, backups) stay on the real clock. A malformed value exits 2 and names the
+  variable; it never falls back to the real date. It is documented in CONTRIBUTING as an injection
+  point. Nothing changes when it is unset.
 - `kb-telemetry` and `kb-eval-sample` honour `CLAUDE_CONFIG_DIR` (#205). They read transcripts from
   `~/.claude/projects` only, though Claude Code writes them under that variable's folder when it is
   set, and `kb-bootstrap` already followed it. `kb-report`'s count of fact-not-found runs reads the

@@ -67,7 +67,7 @@ Exit 0 when every URL is alive (or nothing was fetched), 1 when any was dead or 
 """
 import pathlib, re, sys
 
-from kbengine import factfiles, queue
+from kbengine import clock, factfiles, queue
 
 UA = "kb-sources/1 (knowledge-base liveness check; HEAD only unless refused)"
 TIMEOUT = 10
@@ -274,4 +274,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))

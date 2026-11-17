@@ -94,7 +94,7 @@ Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
 
-from kbengine import factfiles, library, queue
+from kbengine import clock, factfiles, library, queue
 
 URL =re.compile(r"https?://[^\s'\"|;)<>]+")
 # A command fetches when it runs one of these (issue #185); a URL that is only text in it (a
@@ -102,7 +102,6 @@ URL =re.compile(r"https?://[^\s'\"|;)<>]+")
 FETCHER = re.compile(r"(?<![\w./-])(curl|wget|https?|xh)(?![\w.-]|://)|\b(urlopen|urlretrieve|urllib|requests|httpx|aiohttp)\b")
 SHORT_FRAGMENT = 4      # words; 26 of 31 fragments in the #34 sample were 1-4 words long
 REUSE_LIMIT = 2         # sections one (url, fragment) pair may back, all in one file (#41)
-TODAY = datetime.date.today()
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 CLIMB = re.compile(r"(?<![\w.])((?:\.\./)+|(?:\.\./)*\.\.(?![\w./]))")
 
@@ -149,7 +148,7 @@ def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
     Top-level (not nested in main()) so kb-due can import and call it: the two scripts must
     judge staleness identically, and a condition copied into a second file is a condition
     that can drift out from under the first."""
-    age = (TODAY - s["date"]).days
+    age = (clock.today() - s["date"]).days
     return age > (agent_ttl if s["by"] == "agent" else horizon)
 
 
@@ -414,7 +413,7 @@ def main(argv) -> int:
         print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
         for s in unverifiable:
             print(f"    {s['file'].relative_to(root)} § {s['heading']}"
-                  f"  ({(TODAY - s['date']).days}d, by: {s['by']})")
+                  f"  ({(clock.today() - s['date']).days}d, by: {s['by']})")
 
     if not selected:
         print("\nNothing to run.")
@@ -422,7 +421,7 @@ def main(argv) -> int:
 
     print(f"\n  Commands{'' if '--yes' in flags else ' (NOT run — pass --yes to run them)'}:")
     for s in selected:
-        print(f"    {s['file'].relative_to(root)} § {s['heading']}  ({(TODAY - s['date']).days}d)")
+        print(f"    {s['file'].relative_to(root)} § {s['heading']}  ({(clock.today() - s['date']).days}d)")
         print(f"      $ {s['cmd']}")
     if "--yes" not in flags:
         print("\nRead them before you do. A library's assertions run as you, with your privileges.")
@@ -457,11 +456,11 @@ def main(argv) -> int:
     if passed and "--apply" in flags:
         for s in passed:
             lines = s["file"].read_text().split("\n")
-            lines[s["line"]] = f"Verified: {TODAY} · by: agent · method: query"
+            lines[s["line"]] = f"Verified: {clock.today()} · by: agent · method: query"
             s["file"].write_text("\n".join(lines))
         for f in {s["file"] for s in passed}:
             move_floor(f)
-        print(f"\n  restamped {len(passed)} section(s) to {TODAY} (by: agent — kb-verify is an agent, "
+        print(f"\n  restamped {len(passed)} section(s) to {clock.today()} (by: agent — kb-verify is an agent, "
               f"whatever ran the assertion)")
     elif passed:
         print(f"\n  {len(passed)} section(s) still hold. Not restamped — pass --apply for that.")
@@ -499,4 +498,4 @@ def main(argv) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))

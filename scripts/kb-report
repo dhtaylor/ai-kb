@@ -35,7 +35,7 @@ Usage: kb-report [tree ...] [--out DIR]
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
-from kbengine import attention, contract, env
+from kbengine import attention, clock, contract, env
 from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
@@ -238,4 +238,4 @@ def main(argv) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))

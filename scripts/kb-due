@@ -81,7 +81,7 @@ Exit 0 always: being due is a nudge, never a failure.
 """
 import importlib.machinery, importlib.util, pathlib, shlex, sys
 
-from kbengine import attention, contract
+from kbengine import attention, clock, contract
 from kbengine.attention import Failed, label
 
 
@@ -306,4 +306,4 @@ def main(argv) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))
