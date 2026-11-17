@@ -4156,6 +4156,15 @@ case_run "kb-catalog: the count says how many are served" 0 "3 registered, 2 ser
 case_run "kb-catalog: no registry is a clean empty catalog" 0 "no libraries are registered" -- \
   env HOME="$TMP/cat-empty-home" "$ENGINE/scripts/kb-catalog"
 case_run "kb-catalog: it takes no arguments" 2 "usage" -- kbcat --all
+# #203: a trailing comment is no part of a value, quoted or not. The catalog showed `general  # note`
+# as the scope and left the quotes and comment on a quoted description.
+CH2="$TMP/cathome2"; mkdir -p "$CH2"; build_clean "$CD/delta"
+sed -i 's/^scope: general$/scope: general  # the tie-breaker says general/; s/^description: a test fixture\.$/description: "Router for delta"  # note/' "$CD/delta/INDEX.md"
+HOME="$CH2" "$ENGINE/scripts/kb-library" add "$CD/delta" >/dev/null
+case_run "kb-catalog: a trailing comment is not part of the scope (#203)" 0 "delta  [general]  " -- \
+  env HOME="$CH2" "$ENGINE/scripts/kb-catalog"
+case_run "kb-catalog: a quoted description with a trailing comment reads as the description (#203)" 0 "  covers: Router for delta" -- \
+  env HOME="$CH2" "$ENGINE/scripts/kb-catalog"
 
 # ------------------------------------------- check-transient: dated and ticket headings (#136) ----
 # A fact file states current state. A date or a ticket id in a heading is the shape the field
