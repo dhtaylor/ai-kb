@@ -4339,6 +4339,20 @@ contract_header() {
 }
 case_run "CONVENTIONS: the header names the newest contract version in §14" 0 "matches §14" -- contract_header
 
+# kb-init writes the contract version a new library declares, as a literal in a heredoc. Publishing a
+# version means raising it by hand, so a version published without it would scaffold libraries that
+# are born behind (#203). The second case is the negative control: a stale literal is caught.
+init_contract() { # init_contract <kb-init> <CONVENTIONS.md>
+  local init newest
+  init=$(sed -n 's/^kb_contract: "\([0-9][0-9]*\.[0-9][0-9]*\)"$/\1/p' "$1" | head -1)
+  newest=$(awk '/^## [0-9]+\. Contract versions/{p=1;next} /^## /{p=0} p && /^### [0-9]+\.[0-9]+ *$/{print $2}' "$2" | sort -t. -k1,1n -k2,2n | tail -1)
+  [ -n "$init" ] && [ "$init" = "$newest" ] && echo "kb-init writes $init, the newest in §14" || { echo "kb-init writes ${init:-nothing}, §14's newest is $newest"; return 1; }
+}
+case_run "kb-init: the contract version it writes is the newest in §14" 0 "the newest in §14" -- \
+  init_contract "$ENGINE/scripts/kb-init" "$ENGINE/CONVENTIONS.md"
+sed 's/^kb_contract: "[0-9.]*"$/kb_contract: "2.0"/' "$ENGINE/scripts/kb-init" > "$TMP/kb-init-stale"
+case_run "kb-init: a stale contract version is caught" 1 "writes 2.0" -- init_contract "$TMP/kb-init-stale" "$ENGINE/CONVENTIONS.md"
+
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
   exit 0
