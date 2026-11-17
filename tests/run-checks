@@ -1795,6 +1795,13 @@ case_run "nudge: sections with no Source: line are counted" 0 "2 unsourced secti
   "$ENGINE/scripts/kb-due" "$NFX/kb/unsourced-due" --nudge
 case_run "nudge: a fully sourced library reports no unsourced sections" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "unsourced"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
+# #203: a field is read from the frontmatter, not the whole file. A last_swept: line in the body is
+# prose; read as a declaration, it made a library never swept look swept an hour ago.
+build_clean "$NFX/kb/body-swept"
+sed -i '/^last_swept:/d' "$NFX/kb/body-swept/INDEX.md"
+printf '\nlast_swept: %s\n' "$(date +%F)" >> "$NFX/kb/body-swept/INDEX.md"
+case_run "kb-due: a last_swept: line in the body is not a sweep (#203)" 0 "body-swept: never swept" -- \
+  env HOME="$TMP/archhome" "$ENGINE/scripts/kb-due" "$NFX/kb/body-swept" --quiet
 # Issue #63: a stale fact with no Recheck is due too. kb-verify cannot settle it, so it is its own
 # category, told apart from rechecks a command can run, and it is not capped by verifier_budget.
 build_clean "$NFX/kb/stale-noassert"

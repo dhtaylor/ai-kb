@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-due`, `kb-verify`, `kb-prepare` and the queue module read a library's root `INDEX.md` fields
+  from its frontmatter only (#203). They searched the whole file, so a `last_swept:`, `archived:`,
+  `freshness_horizon:`, `verifier_budget:`, `agent_ttl:` or `domain:` line in the body, which is
+  prose, could be read as a declaration when the frontmatter had none. One reader of that file now
+  serves every script (`kbengine/library.py`), as `kbengine/contract.py` does for the contract
+  versions.
 - `check-transient` no longer reads `.claude/` or `.claude-plugin/` (#201). It listed its own excluded
   folders, which lacked those two, so a dated or ticket-titled heading in a library's Claude Code
   settings or plugin folder was reported as a fact file's. It now prunes the same folders as
