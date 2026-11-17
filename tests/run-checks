@@ -3919,6 +3919,17 @@ case_run "kb-report: ...it is an item under that library (#204)" 0 "" -- \
 case_run "kb-report: ...and the libraries after it are still reported (#204)" 0 "" -- \
   bash -c 'kbr "$1" "$2" "$3" "$4" | grep -q "^## fx"' _ "$RAH" "$RD/out3" "$RD/bad" "$RL"
 
+# Issue #204 (e): an unreadable registry is a warning, not the end of the report, as in kb-due.
+RE="$RR/badreg"; mkdir -p "$RE/home/.config/ai-kb"; printf '[library "x"\n = = =\n' > "$RE/home/.config/ai-kb/libraries"
+case_run "kb-report: an unreadable registry warns and still reports the trees it was given (#204)" 1 "library registry unreadable" -- \
+  env HOME="$RE/home" "$ENGINE/scripts/kb-report" "$RL" --out "$RE/out"
+case_run "kb-report: ...and with no tree given it writes the report, nothing to decide (#204)" 0 "library registry unreadable" -- \
+  env HOME="$RE/home" "$ENGINE/scripts/kb-report" --out "$RE/out2"
+case_run "kb-report: ...a report was written either way (#204)" 0 "" -- \
+  bash -c 'grep -q "^decisions: 0" "$1"/*.md && grep -q "^decisions: [1-9]" "$2"/*.md' _ "$RE/out2" "$RE/out"
+case_run "kb-report: ...and the unreadable registry is not blamed on the library (#204)" 1 "" -- \
+  grep -q "Could not compute" "$RE/out"/*.md
+
 "$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
 case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
   "$ENGINE/scripts/kb-due" "$RC" --nudge

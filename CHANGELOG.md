@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-report` goes on when the library registry cannot be read (#204), as `kb-due` does. It stopped
+  with exit 2 and "could not load the engine's readers". It now warns on stderr that the registry is
+  unreadable, reports any library named on the command line, and finds none to report otherwise.
 - `kb-report` no longer stops at the first library it cannot read (#204). A malformed `agent_ttl:`
   or an unreadable `needs-attention.md` ended the whole run with exit 2 and no report. It now writes
   "Could not compute …" as an item under that library and reports the others. Exit 2 stays for an
