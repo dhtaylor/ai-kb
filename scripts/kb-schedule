@@ -21,7 +21,7 @@ calling a tool from one failed under the timer and was queued as stale although 
 `install` records the PATH it was run with in schedule.conf, and `run` uses it for every step.
 Reinstall to change it.
 
-The log, ${XDG_STATE_HOME:-~/.local/state}/ai-kb/schedule.log, records each step's exit code and
+The log, ~/.local/state/ai-kb/schedule.log (ADR-0021), records each step's exit code and
 nothing a step printed, so it never holds a fact's or a source's text. A run that finds another
 still holding the lock does nothing.
 
@@ -35,20 +35,20 @@ Usage: kb-schedule install [--backend systemd|cron] [--prepare] [--budget-usd N]
 status exits 0 installed, 1 not installed. run exits 0 when every step ran (findings included), 2
 when a step could not run. install and remove exit 0, or 2 on a usage or system error.
 """
-import datetime, fcntl, importlib.machinery, importlib.util, os, pathlib, shutil, subprocess, sys
+import datetime, fcntl, importlib.machinery, importlib.util, os, pathlib, subprocess, sys
+
+from kbengine import env
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ENGINE / "scripts"
 UNIT = "ai-kb-schedule"
 MARK = "# ai-kb-schedule"
-HOME = pathlib.Path.home()
-CONFIG_HOME = pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
-STATE = pathlib.Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local" / "state") / "ai-kb"
-CONF = CONFIG_HOME / "ai-kb" / "schedule.conf"
-UNIT_DIR = CONFIG_HOME / "systemd" / "user"
+STATE = env.state_dir()
+CONF = env.config_dir() / "ai-kb" / "schedule.conf"
+UNIT_DIR = env.config_dir() / "systemd" / "user"
 LOG = STATE / "schedule.log"
-SYSTEMCTL = os.environ.get("KB_SYSTEMCTL", "systemctl")
-CRONTAB = os.environ.get("KB_CRONTAB", "crontab")
+SYSTEMCTL = env.systemctl_binary()
+CRONTAB = env.crontab_binary()
 
 
 def say(msg):
@@ -120,7 +120,7 @@ def install(opts: dict) -> int:
     if backend not in ("systemd", "cron"):
         return fail(f"unknown backend {backend}: use systemd or cron")
     prepare = "--prepare" in opts
-    claude = opts.get("--claude") or os.environ.get("KB_CLAUDE") or shutil.which("claude") or ""
+    claude = opts.get("--claude") or env.claude_binary() or ""
     if prepare and not claude:
         return fail("--prepare needs claude: pass --claude PATH")
     budget = opts.get("--budget-usd", "1.00")

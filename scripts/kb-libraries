@@ -13,7 +13,7 @@ A library is installed on a machine when it is registered there, and only then. 
 A read-only library is served like any other, but this machine never curates it: nothing commits
 to it, writes into it or nudges about it. Its corrections are filed with its origin.
 
-The path is FIXED and does not follow XDG_CONFIG_HOME: that variable is often set only in an
+The path is FIXED and does not follow XDG_CONFIG_HOME (ADR-0014, ADR-0021): that variable is often set only in an
 interactive shell, which would put a git hook and the terminal on two different registries
 (the trap ADR-0008 documents). It is not ~/.gitconfig, which people sync across machines.
 
@@ -43,9 +43,9 @@ Exit 0, or 2 if the registry exists and git cannot read it.
 """
 import os, pathlib, re, subprocess, sys
 
-from kbengine import library
+from kbengine import env, library
 
-REGISTRY = pathlib.Path.home() / ".config" / "ai-kb" / "libraries"
+REGISTRY = env.registry_path()
 NAME = re.compile(r"[\w-]+")      # what a registered library may be called
 
 
@@ -114,8 +114,9 @@ def library_home(engine: pathlib.Path) -> pathlib.Path:
     """Where new libraries are cloned: $KB_LIBRARY_HOME, else kb.libraryHome in the registry
     (kb-bootstrap records it), else <engine>/kb. Only a default for kb-library add and import;
     a library is never discovered by being in it."""
-    if os.environ.get("KB_LIBRARY_HOME"):
-        return pathlib.Path(os.environ["KB_LIBRARY_HOME"]).expanduser()
+    home = env.library_home_override()
+    if home:
+        return home
     if REGISTRY.is_file():
         r = subprocess.run(["git", "config", "--file", str(REGISTRY), "--get", "kb.libraryHome"],
                            capture_output=True, text=True)

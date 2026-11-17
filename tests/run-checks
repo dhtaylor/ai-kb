@@ -4374,6 +4374,45 @@ case_run "kb-schedule run under a bare PATH still finds a tool from the installi
 case_run "kb-schedule run: ...so its kb-verify step passed" 0 "" -- \
   grep -q 'kb-verify lib exit=0' "$KPH/.local/state/ai-kb/schedule.log"
 
+# ----------------------------- the engine's files are at fixed paths, whatever XDG says (ADR-0021) ----
+# XDG_CONFIG_HOME is often set only in an interactive shell. kb-schedule install then wrote
+# schedule.conf under it, and the cron or systemd run, without it, read ~/.config: preparation off and
+# no saved PATH, silently. Install under XDG_*, run without it: the conf is still found. And no XDG_*
+# variable moves the packets, the reports or the log.
+XH="$TMP/xdg-fixed"; XHH="$XH/home"; XOTHER="$XH/elsewhere"; mkdir -p "$XHH" "$XH/userbin" "$XOTHER"
+printf '#!/bin/sh\nexit 0\n' > "$XH/userbin/kbtool"; chmod +x "$XH/userbin/kbtool"
+build_clean "$XH/lib"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$XH/lib/widgets.md"
+printf 'Recheck: kbtool\n' >> "$XH/lib/widgets.md"
+HOME="$XHH" "$ENGINE/scripts/kb-library" add "$XH/lib" >/dev/null 2>&1
+xsched() { # xsched PATH [VAR=value ...] -- kb-schedule arguments, run with only HOME, PATH and what is named
+  local p="$1" e=(); shift
+  while [ "$1" != -- ]; do e+=("$1"); shift; done; shift
+  env -i HOME="$XHH" PATH="$p" KS_LOG="$KS/log" KS_CRON="$XH/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" \
+    ${e[@]+"${e[@]}"} "$ENGINE/scripts/kb-schedule" "$@"
+}
+xsched "$XH/userbin:$PATH" XDG_CONFIG_HOME="$XOTHER/config" XDG_STATE_HOME="$XOTHER/state" -- install --backend cron --prepare --claude /bin/true >/dev/null 2>&1
+case_run "kb-schedule install: schedule.conf is under ~/.config even with XDG_CONFIG_HOME set" 0 "" -- \
+  bash -c '[ -f "$1/.config/ai-kb/schedule.conf" ] && [ ! -e "$2/config" ]' _ "$XHH" "$XOTHER"
+xsched /usr/bin:/bin -- run >/dev/null 2>&1
+case_run "kb-schedule run, XDG_CONFIG_HOME unset: the conf is found (preparation was chosen)" 0 "kb-prepare distill lib exit=" -- \
+  cat "$XHH/.local/state/ai-kb/schedule.log"
+case_run "kb-schedule run, XDG_CONFIG_HOME unset: ...and so is the saved PATH" 0 "kb-verify lib exit=0" -- \
+  cat "$XHH/.local/state/ai-kb/schedule.log"
+case_run "kb-schedule: the log and lock are under ~/.local/state, not XDG_STATE_HOME" 0 "" -- \
+  bash -c '[ -f "$1/.local/state/ai-kb/schedule.lock" ] && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
+xsched /usr/bin:/bin XDG_STATE_HOME="$XOTHER/state" -- run >/dev/null 2>&1
+case_run "kb-schedule run with XDG_STATE_HOME set still logs to ~/.local/state" 0 "" -- \
+  bash -c '[ "$(grep -c "run started" "$1/.local/state/ai-kb/schedule.log")" = 2 ] && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
+env HOME="$XHH" XDG_STATE_HOME="$XOTHER/state" "$ENGINE/scripts/kb-report" "$XH/lib" >/dev/null 2>&1
+case_run "kb-report: XDG_STATE_HOME does not move the reports" 0 "" -- \
+  bash -c 'ls "$1"/.local/state/ai-kb/reports/*-W*.md >/dev/null 2>&1 && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
+mkdir -p "$XHH/.local/state/ai-kb/packets/fx"
+printf -- '---\npacket: kb-distill\nlibrary: fx\nlibrary_path: %s\nlibrary_head: x\nprepared: 2026-10-20T00:00:00Z\nstatus: pending\n---\n\nXDG-PACKET\n' \
+  "$XH/lib" > "$XHH/.local/state/ai-kb/packets/fx/2026-10-20-kb-distill.md"
+case_run "kb-apply list: XDG_STATE_HOME does not move the packets" 1 "1 packet(s) waiting" -- \
+  env HOME="$XHH" XDG_STATE_HOME="$XOTHER/state" "$ENGINE/scripts/kb-apply" list
+
 # ------------------------------------------- a home directory managed by Stow or similar (#138) ----
 # A dotfiles manager links files, or whole folders, from a repository synced across machines. Every
 # engine write goes through the link, so this machine's paths land in that repository. The engine

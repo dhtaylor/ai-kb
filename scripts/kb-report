@@ -25,7 +25,7 @@ in one line. Either way the file is written, so a quiet week can be told from a 
 run. It never holds a fact's, a source's or a packet's text: paths, counts, headings and ids only.
 
 The report is <out>/<ISO year>-W<ISO week>.md; a rerun in the same week replaces it. The default
-<out> is $KB_REPORTS, or ${XDG_STATE_HOME:-~/.local/state}/ai-kb/reports. `kb-due --nudge` names the
+<out> is $KB_REPORTS, or ~/.local/state/ai-kb/reports (ADR-0021). `kb-due --nudge` names the
 latest report while it is under eight days old and lists decisions.
 
 Usage: kb-report [tree ...] [--out DIR]
@@ -35,7 +35,7 @@ Usage: kb-report [tree ...] [--out DIR]
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
-from kbengine import attention, contract
+from kbengine import attention, contract, env
 from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
@@ -53,10 +53,7 @@ def load_module(name: str, filename: str):
 def reports_dir(out=None) -> pathlib.Path:
     if out:
         return pathlib.Path(out)
-    if os.environ.get("KB_REPORTS"):
-        return pathlib.Path(os.environ["KB_REPORTS"])
-    state = os.environ.get("XDG_STATE_HOME") or str(pathlib.Path.home() / ".local" / "state")
-    return pathlib.Path(state) / "ai-kb" / "reports"
+    return env.reports_dir()
 
 
 def latest(out=None):

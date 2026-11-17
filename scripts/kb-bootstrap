@@ -18,7 +18,7 @@
 #   installed libraries       core.hooksPath, which git does not clone
 #
 # Existing settings are merged, never replaced; a file is backed up before its
-# first change, into ${XDG_STATE_HOME:-~/.local/state}/ai-kb/backups/ and never beside
+# first change, into ~/.local/state/ai-kb/backups/ and never beside
 # it: beside it may be a folder a dotfiles manager links into a shared repository.
 #
 # A LINKED TARGET: a dotfiles manager (GNU Stow and its kin) may make any of these
@@ -72,7 +72,7 @@ report() { # status item detail
   case "$1" in ok) ;; *) drift=1 ;; esac
 }
 verb() { [ "$mode" = apply ] && echo "$1" || echo "$2"; }
-backups="${XDG_STATE_HOME:-$HOME/.local/state}/ai-kb/backups"
+backups="$HOME/.local/state/ai-kb/backups"
 linknote() { # target: say so when it is reached through a link (kb-libraries owns the rule)
   local real
   real=$("$engine/scripts/kb-libraries" --linked "$1" | cut -f2)

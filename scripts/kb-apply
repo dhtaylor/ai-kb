@@ -11,7 +11,7 @@ A packet is STALE when its library has commits since the one the packet was draf
 (`library_head:` in its header). A stale packet is still usable; the skill re-validates each item
 against the current files before showing it.
 
-Packets live in $KB_PACKETS, or ${XDG_STATE_HOME:-~/.local/state}/ai-kb/packets, as
+Packets live in $KB_PACKETS, or ~/.local/state/ai-kb/packets (ADR-0021), as
 <library>/<date>-<skill>.md. A closed one moves to <library>/done/.
 
 Usage: kb-apply list [--out DIR]
@@ -20,7 +20,9 @@ Usage: kb-apply list [--out DIR]
 `list` prints paths, libraries and dates only, never a packet's text, so it is schedulable (#95).
 Exit codes for list: 0 nothing pending, 1 packets pending, 2 could not run. show and done: 0 or 2.
 """
-import os, pathlib, re, subprocess, sys
+import pathlib, re, subprocess, sys
+
+from kbengine import env
 
 HEADER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 
@@ -28,10 +30,7 @@ HEADER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 def packets_dir(out=None) -> pathlib.Path:
     if out:
         return pathlib.Path(out)
-    if os.environ.get("KB_PACKETS"):
-        return pathlib.Path(os.environ["KB_PACKETS"])
-    state = os.environ.get("XDG_STATE_HOME") or str(pathlib.Path.home() / ".local" / "state")
-    return pathlib.Path(state) / "ai-kb" / "packets"
+    return env.packets_dir()
 
 
 def header(path: pathlib.Path) -> dict:
