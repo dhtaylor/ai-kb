@@ -95,14 +95,19 @@ in the queue), 2 on a usage or config error (bad JSON, a malformed entry, a libr
 INDEX.md) — the run still processes every well-formed entry first. Old and new values are printed
 only at a terminal or with --dry-run, so an unattended run's log holds no source text (#95).
 """
-import datetime, hashlib, html.parser, json, os, pathlib, re, sys
+import html.parser, json, pathlib, re, sys
 
-TODAY = datetime.date.today().isoformat()
-MAX_LEN = 200
-ID_RE = re.compile(r"^\s*-\s*id:\s*([0-9a-f]{8})\s*$")
-KV_RE = re.compile(r'^\s{2}(\w+):\s*"?(.*?)"?\s*$')
-FENCE_OPEN = "```yaml\n"
-FENCE_CLOSE = "```\n"
+from kbengine import queue
+
+# The old and new values are the source's own text (#95): the queue truncates and defangs them.
+UNTRUSTED = frozenset({"old", "new"})
+
+# kb-verify, kb-sources, kb-due, kb-report and check-kb still load this script for these. Each stops
+# in its own commit, and the last one takes this block with it (#202).
+yaml_scalar, existing_ids, new_queue_file = queue.scalar, queue.existing_ids, queue.new_queue_file
+library_domain_scope, atomic_write, ensure_routed = queue.library_domain_scope, queue.atomic_write, queue.ensure_routed
+FENCE_OPEN, FENCE_CLOSE, parse_records = queue.FENCE_OPEN, queue.FENCE_CLOSE, queue.parse_records
+duplicate_ids, unreadable_records = queue._duplicate_ids, queue._unreadable_records
 
 
 # ------------------------------------------------------------------ plain-text stripping ----
@@ -153,31 +158,6 @@ def extract_field(text: str, pattern: str):
     if not m:
         return None
     return m.group(1) if m.lastindex else m.group(0)
-
-
-# ------------------------------------------------------------------------------- escaping ----
-def flatten(s: str) -> str:
-    s = s.replace("\r\n", " ").replace("\r", " ").replace("\n", " ")
-    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", s)
-    return s
-
-
-def yaml_scalar(value, untrusted: bool) -> str:
-    """A safe, single-line, double-quoted YAML-ish scalar. Untrusted values are additionally
-    truncated and have fence-breaking backtick runs neutralised, per the drift-signal schema."""
-    s = flatten("" if value is None else str(value))
-    if untrusted:
-        s = re.sub(r"`{3,}", "'''", s)
-        if len(s) > MAX_LEN:
-            s = s[:MAX_LEN] + " …[truncated]"
-    s = s.replace("\\", "\\\\").replace('"', '\\"')
-    return f'"{s}"'
-
-
-def stable_id(category: str, source_id: str, field: str, new_value) -> str:
-    raw = "" if new_value is None else str(new_value)
-    payload = f"{category}|{source_id}|{field}|{raw}".encode()
-    return hashlib.sha1(payload).hexdigest()[:8]
 
 
 # --------------------------------------------------------------------------- the allowlist ----
@@ -233,216 +213,36 @@ def load_allowlist(path: pathlib.Path):
     return entries, errors
 
 
-# ------------------------------------------------------------------------------ the queue ----
-def library_domain_scope(library_root: pathlib.Path):
-    idx = library_root / "INDEX.md"
-    if not idx.is_file():
-        return None, None, f"{library_root} has no INDEX.md — not a library root"
-    text = idx.read_text(errors="replace")
-    d = re.search(r"^domain:\s*(.+)$", text, re.M)
-    s = re.search(r"^scope:\s*(.+)$", text, re.M)
-    if not d or not s:
-        return None, None, f"{idx} has no domain:/scope: in its frontmatter"
-    return d.group(1).strip(), s.group(1).strip(), None
-
-
-def existing_ids(queue_path: pathlib.Path):
-    if not queue_path.is_file():
-        return set()
-    return {m.group(1) for m in map(ID_RE.match, queue_path.read_text(errors="replace").splitlines())
-            if m}
-
-
-def render_record(rec: dict) -> str:
-    lines = [f"- id: {rec['id']}"]
-    for key in ("category", "status", "source_id", "field"):
-        lines.append(f"  {key}: {yaml_scalar(rec[key], untrusted=False)}")
-    lines.append(f"  old: {yaml_scalar(rec['old'], untrusted=True)}")
-    lines.append(f"  new: {yaml_scalar(rec['new'], untrusted=True)}")
-    lines.append(f"  source_url: {yaml_scalar(rec['source_url'], untrusted=False)}")
-    lines.append(f"  date: {yaml_scalar(rec['date'], untrusted=False)}")
-    return "\n".join(lines) + "\n\n"
-
-
-def new_queue_file(domain: str, scope: str) -> str:
-    fm = (
-        "---\n"
-        "name: needs-attention\n"
-        "description: Open findings from automated checks (kb-watch, kb-verify) and hygiene sweeps "
-        "(kb-audit), by severity.\n"
-        "memory_type: reference\n"
-        f"domain: {domain}\n"
-        f"scope: {scope}\n"
-        "metadata:\n"
-        "  type: index\n"
-        "  node_type: memory\n"
-        f"  created: {TODAY}\n"
-        "tags: [meta, hygiene, queue, watcher]\n"
-        "keywords: [needs attention, queue, findings, drift, watcher, unreachable]\n"
-        "---\n"
-        "# Needs attention\n\n"
-        "Findings from automated drift checks and hygiene sweeps. Detection only — nothing here "
-        "was fixed automatically. See CONVENTIONS.md §3 and "
-        "plugins/knowledge-tools/skills/kb-audit/SKILL.md for the queue's conventions.\n\n"
-    )
-    return fm + FENCE_OPEN + FENCE_CLOSE
-
-
-ROUTER_LINE = ("- [needs-attention](needs-attention.md) — open findings from automated checks and "
-               "sweeps; detection only, nothing here was fixed automatically\n")
-
-
-def ensure_routed(library_root: pathlib.Path):
-    """Add the queue's router line to the library's INDEX.md, once. Idempotent; returns an error or None."""
-    idx = library_root / "INDEX.md"
-    if not idx.is_file():
-        return f"{library_root} has no INDEX.md — not a library root"
-    text = idx.read_text(errors="replace")
-    if re.search(r"\]\(needs-attention\.md\)", text):
-        return None
-    lines = text.splitlines(keepends=True)
-    last = max((i for i, l in enumerate(lines) if l.startswith("- [")), default=None)
-    if last is None:
-        text = text.rstrip("\n") + "\n\n" + ROUTER_LINE
-    else:
-        j = last + 1                       # a router line may wrap onto indented continuation lines
-        while j < len(lines) and lines[j].startswith("  ") and lines[j].strip():
-            j += 1
-        lines.insert(j, ROUTER_LINE)
-        text = "".join(lines)
-    atomic_write(idx, text)
-    return None
-
-
-def atomic_write(path: pathlib.Path, text: str):
-    """Replace `path` with `text` by writing a sibling and renaming it over the original. A session
-    reading or committing the library at the same moment sees the old file or the new one, never a
-    half-written one, so these writers can run on a schedule beside a working session (#95)."""
-    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    try:
-        tmp.write_text(text)
-        os.replace(tmp, path)
-    finally:
-        tmp.unlink(missing_ok=True)
-
-
-def append_records(queue_path: pathlib.Path, records: list):
-    body = "".join(render_record(r) for r in records)
-    if not queue_path.is_file():
-        domain, scope, err = library_domain_scope(queue_path.parent)
-        if err:
-            return err
-        atomic_write(queue_path, new_queue_file(domain, scope)[:-len(FENCE_CLOSE)] + body + FENCE_CLOSE)
-        return ensure_routed(queue_path.parent)
-    text = queue_path.read_text(errors="replace")
-    spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
-    if spans:
-        last = spans[-1]
-        insert_at = last.end() - len(FENCE_CLOSE)
-        text = text[:insert_at] + body + text[insert_at:]
-    else:
-        text = text.rstrip("\n") + "\n\n" + FENCE_OPEN + body + FENCE_CLOSE
-    atomic_write(queue_path, text)
-    return None
-
-
-# ---------------------------------------------------------------------------- record parse ----
-def parse_records(text: str):
-    """The same shape this script writes: '- id: x' opens a record, two-space-indented 'key:
-    value' lines fill it in. Mirrors check-golden's parser style (line-based, no yaml library)."""
-    records, cur = [], None
-    for raw in text.splitlines():
-        m = ID_RE.match(raw)
-        if m:
-            if cur:
-                records.append(cur)
-            cur = {"id": m.group(1)}
-            continue
-        if cur is not None:
-            kv = KV_RE.match(raw)
-            if kv:
-                cur[kv.group(1)] = re.sub(r"\\(.)", r"\1", kv.group(2))
-            elif raw.strip() == "" or raw.strip().startswith("```"):
-                pass
-            elif not raw.startswith("  "):
-                records.append(cur); cur = None
-    if cur:
-        records.append(cur)
-    return records
-
-
-def duplicate_ids(text: str):
-    """{id: [line numbers]} for each id that opens two or more records (#172). It walks the text
-    exactly as parse_records does, so the two cannot disagree: a line opens a record when ID_RE
-    matches it, wherever it sits."""
-    seen = {}
-    for n, raw in enumerate(text.splitlines(), 1):
-        m = ID_RE.match(raw)
-        if m:
-            seen.setdefault(m.group(1), []).append(n)
-    return {i: ns for i, ns in seen.items() if len(ns) > 1}
-
-
-def unreadable_records(text: str):
-    """[(line number, line)] for each record in a ```yaml fence that parse_records does not read:
-    the first line of each run of data lines it skips, such as a bare mapping with `id:` at column 0
-    (#168). It walks the text exactly as parse_records does, so the two cannot disagree."""
-    out, in_yaml, in_rec, run = [], False, False, False
-    for n, raw in enumerate(text.splitlines(), 1):
-        s = raw.strip()
-        if s.startswith("```"):
-            in_yaml = s == "```yaml" and not in_yaml
-            in_rec = run = False
-            continue
-        if not in_yaml or s == "" :
-            run = False
-            continue
-        if ID_RE.match(raw):
-            in_rec, run = True, False
-            continue
-        if in_rec and (KV_RE.match(raw) or raw.startswith("  ")):
-            continue
-        in_rec = False
-        if s.startswith("#"):
-            run = False
-            continue
-        if not run:
-            out.append((n, raw))
-        run = True
-    return out
-
-
 # ------------------------------------------------------------------------------------ main ----
 def process_entry(entry: dict, dry_run: bool):
-    """Returns (findings_written_or_would_write, errors, findings_found) for this one source."""
+    """Returns (ids_written_or_would_write, errors, findings_found) for this one source."""
     source_id, url, library = entry["source_id"], entry["url"], entry["library"]
     findings, errors = [], []
+
+    def finding(category, field, old, new):
+        return queue.Finding(category, (source_id, field, new),
+                             {"source_id": source_id, "field": field, "old": old, "new": new,
+                              "source_url": url}, UNTRUSTED)
 
     ok_b, base_txt = read_snapshot(entry["baseline_snapshot"])
     ok_c, cur_txt = read_snapshot(entry["current_snapshot"])
     if not (ok_b and ok_c):
         reason = base_txt if not ok_b else cur_txt
-        findings.append({"category": "unreachable", "status": "open", "source_id": source_id,
-                          "field": "-", "old": None, "new": reason, "source_url": url, "date": TODAY})
+        findings.append(finding("unreachable", "-", None, reason))
     else:
         for f in entry["fields"]:
             old = extract_field(base_txt, f["pattern"])
             new = extract_field(cur_txt, f["pattern"])
             if old == new:
                 continue
-            findings.append({"category": "drift", "status": "open", "source_id": source_id,
-                              "field": f["name"],
-                              "old": old if old is not None else "(not found)",
-                              "new": new if new is not None else "(not found)",
-                              "source_url": url, "date": TODAY})
-
-    for finding in findings:
-        finding["id"] = stable_id(finding["category"], finding["source_id"], finding["field"],
-                                   finding["new"])
+            findings.append(finding("drift", f["name"],
+                                    old if old is not None else "(not found)",
+                                    new if new is not None else "(not found)"))
 
     queue_path = library / "needs-attention.md"
-    seen = existing_ids(queue_path)
-    to_write = [f for f in findings if f["id"] not in seen]
+    result = queue.append(library, findings, "kb-watch", dry_run=dry_run)
+    by_id = {f.id: f for f in findings}
+    to_write = [by_id[i] for i in result.new]
     skipped = len(findings) - len(to_write)
 
     print(f"kb-watch: {source_id}: {len(findings)} finding(s), {skipped} already queued, "
@@ -452,26 +252,12 @@ def process_entry(entry: dict, dry_run: bool):
     show_values = dry_run or sys.stdout.isatty()
     for f in to_write:
         tag = "WOULD QUEUE" if dry_run else "queued"
-        values = f": {f['old']!r} -> {f['new']!r}" if show_values else ""
-        print(f"  {tag} [{f['category']}] {f['id']}  {f['field']}{values}  ({queue_path})")
+        values = f": {f.fields['old']!r} -> {f.fields['new']!r}" if show_values else ""
+        print(f"  {tag} [{f.category}] {f.id}  {f.fields['field']}{values}  ({queue_path})")
 
-    if to_write and not dry_run:
-        err = append_records(queue_path, to_write)
-        if err:
-            errors.append(f"{source_id}: {err}")
-    return to_write, errors, len(findings)
-
-
-def read_only_entry(path):
-    """The registry entry if the library at path is registered read-only (ADR-0020), else None."""
-    import importlib.machinery, importlib.util
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader(
-        "kb_libraries", str(pathlib.Path(__file__).resolve().parent / "kb-libraries"))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod, mod.read_only(path)
+    if result.error:
+        errors.append(f"{source_id}: {result.error}")
+    return result.new, errors, len(findings)
 
 
 def main(argv):
@@ -481,7 +267,7 @@ def main(argv):
         qp = pathlib.Path(argv[1])
         if not qp.is_file():
             print(f"kb-watch: {qp} does not exist", file=sys.stderr); return 2
-        for r in parse_records(qp.read_text(errors="replace")):
+        for r in queue.parse_records(qp.read_text(errors="replace")):
             cols = [r.get(k, "") for k in
                     ("id", "category", "status", "source_id", "field", "old", "new",
                      "source_url", "date")]
@@ -506,7 +292,7 @@ def main(argv):
 
     run_errors = []
     total_new = total_found = 0
-    kl = read_only_entry(".")[0]
+    kl = queue.read_only_entry(".")[0]
     for entry in entries:
         ro = kl.read_only(entry["library"])
         if ro:   # its publisher watches it; a finding would be queued into their library (ADR-0020)
