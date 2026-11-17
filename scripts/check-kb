@@ -43,7 +43,7 @@ Exit 0 clean, 1 on any defect.
 import datetime, pathlib, re, subprocess, sys
 from collections import Counter
 
-from kbengine import factfiles, queue
+from kbengine import contract, factfiles, library, queue
 
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
@@ -106,8 +106,8 @@ def agent_ttl(declared, horizon: int) -> int:
     horizon of 90-180d gives 9-18d, so agent stamps expired before every monthly sweep, and
     stretching the horizon to fix that stretched the human TTL too (issue #30). Raises
     ValueError unless it is <N>d and shorter than the horizon: an agent TTL as long as the
-    horizon erases the trust tier between agent and human stamps. kb-verify and kb-due import
-    this, so the one rule has one copy."""
+    horizon erases the trust tier between agent and human stamps. kb-verify's helper still
+    imports this; the rule is kbengine.library's (#203)."""
     if declared is None:
         return max(1, horizon // 10)
     value = declared.split(" #")[0].strip().strip('"').strip("'")
@@ -116,26 +116,6 @@ def agent_ttl(declared, horizon: int) -> int:
         raise ValueError(f"agent_ttl: {value!r} must be <N>d and shorter than freshness_horizon "
                          f"({horizon}d), or an agent stamp is trusted as long as a human one")
     return int(m.group(1))
-
-
-def contract_version(declared) -> tuple:
-    """The contract version a root INDEX.md declares, as (major, minor) (ADR-0016). `declared`
-    is the raw text after `kb_contract:`, quotes included. Absent is 2.0: every library that
-    predates the field was built to engine v0.2.0's rules, which are contract 2.0. Raises
-    ValueError unless it is a quoted MAJOR.MINOR in plain digits. Quoted, because a YAML reader
-    turns a bare 2.10 into the number 2.1; plain digits (no leading zero, patch or prefix), so
-    "2.01" and "2.1" cannot both name one version."""
-    if declared is None:
-        return (2, 0)
-    value = declared.split(" #")[0].strip()
-    q = re.fullmatch(r'"([^"]*)"|\'([^\']*)\'', value)
-    if not q:
-        raise ValueError(f"kb_contract: {value} must be quoted, e.g. \"2.0\": a YAML reader turns "
-                         f"a bare 2.10 into the number 2.1 (ADR-0016)")
-    m = re.fullmatch(r"(0|[1-9]\d*)\.(0|[1-9]\d*)", q.group(1) if q.group(1) is not None else q.group(2))
-    if not m:
-        raise ValueError(f"kb_contract: {value} must be MAJOR.MINOR, e.g. \"2.0\" (ADR-0016)")
-    return (int(m.group(1)), int(m.group(2)))
 
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
@@ -157,73 +137,6 @@ def sh_syntax_error(cmd: str):
     r = subprocess.run(["/bin/sh", "-n", "-c", cmd], capture_output=True, text=True,
                        env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
     return (r.stderr.strip() or f"exit {r.returncode}") if r.returncode else None
-
-
-CONTRACT_SECTION = re.compile(r"^## \d+\. Contract versions\n(.*?)(?=^## |\Z)", re.M | re.S)
-CONTRACT_HEADING = re.compile(r"^### (0|[1-9]\d*)\.(0|[1-9]\d*)\s*$")
-
-
-def known_contracts() -> dict:
-    """{(major, minor): what it adds} for every contract version this engine knows: the `### X.Y`
-    headings of CONVENTIONS §14, each with the first paragraph under it. The spec is the one
-    copy, so publishing a version is writing its §14 entry (ADR-0016). Raises RuntimeError if
-    §14 lists nothing: an engine that cannot name its versions cannot gate by them."""
-    m = CONTRACT_SECTION.search((ENGINE / "CONVENTIONS.md").read_text(errors="replace"))
-    known, cur, para = {}, None, []
-    for line in (m.group(1) if m else "").split("\n"):
-        if h := CONTRACT_HEADING.match(line):
-            cur, para = (int(h.group(1)), int(h.group(2))), []
-            known[cur] = ""
-        elif cur and not known[cur]:
-            if line.strip():
-                para.append(line.strip())
-            elif para:
-                known[cur] = " ".join(para)
-    if cur and not known[cur]:
-        known[cur] = " ".join(para)
-    if not known:
-        raise RuntimeError(f"{ENGINE / 'CONVENTIONS.md'} lists no contract versions (§14)")
-    return known
-
-
-def declared_contract(root: pathlib.Path):
-    """The raw text after `kb_contract:` in a root INDEX.md's frontmatter, or None."""
-    try:
-        text = (root / "INDEX.md").read_text(errors="replace")
-    except OSError:
-        return None
-    block = text.split("---\n", 2)
-    if not text.startswith("---\n") or len(block) < 3:
-        return None
-    m = re.search(r"^kb_contract:[ \t]*(.*?)[ \t]*$", block[1], re.M)
-    return m.group(1) if m else None
-
-
-def fmt(v: tuple) -> str:
-    return f"{v[0]}.{v[1]}"
-
-
-def contract_status(declared) -> tuple:
-    """(state, version, newest, newer) for a declared kb_contract (ADR-0016). state is current,
-    behind (older than the newest known: `newer` lists (version, what it adds) above it), ahead
-    (a newer minor of a supported major: checked by the newest rules known) or unsupported (a
-    major outside the last two this engine has published). Raises ValueError if malformed."""
-    v = contract_version(declared)
-    known = known_contracts()
-    newest = max(known)
-    supported = {newest[0], newest[0] - 1} & {k[0] for k in known}
-    if v[0] not in supported:
-        return "unsupported", v, newest, []
-    if v > newest:
-        return "ahead", v, newest, []
-    newer = [(k, known[k]) for k in sorted(known) if k > v]
-    return ("behind" if newer else "current"), v, newest, newer
-
-
-def supported_majors() -> str:
-    known = known_contracts()
-    newest = max(known)
-    return " and ".join(f"{m}.x" for m in sorted({newest[0], newest[0] - 1} & {k[0] for k in known}))
 
 
 def kb_files(root: pathlib.Path) -> list:
@@ -266,30 +179,6 @@ def orphans(root: pathlib.Path, files: list) -> list:
             and not f.name.endswith("-golden.md")]
 
 
-# STDLIB ONLY, deliberately. PyYAML is not installed everywhere, and this runs in
-# every commit hook on every machine: an import nobody has is a traceback where a
-# guardrail should be. It bit CI, which had never run this check (the engine holds
-# no knowledge for it to read) and so had never noticed the dependency.
-#
-# It parses only what the contract needs — `key: value` at the top level, and
-# `key:` introducing an indented block, which it records as present and does not
-# descend into. A line that is neither is reported rather than skipped: silence
-# about a malformed file is how a malformed file survives.
-KEY = re.compile(r"^([A-Za-z_][\w-]*):\s*(.*)$")
-
-
-def frontmatter(block: str):
-    fm, bad = {}, None
-    for n, line in enumerate(block.split("\n"), 1):
-        if not line.strip() or line.startswith("#") or line[0] in " \t-":
-            continue                      # blank, comment, nested value, or list item
-        m = KEY.match(line)
-        if not m:
-            bad = (n, line); break
-        fm[m.group(1)] = m.group(2).strip().strip('"').strip("'")
-    return fm, bad
-
-
 def main(root: pathlib.Path) -> int:
     kinds = dict(factfiles.files(root))
     files = list(kinds)
@@ -302,22 +191,22 @@ def main(root: pathlib.Path) -> int:
     # Rules apply by the contract version the library declares (§14, ADR-0016). A malformed
     # version is a defect below; until it is fixed, the newest rules apply.
     index = root / "INDEX.md"
-    try:
-        state, version, newest, newer = contract_status(declared_contract(root))
-    except ValueError:
-        state, version, newest, newer = "malformed", None, max(known_contracts()), []
+    lib = library.library(root)
+    if lib.contract is None:
+        contract.known_contracts()    # this engine cannot read its own §14: raises, as it always did
+    state, version, newest, newer = lib.contract
     rules = newest if state in ("ahead", "unsupported", "malformed") else version
     if state == "behind":
-        notes.append(f"{index}: built to contract {fmt(version)}; this engine knows {fmt(newest)}. "
-                     f"Raise kb_contract to adopt what is newer — "
-                     + "; ".join(f"{fmt(k)}: {what}" for k, what in newer))
+        notes.append(f"{index}: built to contract {contract.fmt(version)}; this engine knows "
+                     f"{contract.fmt(newest)}. Raise kb_contract to adopt what is newer — "
+                     + "; ".join(f"{contract.fmt(k)}: {what}" for k, what in newer))
     elif state == "ahead":
-        notes.append(f"{index}: declares contract {fmt(version)}, newer than this engine knows "
-                     f"({fmt(newest)}); checked by {fmt(newest)}'s rules — upgrade the engine to "
+        notes.append(f"{index}: declares contract {contract.fmt(version)}, newer than this engine knows "
+                     f"({contract.fmt(newest)}); checked by {contract.fmt(newest)}'s rules — upgrade the engine to "
                      f"check the rest")
     elif state == "unsupported":
-        defects.append(f"{index}: declares contract {fmt(version)}, which is not supported by this "
-                       f"engine (it supports {supported_majors()}) — it is not served; see the "
+        defects.append(f"{index}: declares contract {contract.fmt(version)}, which is not supported by "
+                       f"this engine (it supports {contract.supported_majors()}) — it is not served; see the "
                        f"migration notes in CONVENTIONS §14, or upgrade the engine")
 
     def rule(since: tuple, message: str):
@@ -325,8 +214,8 @@ def main(root: pathlib.Path) -> int:
         if rules >= since:
             defects.append(message)
         else:
-            warnings.append(f"{message} — fails from contract {fmt(since)} (this library declares "
-                            f"{fmt(version)})")
+            warnings.append(f"{message} — fails from contract {contract.fmt(since)} (this library declares "
+                            f"{contract.fmt(version)})")
 
     # sources/ holds only .md citation stubs (§6); the artifacts they cite are archived under
     # documents/. Only .md files are read below, so a raw file here would pass unseen (issue #71).
@@ -344,7 +233,8 @@ def main(root: pathlib.Path) -> int:
         if len(block) < 3:
             defects.append(f"{f}: frontmatter is not closed by a --- line")
             continue
-        fm, bad = frontmatter(block[1])
+        fm = library.parse(block[1])
+        bad = fm.bad
         if bad:
             defects.append(f"{f}: unparseable frontmatter line {bad[0]}: {bad[1]!r}")
             continue
@@ -389,12 +279,8 @@ def main(root: pathlib.Path) -> int:
                     found.append((st.line, f"{f}:{st.line}: stamp dated in the future ({st.date})"))
         defects += [d for _, d in sorted(found, key=lambda x: x[0])]
 
-        if f == root / "INDEX.md" and "agent_ttl" in fm:
-            h = re.match(r"(\d+)d", fm.get("freshness_horizon", ""))
-            try:
-                agent_ttl(fm["agent_ttl"], int(h.group(1)) if h else 0)
-            except ValueError as e:
-                defects.append(f"{f}: {e}")
+        if f == root / "INDEX.md" and lib.problem("agent_ttl"):
+            defects.append(f"{f}: {lib.problem('agent_ttl')}")
 
         if f == root / "INDEX.md":
             # "Not covered here:" (§3, contract 2.3) is optional; when present it must say something.
@@ -411,12 +297,8 @@ def main(root: pathlib.Path) -> int:
                 if m and m.group(1) != "manual":
                     rule((2, 4), f"{f}: 'Liveness: {m.group(1)}' — the only value is 'manual' (§6)")
 
-        if f == root / "INDEX.md" and "kb_contract" in fm:
-            try:
-                raw = re.search(r"^kb_contract:[ \t]*(.*?)[ \t]*$", block[1], re.M)
-                contract_version(raw.group(1))
-            except ValueError as e:
-                defects.append(f"{f}: {e}")
+        if f == root / "INDEX.md" and lib.problem("kb_contract"):
+            defects.append(f"{f}: {lib.problem('kb_contract')}")
 
         if kinds[f] == "fact":
             for heading in unsourced(block[2]):
@@ -424,7 +306,7 @@ def main(root: pathlib.Path) -> int:
                              f"from, or move it out of the fact file (§6)")
 
         if "verified" in fm:
-            declared = fm["verified"].split(" #")[0].strip()      # a trailing YAML comment
+            declared = fm.get("verified")
             floor = derived_floor(block[2])
             if declared != floor:
                 defects.append(f"{f}: frontmatter verified: {declared}, but the derived floor is "
@@ -449,8 +331,8 @@ def main(root: pathlib.Path) -> int:
     # links_to (§3, contract 2.6, ADR-0020): every library a link names says where it comes from,
     # so a machine with a different library under that name can tell. check-xlinks' reader, so a
     # fence or a code span means the same in both: a span explains the form and needs no entry.
-    xl, kl = engine_module("check_xlinks", "check-xlinks"), engine_module("kb_libraries", "kb-libraries")
-    declared, named, first = kl.links_to(root), set(), {}
+    xl = engine_module("check_xlinks", "check-xlinks")
+    declared, named, first = lib.links_to, set(), {}
     for f in files:
         for link, in_span in xl.links(f.read_text(errors="replace")):
             if ":" not in link or xl.PLACEHOLDER.search(link) or link in xl.EXAMPLES or link in EXAMPLE_SLUGS:

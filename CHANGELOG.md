@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A trailing ` # comment` after a value in a library's root `INDEX.md` is no part of the value, and
+  a quoted value is read without its quotes (#203). `check-kb` failed `name: "widgets"  # note`
+  against the filename `widgets`; `kb-prepare` named a library `"fx"`, quotes and all; `kb-catalog`
+  listed a scope as `general  # note`; `kb-verify` ignored a quoted `freshness_horizon`, and
+  `kb-due` read a quoted `last_swept` as never swept; a new queue file copied a scope's comment into
+  its frontmatter. One rule now reads every value: drop a ` #` comment outside quotes, then one
+  pair of matching quotes. It only relaxes what a library may write, so it needs no contract version.
 - `kb-due`, `kb-verify`, `kb-prepare` and the queue module read a library's root `INDEX.md` fields
   from its frontmatter only (#203). They searched the whole file, so a `last_swept:`, `archived:`,
   `freshness_horizon:`, `verifier_budget:`, `agent_ttl:` or `domain:` line in the body, which is

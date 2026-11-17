@@ -134,6 +134,15 @@ build_clean "$TMP/badname"
 sed -i 's/^name: widgets$/name: gadgets/' "$TMP/badname/widgets.md"
 case_run "name that disagrees with filename" 1 "does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/badname"
 
+# #203: a trailing comment is no part of a value, quoted or not. check-kb took `"widgets"  # note`
+# whole and failed it against the filename; a name that really disagrees still fails.
+build_clean "$TMP/qname"
+sed -i 's/^name: widgets$/name: "widgets"  # the slug/' "$TMP/qname/widgets.md"
+case_run "a quoted name with a trailing comment matches its filename (#203)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/qname"
+build_clean "$TMP/qbadname"
+sed -i 's/^name: widgets$/name: "gadgets"  # the slug/' "$TMP/qbadname/widgets.md"
+case_run "...and a quoted name that disagrees still fails (#203)" 1 "name 'gadgets' does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/qbadname"
+
 build_clean "$TMP/deadlink"
 printf '\nSee [[nowhere]].\n' >> "$TMP/deadlink/widgets.md"
 case_run "dead [[slug]] link" 1 "dead" -- "$ENGINE/scripts/check-kb" "$TMP/deadlink"
