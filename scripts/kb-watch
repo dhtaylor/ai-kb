@@ -102,13 +102,6 @@ from kbengine import queue
 # The old and new values are the source's own text (#95): the queue truncates and defangs them.
 UNTRUSTED = frozenset({"old", "new"})
 
-# kb-verify, kb-sources, kb-due, kb-report and check-kb still load this script for these. Each stops
-# in its own commit, and the last one takes this block with it (#202).
-yaml_scalar, existing_ids, new_queue_file = queue.scalar, queue.existing_ids, queue.new_queue_file
-library_domain_scope, atomic_write, ensure_routed = queue.library_domain_scope, queue.atomic_write, queue.ensure_routed
-FENCE_OPEN, FENCE_CLOSE, parse_records = queue.FENCE_OPEN, queue.FENCE_CLOSE, queue.parse_records
-duplicate_ids, unreadable_records = queue._duplicate_ids, queue._unreadable_records
-
 
 # ------------------------------------------------------------------ plain-text stripping ----
 class _TextStripper(html.parser.HTMLParser):
