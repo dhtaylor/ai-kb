@@ -29,7 +29,7 @@ due, or the run proposed nothing), 1 a packet is waiting for a decision, 2 could
 """
 import datetime, importlib.machinery, importlib.util, json, os, pathlib, re, shutil, subprocess, sys
 
-from kbengine import queue
+from kbengine import library, queue
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ENGINE / "scripts"
@@ -53,8 +53,7 @@ def fail(msg: str) -> int:
 
 
 def library_name(lib: pathlib.Path) -> str:
-    m = re.search(r"^domain:\s*(\S+)", (lib / "INDEX.md").read_text(errors="replace"), re.M)
-    return m.group(1) if m else lib.name
+    return library.library(lib).name or lib.name
 
 
 def mechanical_checks(lib: pathlib.Path) -> str:

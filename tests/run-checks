@@ -3623,6 +3623,12 @@ case_run "kb-prepare: the header says pending" 0 "" -- grep -qx 'status: pending
 case_run "kb-prepare: the packet is redacted before it is written" 0 "[redacted: secret]" -- cat "$PKF"
 case_run "kb-prepare: ...and holds no credential" 1 "" -- grep -q 'AKIA' "$PKF"
 case_run "kb-prepare: the library is untouched" 0 "" -- bash -c '[ -z "$(git -C "$1" status --porcelain)" ]' _ "$PL"
+# #203: the library's name is the domain: of its frontmatter. A domain: line in the body is prose.
+PB="$PK/kb/bodyname"; build_clean "$PB"; sed -i '/^domain:/d' "$PB/INDEX.md"
+printf '\ndomain: elsewhere\n' >> "$PB/INDEX.md"
+git -C "$PB" add -A && git -C "$PB" -c user.email=t@t -c user.name=t commit -qm init
+case_run "kb-prepare: a domain: line in the body is not the library's name (#203)" 0 "kb-prepare: bodyname: nothing to prepare" -- \
+  prep distill "$PB"
 case_run "kb-prepare: a packet already waiting is not drafted again" 1 "already waiting" -- prep distill "$PL"
 case_run "kb-prepare: an output directory inside the library is refused" 2 "outside" -- \
   prep distill "$PL" --out "$PL/packets" --force
