@@ -3902,6 +3902,12 @@ case_run "kb-report: an archived library that is not registered is left out (#20
 case_run "kb-report: ...and a registered archived library is still reported (#204)" 0 "" -- \
   bash -c 'kbr "$1" "$2" "$3" "$4" | grep -q "^## kept"' _ "$RAH" "$RA/out" "$RA/gone" "$RA/kept"
 
+# Issue #204 (b): kb-report lists a contract newer than the engine's, as kb-due does.
+RB="$RR/ahead"; build_clean "$RB"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/; s/^kb_contract: .*\$/kb_contract: \"2.99\"/" "$RB/INDEX.md"
+case_run "kb-report: a library on a contract newer than the engine is listed (#204)" 0 "newer than this engine" -- \
+  kbr "$RAH" "$RR/ahead-out" "$RB"
+
 "$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
 case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
   "$ENGINE/scripts/kb-due" "$RC" --nudge

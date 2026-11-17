@@ -11,7 +11,7 @@ listing per library only what a person has to decide:
 - rechecks that are due but marked `Recheck (attended):`, which only a person can run;
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
 - while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
-- a library behind the contract, or on one this engine cannot serve;
+- a library behind the contract, ahead of this engine's, or on one this engine cannot serve;
 - kb-retrieve runs in the past 7 days that answered `fact not found` (kb-telemetry, #147): an absent
   topic named in the root `Not covered here:` line makes the next such question far cheaper. The
   report gives the count and cost; `kb-telemetry --not-found` lists the questions.
@@ -138,6 +138,9 @@ def decisions_for(att, mods: dict, gaps=None) -> list:
     if state == "behind":
         out.append(f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
                    f"Decide whether to adopt it (CONVENTIONS §14).")
+    elif state == "ahead":
+        out.append(f"Declares contract {contract.fmt(v)}, newer than this engine ({contract.fmt(newest)}). "
+                   f"Upgrade the engine.")
     elif state in ("unsupported", "malformed"):
         out.append("Its contract version cannot be served by this engine; check-kb says why.")
 

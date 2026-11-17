@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-report` lists a library whose contract is newer than the engine's (#204). It named a library
+  behind the contract, or on one the engine cannot serve, but said nothing about one ahead, which
+  `kb-due` already told to upgrade the engine.
 - `kb-report` leaves out a library that declares `archived:` and is not registered (#204), as
   `kb-due` already did (#141). It listed that library's sweep and anything else due, though a
   read-only archive cannot act on a decision. A registered library is still reported: it is served
