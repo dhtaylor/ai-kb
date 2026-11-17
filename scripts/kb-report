@@ -30,7 +30,8 @@ Usage: kb-report [tree ...] [--out DIR]
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
-from kbengine import contract, library, queue
+from kbengine import attention, contract
+from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 
@@ -93,48 +94,46 @@ def not_found_week(mods: dict) -> dict:
     return out
 
 
-def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> list:
-    kb_due, kb_verify = mods["kb_due"], mods["kb_verify"]
-    root, out = tree.resolve(), []
-    mine = [(p, h) for p, h in packets if h.get("library_path") == str(root)]
-    for p, h in mine:
+class Unreadable(Exception):
+    """A field of the library's Attention that could not be worked out."""
+    def __init__(self, failed: Failed):
+        self.failed = failed
+
+
+def need(value):
+    if isinstance(value, Failed):
+        raise Unreadable(value)
+    return value
+
+
+def decisions_for(att, mods: dict, gaps=None) -> list:
+    root, out = att.root, []
+    for p, h in att.packets:
         out.append(f"Review packet: {h.get('packet', '?')}, prepared {h.get('prepared', '?')[:10]}. "
                    f"Ask a session to review it (`kb-apply show {p}`).")
-    covered = {h.get("packet") for _, h in mine}
 
-    qpath = root / "needs-attention.md"
-    if qpath.is_file():
-        for r in queue.open_findings(qpath.read_text(errors="replace")):   # a duplicated id is one finding (#172)
-            out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
-                       f"Triage it in needs-attention.md.")
+    for r in need(att.queue):
+        out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
+                   f"Triage it in needs-attention.md.")
 
-    lib = library.library(root)
-    if lib.horizon is not None:
-        if lib.agent_ttl is None:
-            raise ValueError(lib.problem("agent_ttl"))
-        due, _found, _cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
-        attended = [s for s in due if s.get("attended")]
-        if attended:
-            out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
-                       f"`kb-verify {root} --yes`.")
+    attended = need(att.rechecks).attended
+    if attended:
+        out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
+                   f"`kb-verify {root} --yes`.")
 
-    st = kb_due.status(root)
-    if st and st["due"] and "kb-audit" not in covered:
+    if att.sweep.due and not att.sweep_covered:
         out.append("Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule.")
-    if st and st["due"]:
+    if att.sweep.due:
         # Once per sweep interval: listed while the sweep is due, gone once it is done (#120).
-        manual = mods["kb_sources"].manual_stubs(root)
+        manual = need(att.manual_stubs)
         if manual:
             out.append(f"{len(manual)} source(s) marked Liveness: manual, which only a person can check: "
                        f"{', '.join(manual)}. Open each and confirm it still holds what its facts cite.")
-    notes = kb_due.episodic_count(root)
-    if notes and "kb-distill" not in covered:
+    notes = need(att.episodic)
+    if notes and not att.distill_covered:
         out.append(f"{notes} note(s) awaiting distillation and no packet drafted: run kb-distill.")
 
-    found = library.library(root).contract
-    if found is None:
-        contract.known_contracts()    # this engine cannot read its own §14: raises why
-    state, v, newest, _newer = found
+    state, v, newest, _newer = need(att.contract)
     if state == "behind":
         out.append(f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
                    f"Decide whether to adopt it (CONVENTIONS §14).")
@@ -163,17 +162,15 @@ def main(argv) -> int:
             print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
         trees.append(pathlib.Path(argv[i])); i += 1
     try:
+        kl = load_module("kb_libraries", "kb-libraries")
         if not trees:
-            trees = list(load_module("kb_libraries", "kb-libraries").installed().values())
+            trees = list(kl.installed().values())
         # A read-only library is curated by its publisher, so nothing in it is this machine's
         # decision (ADR-0020).
-        consumed = {e["path"].resolve() for e in load_module("kb_libraries", "kb-libraries").entries()
-                    if e["read_only"]}
+        consumed = {e["path"].resolve() for e in kl.entries() if e["read_only"]}
         trees = [t for t in trees if t.resolve() not in consumed]
-        mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
-                "kb_sources": load_module("kb_sources", "kb-sources"),
-                "kb_telemetry": load_module("kb_telemetry", "kb-telemetry"),
-                "kb_libraries": load_module("kb_libraries", "kb-libraries")}
+        attention.script("kb-verify"), attention.script("kb-sources")   # attention's readers: fail here, not per library
+        mods = {"kb_telemetry": load_module("kb_telemetry", "kb-telemetry"), "kb_libraries": kl}
         packets = load_module("kb_apply", "kb-apply").pending()
     except Exception as e:
         print(f"kb-report: could not load the engine's readers ({type(e).__name__})", file=sys.stderr)
@@ -189,14 +186,16 @@ def main(argv) -> int:
     for t in trees:
         if not (t / "INDEX.md").is_file():
             continue
+        att = attention.attention(t, packets, set())
         try:
-            items = decisions_for(t, mods, packets, gaps)
+            items = decisions_for(att, mods, gaps)
         except Exception as e:
-            print(f"kb-report: {t}: could not be read ({type(e).__name__})", file=sys.stderr)
+            kind = e.failed.kind if isinstance(e, Unreadable) else type(e).__name__
+            print(f"kb-report: {t}: could not be read ({kind})", file=sys.stderr)
             return 2
         if items:
             total += len(items)
-            sections.append(f"## {mods['kb_due'].label(t)}\n\n" + "\n".join(f"- {x}" for x in items) + "\n")
+            sections.append(f"## {attention.label(t)}\n\n" + "\n".join(f"- {x}" for x in items) + "\n")
 
     now = datetime.datetime.now(datetime.timezone.utc)
     year, week, _ = now.date().isocalendar()
