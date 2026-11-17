@@ -3885,6 +3885,23 @@ sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$RM/INDEX.md"
 case_run "kb-report: no sweep due, so the manual stubs are not listed" 1 "" -- \
   bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-calm" "$WEEK"
 
+# kbr <home> <out> <tree...>: kb-report with the registry at <home>, then the report it wrote.
+kbr() { local h="$1" o="$2"; shift 2; HOME="$h" "$ENGINE/scripts/kb-report" "$@" --out "$o" 2>&1; cat "$o"/*.md 2>/dev/null; }
+export -f kbr; export ENGINE
+# Issue #204 (a): kb-report leaves out a library declaring archived: that is not registered, as
+# kb-due does (#141); a registered one is served whatever it declares, so it is still reported.
+RA="$RR/arch"; RAH="$RA/home"; mkdir -p "$RAH"
+for d in gone kept; do
+  build_clean "$RA/$d"
+  sed -i 's/^last_swept: never$/&\narchived: legacy copy/' "$RA/$d/INDEX.md"
+  git -C "$RA/$d" add -A; git -C "$RA/$d" -c user.email=t@t -c user.name=t commit -qm init
+done
+HOME="$RAH" "$ENGINE/scripts/kb-library" add "$RA/kept" >/dev/null 2>&1
+case_run "kb-report: an archived library that is not registered is left out (#204)" 1 "" -- \
+  bash -c 'kbr "$1" "$2" "$3" "$4" | grep -q "^## gone"' _ "$RAH" "$RA/out" "$RA/gone" "$RA/kept"
+case_run "kb-report: ...and a registered archived library is still reported (#204)" 0 "" -- \
+  bash -c 'kbr "$1" "$2" "$3" "$4" | grep -q "^## kept"' _ "$RAH" "$RA/out" "$RA/gone" "$RA/kept"
+
 "$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
 case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
   "$ENGINE/scripts/kb-due" "$RC" --nudge

@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-report` leaves out a library that declares `archived:` and is not registered (#204), as
+  `kb-due` already did (#141). It listed that library's sweep and anything else due, though a
+  read-only archive cannot act on a decision. A registered library is still reported: it is served
+  whatever it declares.
 - Two edge cases in a library's root `INDEX.md` frontmatter read differently (#203). On a repeated
   key the first occurrence now wins; `check-kb` and `kb-catalog` kept the last. `kb-libraries` now
   treats a `domain:` value outside `[\w-]+` (such as `foo#bar`) as a name mismatch.

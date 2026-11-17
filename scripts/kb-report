@@ -16,6 +16,7 @@ listing per library only what a person has to decide:
   topic named in the root `Not covered here:` line makes the next such question far cheaper. The
   report gives the count and cost; `kb-telemetry --not-found` lists the questions.
 
+A library declaring `archived:` that is not registered is left out, as `kb-due` leaves it out (#141).
 A library with nothing to decide gets no section. When no library has anything, the report says so
 in one line. Either way the file is written, so a quiet week can be told from a week the job did not
 run. It never holds a fact's, a source's or a packet's text: paths, counts, headings and ids only.
@@ -163,8 +164,10 @@ def main(argv) -> int:
         trees.append(pathlib.Path(argv[i])); i += 1
     try:
         kl = load_module("kb_libraries", "kb-libraries")
+        installed = kl.installed()
         if not trees:
-            trees = list(kl.installed().values())
+            trees = list(installed.values())
+        registered = {pathlib.Path(p).resolve() for p in installed.values()}
         # A read-only library is curated by its publisher, so nothing in it is this machine's
         # decision (ADR-0020).
         consumed = {e["path"].resolve() for e in kl.entries() if e["read_only"]}
@@ -186,7 +189,9 @@ def main(argv) -> int:
     for t in trees:
         if not (t / "INDEX.md").is_file():
             continue
-        att = attention.attention(t, packets, set())
+        att = attention.attention(t, packets, consumed)
+        if attention.shelved(att, registered):   # a read-only archive cannot act on a decision (#141)
+            continue
         try:
             items = decisions_for(att, mods, gaps)
         except Exception as e:
