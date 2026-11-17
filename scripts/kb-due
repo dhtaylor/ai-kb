@@ -83,20 +83,6 @@ from kbengine import attention, contract
 from kbengine.attention import Failed, label
 
 
-def status(tree: pathlib.Path):    # until kb-report and kb-prepare read attention themselves
-    if not (tree / "INDEX.md").is_file():
-        return None
-    a = attention.attention(tree, [], set())
-    return {"tree": tree, "age": a.sweep.age, "interval": a.sweep.interval, "due": a.sweep.due, "archived": a.archived}
-
-
-def episodic_count(root: pathlib.Path):    # likewise
-    n = attention.attention(root, [], set()).episodic
-    if isinstance(n, Failed):
-        raise RuntimeError(n.reason)
-    return n
-
-
 # -------------------------------------------------------------------- --nudge ----
 def load_module(name: str, filename: str):
     """Import an extensionless sibling script as a module, byte-identical to the file on

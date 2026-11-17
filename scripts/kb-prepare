@@ -29,7 +29,8 @@ due, or the run proposed nothing), 1 a packet is waiting for a decision, 2 could
 """
 import datetime, importlib.machinery, importlib.util, json, os, pathlib, re, shutil, subprocess, sys
 
-from kbengine import library, queue
+from kbengine import attention, library, queue
+from kbengine.attention import Failed
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ENGINE / "scripts"
@@ -117,8 +118,10 @@ def main(argv) -> int:
             return 1
 
     if "--force" not in opts:
-        kb_due = load_module("kb_due", "kb-due")
-        due = kb_due.episodic_count(lib) if skill == "distill" else kb_due.status(lib)["due"]
+        att = attention.attention(lib, [], set())
+        due = att.episodic if skill == "distill" else att.sweep.due
+        if isinstance(due, Failed):
+            return fail(f"{name}: could not tell whether there is anything to prepare for {packet} ({due.reason})")
         if not due:
             print(f"kb-prepare: {name}: nothing to prepare for {packet}")
             return 0
