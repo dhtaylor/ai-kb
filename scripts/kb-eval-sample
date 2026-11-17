@@ -26,6 +26,8 @@ Exit for grade: 0 every graded case passed both graders, 1 any failed, 2 nothing
 """
 import datetime, importlib.machinery, importlib.util, pathlib, random, re, subprocess, sys
 
+from kbengine import env
+
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 
 
@@ -102,7 +104,7 @@ def grade(argv) -> int:
     sid, lib = lines[0].split(": ", 1)[1], pathlib.Path(lines[1].split(": ", 1)[1])
     cases = [l.split("\t", 1)[0] for l in lines[2:] if l.startswith("Q")]
     tel = load("kb_telemetry", "kb-telemetry")
-    projects = pathlib.Path(opts.get("--projects") or pathlib.Path.home() / ".claude" / "projects")
+    projects = pathlib.Path(opts.get("--projects") or env.claude_projects())
     found = {}
     for t, meta in tel.runs(projects):
         m = re.fullmatch(rf"kb-eval {re.escape(sid)} (Q\d+)", str(meta.get("description", "")).strip())

@@ -36,10 +36,12 @@ on this machine. It never prints an answer or a file's text.
 
 Usage: kb-telemetry [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--window Nd] [--library NAME]
                     [--projects DIR] [--include-evals] [--not-found]
-  Defaults: the last 28 days, in 7-day windows; every library; ~/.claude/projects.
+  Defaults: the last 28 days, in 7-day windows; every library; $CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects.
 Schedulable (#95): exit 0, or 2 on a usage error.
 """
 import datetime, importlib.machinery, importlib.util, json, pathlib, re, statistics, sys
+
+from kbengine import env
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 EVAL = re.compile(r"^kb-eval\b|\b(eval|trial)\b", re.I)
@@ -186,7 +188,7 @@ def main(argv) -> int:
     except ValueError:
         print("kb-telemetry: --since/--until take YYYY-MM-DD (since first), --window takes Nd", file=sys.stderr)
         return 2
-    projects = pathlib.Path(opts.get("--projects") or pathlib.Path.home() / ".claude" / "projects")
+    projects = pathlib.Path(opts.get("--projects") or env.claude_projects())
     measured, evals = collect(projects, since, until, "--include-evals" in opts, opts.get("--library"))
 
     if "--not-found" in opts:

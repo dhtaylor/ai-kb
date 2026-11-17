@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-telemetry` and `kb-eval-sample` honour `CLAUDE_CONFIG_DIR` (#205). They read transcripts from
+  `~/.claude/projects` only, though Claude Code writes them under that variable's folder when it is
+  set, and `kb-bootstrap` already followed it. `kb-report`'s count of fact-not-found runs reads the
+  same folder. `--projects` still wins. `kb-schedule install` now saves `CLAUDE_CONFIG_DIR` in
+  `schedule.conf`, and `run` restores it, as it does PATH; reinstall to record it.
 - **The engine no longer reads `XDG_STATE_HOME` or `XDG_CONFIG_HOME` (#205, ADR-0021).** Its files are
   at fixed paths: packets, reports, `schedule.log`, `schedule.lock` and backups under
   `~/.local/state/ai-kb/`, and `schedule.conf` and the systemd user unit folder under `~/.config/`.

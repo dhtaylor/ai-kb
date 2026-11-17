@@ -85,7 +85,7 @@ def not_found_week(mods: dict) -> dict:
     try:
         roots = {n: pathlib.Path(p).resolve() for n, p in mods["kb_libraries"].installed().items()}
         today = datetime.datetime.now(datetime.timezone.utc).date()   # transcripts are stamped in UTC
-        runs, _evals = mods["kb_telemetry"].collect(pathlib.Path.home() / ".claude" / "projects",
+        runs, _evals = mods["kb_telemetry"].collect(env.claude_projects(),
                                                     today - datetime.timedelta(days=6), today)
     except Exception:
         return {}

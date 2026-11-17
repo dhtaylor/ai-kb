@@ -3793,6 +3793,14 @@ case_run "kb-telemetry: steps to that read, counting each tool call once" 0 "" -
 case_run "kb-telemetry: an uncited content read is a wasted read; INDEX is protocol overhead" 0 "| 1 | 1 |" -- printf '%s\n' "$TEL"
 case_run "kb-telemetry: no question, answer or file text is printed" 1 "" -- bash -c 'printf "%s\n" "$1" | grep -q SCHED-CANARY' _ "$TEL"
 case_run "kb-telemetry: eval runs are left out of normal use by default" 0 "1 eval run(s) left out" -- printf '%s\n' "$TEL"
+# CLAUDE_CONFIG_DIR moves where Claude Code writes its transcripts, so it moves where they are read (#205).
+# The same transcripts, copied under a config folder of their own, are found from an empty HOME only
+# when the variable names it.
+TLC="$TL/claude-elsewhere"; TLE="$TL/empty-home"; mkdir -p "$TLC" "$TLE"; cp -r "$TLH/.claude/projects" "$TLC/projects"
+case_run "kb-telemetry: CLAUDE_CONFIG_DIR names where the transcripts are" 0 "1 kb-retrieve run(s)" -- \
+  env HOME="$TLE" CLAUDE_CONFIG_DIR="$TLC" "$ENGINE/scripts/kb-telemetry" --since 2026-10-19 --until 2026-10-25
+case_run "kb-telemetry: ...and without it an empty HOME has none" 0 "0 kb-retrieve run(s)" -- \
+  env HOME="$TLE" "$ENGINE/scripts/kb-telemetry" --since 2026-10-19 --until 2026-10-25
 case_run "kb-telemetry: a window with no runs still gets a row" 0 "2026-10-26" -- ktel --since 2026-10-19 --until 2026-11-01 --window 7d
 case_run "kb-telemetry: a malformed --window is a usage error" 2 "" -- ktel --window week
 case_run "schedulable: kb-telemetry from / with a stripped environment" 0 "exit=0" -- \
@@ -3833,6 +3841,9 @@ SID=$(sed -n 's/^sample_id: //p' "$KES/sample.tsv" | head -1)
 mkrun a4 knowledge-tools:kb-retrieve "kb-eval $SID Q1" $'A widget holds up to 12 things.\nSources: widgets.md'
 case_run "kb-eval-sample grade: finds each case's transcript by its description and grades it" 0 "routing" -- \
   env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
+rm -rf "$TLC/projects"; cp -r "$TLH/.claude/projects" "$TLC/projects"
+case_run "kb-eval-sample grade: CLAUDE_CONFIG_DIR names where the transcripts are" 0 "460" -- \
+  env HOME="$TLE" CLAUDE_CONFIG_DIR="$TLC" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
 case_run "kb-eval-sample grade: writes the mapping both graders read" 0 "" -- grep -q '^Q1|.*agent-a4.jsonl$' "$KES/mapping"
 case_run "kb-eval-sample grade: joins each case with its cost" 0 "460" -- env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
 
@@ -4384,14 +4395,21 @@ printf '#!/bin/sh\nexit 0\n' > "$XH/userbin/kbtool"; chmod +x "$XH/userbin/kbtoo
 build_clean "$XH/lib"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$XH/lib/widgets.md"
 printf 'Recheck: kbtool\n' >> "$XH/lib/widgets.md"
+git -C "$XH/lib" -c user.email=t@t -c user.name=t commit -qm init
 HOME="$XHH" "$ENGINE/scripts/kb-library" add "$XH/lib" >/dev/null 2>&1
+cat > "$XH/claudestub" <<STUB
+#!/bin/sh
+printf %s "\$CLAUDE_CONFIG_DIR" > "$XH/cc-seen"
+echo '{"result": "NO ITEMS"}'
+STUB
+chmod +x "$XH/claudestub"
 xsched() { # xsched PATH [VAR=value ...] -- kb-schedule arguments, run with only HOME, PATH and what is named
   local p="$1" e=(); shift
   while [ "$1" != -- ]; do e+=("$1"); shift; done; shift
   env -i HOME="$XHH" PATH="$p" KS_LOG="$KS/log" KS_CRON="$XH/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" \
     ${e[@]+"${e[@]}"} "$ENGINE/scripts/kb-schedule" "$@"
 }
-xsched "$XH/userbin:$PATH" XDG_CONFIG_HOME="$XOTHER/config" XDG_STATE_HOME="$XOTHER/state" -- install --backend cron --prepare --claude /bin/true >/dev/null 2>&1
+xsched "$XH/userbin:$PATH" XDG_CONFIG_HOME="$XOTHER/config" XDG_STATE_HOME="$XOTHER/state" CLAUDE_CONFIG_DIR="$XOTHER/cc" -- install --backend cron --prepare --claude "$XH/claudestub" >/dev/null 2>&1
 case_run "kb-schedule install: schedule.conf is under ~/.config even with XDG_CONFIG_HOME set" 0 "" -- \
   bash -c '[ -f "$1/.config/ai-kb/schedule.conf" ] && [ ! -e "$2/config" ]' _ "$XHH" "$XOTHER"
 xsched /usr/bin:/bin -- run >/dev/null 2>&1
@@ -4399,6 +4417,9 @@ case_run "kb-schedule run, XDG_CONFIG_HOME unset: the conf is found (preparation
   cat "$XHH/.local/state/ai-kb/schedule.log"
 case_run "kb-schedule run, XDG_CONFIG_HOME unset: ...and so is the saved PATH" 0 "kb-verify lib exit=0" -- \
   cat "$XHH/.local/state/ai-kb/schedule.log"
+case_run "kb-schedule install records CLAUDE_CONFIG_DIR as it ran with it" 0 "" -- \
+  grep -qx "claude_config_dir=$XOTHER/cc" "$XHH/.config/ai-kb/schedule.conf"
+case_run "kb-schedule run restores CLAUDE_CONFIG_DIR for the steps, as it does PATH" 0 "$XOTHER/cc" -- cat "$XH/cc-seen"
 case_run "kb-schedule: the log and lock are under ~/.local/state, not XDG_STATE_HOME" 0 "" -- \
   bash -c '[ -f "$1/.local/state/ai-kb/schedule.lock" ] && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
 xsched /usr/bin:/bin XDG_STATE_HOME="$XOTHER/state" -- run >/dev/null 2>&1
