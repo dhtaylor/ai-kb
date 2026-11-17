@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Two edge cases in a library's root `INDEX.md` frontmatter read differently (#203). On a repeated
+  key the first occurrence now wins; `check-kb` and `kb-catalog` kept the last. `kb-libraries` now
+  treats a `domain:` value outside `[\w-]+` (such as `foo#bar`) as a name mismatch.
 - `kb-due --nudge` no longer crashes on a library whose `kb_contract:` is malformed (#203). It
   stopped with a traceback; it now says the contract cannot be read and goes on to the next tree.
 - `kb-due`'s recheck count no longer needs `check-kb` beside it (#203). It read the horizon and agent
