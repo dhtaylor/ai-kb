@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-due --nudge` no longer names a sweep that a pending `kb-audit` packet already covers, or the
+  episodic notes a pending `kb-distill` packet covers (#204). It named both the packet and the work
+  inside it, so the same decision showed twice; `kb-report` already left the second out. A packet
+  covers only what its skill does: an audit packet does not hide the notes, nor a distill packet the
+  sweep. `--quiet` and the plain listing still show a due sweep.
 - `kb-report` goes on when the library registry cannot be read (#204), as `kb-due` does. It stopped
   with exit 2 and "could not load the engine's readers". It now warns on stderr that the registry is
   unreadable, reports any library named on the command line, and finds none to report otherwise.

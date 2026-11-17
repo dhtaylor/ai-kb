@@ -3930,6 +3930,28 @@ case_run "kb-report: ...a report was written either way (#204)" 0 "" -- \
 case_run "kb-report: ...and the unreadable registry is not blamed on the library (#204)" 1 "" -- \
   grep -q "Could not compute" "$RE/out"/*.md
 
+# Issue #204 (f): kb-due --nudge leaves out the sweep a pending kb-audit packet covers, and the
+# episodic notes a pending kb-distill packet covers, as kb-report does. Each packet covers its own.
+RF="$RR/covered"; mkdir -p "$RF/packets/x" "$RF/home"   # an empty registry: no other library is nudged
+for d in audit distill; do
+  build_clean "$RF/$d"; mkdir -p "$RF/$d/episodic"
+  printf -- '---\nname: n\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\nmetadata: {type: episodic, node_type: memory, created: 2026-01-01}\ntags: [fx]\nkeywords: [fx]\n---\n# note\n' > "$RF/$d/episodic/n.md"
+  printf -- '---\npacket: kb-%s\nlibrary: %s\nlibrary_path: %s\nprepared: 2026-10-20T00:00:00Z\nstatus: pending\n---\n\nbody\n' \
+    "$d" "$d" "$(cd "$RF/$d" && pwd -P)" > "$RF/packets/x/2026-10-20-$d.md"
+done
+case_run "nudge: a pending kb-audit packet covers the sweep, so only the packet is named (#204)" 1 "" -- \
+  bash -c 'HOME="$4" KB_PACKETS="$2" "$1" "$3" --nudge | grep -qF "sweep due"' _ "$ENGINE/scripts/kb-due" "$RF/packets" "$RF/audit" "$RF/home"
+case_run "nudge: ...the episodic note it does not cover is still named (#204)" 0 "1 episodic note awaiting distillation" -- \
+  env HOME="$RF/home" KB_PACKETS="$RF/packets" "$ENGINE/scripts/kb-due" "$RF/audit" --nudge
+case_run "nudge: a pending kb-distill packet covers the notes (#204)" 1 "" -- \
+  bash -c 'HOME="$4" KB_PACKETS="$2" "$1" "$3" --nudge | grep -qF "awaiting distillation"' _ "$ENGINE/scripts/kb-due" "$RF/packets" "$RF/distill" "$RF/home"
+case_run "nudge: ...and the sweep it does not cover is still named (#204)" 0 "1 review packet awaiting your decision (kb-apply list); sweep due" -- \
+  env HOME="$RF/home" KB_PACKETS="$RF/packets" "$ENGINE/scripts/kb-due" "$RF/distill" --nudge
+case_run "nudge: ...and the summary counts only what is shown (#204)" 1 "" -- \
+  bash -c 'HOME="$4" KB_PACKETS="$2" "$1" "$3" --nudge --summary | tail -n 1 | grep -qF "sweeps due"' _ "$ENGINE/scripts/kb-due" "$RF/packets" "$RF/audit" "$RF/home"
+case_run "kb-due --quiet: a pending packet does not hide a due sweep (#204)" 0 "kb-audit due" -- \
+  env HOME="$RF/home" KB_PACKETS="$RF/packets" "$ENGINE/scripts/kb-due" "$RF/audit" --quiet
+
 "$ENGINE/scripts/kb-report" "$RL" >/dev/null 2>&1
 case_run "kb-due --nudge names this week's report and its decisions" 0 "decision(s) waiting in" -- \
   "$ENGINE/scripts/kb-due" "$RC" --nudge
