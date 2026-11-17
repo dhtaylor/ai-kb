@@ -1020,6 +1020,12 @@ case_run "agent_ttl: an invalid one is a kb-due warning, never a crash" 0 "agent
   "$ENGINE/scripts/kb-due" "$TMP/ttl-eq" --nudge
 ttl_lib "$TMP/ttl-bad" "agent_ttl: a month"
 case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
+# #203: a field is read from the frontmatter. A freshness_horizon: line in the body is prose, and
+# read as the horizon it let kb-verify judge staleness by a number the library never declared.
+build_clean "$TMP/vbody"; sed -i '/^freshness_horizon:/d' "$TMP/vbody/INDEX.md"
+printf '\nfreshness_horizon: 90d\n' >> "$TMP/vbody/INDEX.md"
+case_run "kb-verify: a freshness_horizon: line in the body is not the horizon (#203)" 2 "declares no freshness_horizon" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vbody"
 
 # Issue #80: importing an extensionless script as a module (an ad-hoc SourceFileLoader, as an
 # agent or a person debugging does) writes scripts/__pycache__/, and the engine checkout then

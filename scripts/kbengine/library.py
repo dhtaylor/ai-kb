@@ -60,7 +60,7 @@ class Field:
 
 @dataclass(frozen=True)
 class Frontmatter:
-    """fields: {key: Field}, a repeated key keeping its last. bad: (line number, line) of the first
+    """fields: {key: Field}, a repeated key keeping its first, as the line-by-line readers it replaces did. bad: (line number, line) of the first
     line that is not a key, a comment, blank or nested, or None: check-kb reports it."""
     fields: dict
     bad: object = None
@@ -84,7 +84,7 @@ def parse(block: str) -> Frontmatter:
     fields, bad, cur = {}, None, None       # cur: [key, raw, value, line, items, children] being filled
     def close():
         if cur:
-            fields[cur[0]] = Field(cur[1], cur[2], cur[3], tuple(cur[4]), cur[5])
+            fields.setdefault(cur[0], Field(cur[1], cur[2], cur[3], tuple(cur[4]), cur[5]))
     for n, line in enumerate(block.split("\n"), 1):
         if not line.strip() or line.startswith("#"):
             continue

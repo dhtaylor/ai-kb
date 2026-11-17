@@ -82,8 +82,8 @@ class Parse(unittest.TestCase):
         self.assertEqual(f.bad, (2, "this is not a key"))
         self.assertEqual((f.get("name"), f.get("domain")), ("x", "d"))
 
-    def test_a_repeated_key_keeps_its_last(self):
-        self.assertEqual(library.parse("a: 1\na: 2").get("a"), "2")
+    def test_a_repeated_key_keeps_its_first(self):
+        self.assertEqual(library.parse("a: 1\na: 2").get("a"), "1")
 
     def test_read_takes_a_whole_files_text_and_only_its_frontmatter(self):
         f = library.read("---\nname: x\n---\nfreshness_horizon: 9d\n")
