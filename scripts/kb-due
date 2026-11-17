@@ -124,12 +124,13 @@ def recheck_due(root: pathlib.Path, kb_verify):
     verifier_budget. Returns None (not zero) when the tree declares no freshness_horizon —
     that is not an overdue count of zero, it is "not computable", and the two must not read
     the same in the nudge."""
-    horizon, budget = kb_verify.horizon_and_budget(root)
-    if horizon is None:
+    lib = library.library(root)
+    if lib.horizon is None:
         return None
-    budget = budget or 5
-    due, _found, _with_cmd = kb_verify.due_sections(root, horizon, kb_verify.agent_ttl(root, horizon))
-    return due[:budget]
+    if lib.agent_ttl is None:
+        raise ValueError(lib.problem("agent_ttl"))
+    due, _found, _with_cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
+    return due[:lib.budget]
 
 
 def stale_unasserted(root: pathlib.Path, kb_verify):
@@ -138,12 +139,13 @@ def stale_unasserted(root: pathlib.Path, kb_verify):
     recheck_due() counts only what a command can settle, so between sweeps they were silent.
     The same is_due() decides, so there is one judgment of "due". Not capped by
     verifier_budget: the budget limits what kb-verify RUNS, and nothing runs these."""
-    horizon, _budget = kb_verify.horizon_and_budget(root)
-    if horizon is None:
+    lib = library.library(root)
+    if lib.horizon is None:
         return None
-    ttl = kb_verify.agent_ttl(root, horizon)
-    _due, found, _with_cmd = kb_verify.due_sections(root, horizon, ttl)
-    return [s for s in found if not s["cmd"] and kb_verify.is_due(s, horizon, ttl)]
+    if lib.agent_ttl is None:
+        raise ValueError(lib.problem("agent_ttl"))
+    _due, found, _with_cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
+    return [s for s in found if not s["cmd"] and kb_verify.is_due(s, lib.horizon, lib.agent_ttl)]
 
 
 def queue_due(root: pathlib.Path):

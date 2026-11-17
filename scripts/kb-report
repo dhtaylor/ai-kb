@@ -108,9 +108,11 @@ def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> l
             out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
                        f"Triage it in needs-attention.md.")
 
-    horizon, _budget = kb_verify.horizon_and_budget(root)
-    if horizon is not None:
-        due, _found, _cmd = kb_verify.due_sections(root, horizon, kb_verify.agent_ttl(root, horizon))
+    lib = library.library(root)
+    if lib.horizon is not None:
+        if lib.agent_ttl is None:
+            raise ValueError(lib.problem("agent_ttl"))
+        due, _found, _cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
         attended = [s for s in due if s.get("attended")]
         if attended:
             out.append(f"{len(attended)} attended recheck(s) due, which need you there: "

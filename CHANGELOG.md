@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-due`'s recheck count no longer needs `check-kb` beside it (#203). It read the horizon and agent
+  TTL through `check-kb`, so a `kb-due` copied without it printed "could not compute facts due for
+  recheck"; it now reads them through `kbengine`, as `kb-report` does, and prints the count.
 - A trailing ` # comment` after a value in a library's root `INDEX.md` is no part of the value, and
   a quoted value is read without its quotes (#203). `check-kb` failed `name: "widgets"  # note`
   against the filename `widgets`; `kb-prepare` named a library `"fx"`, quotes and all; `kb-catalog`

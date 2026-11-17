@@ -1834,15 +1834,17 @@ case_run "nudge: ...and not as facts a recheck can run" 1 "" -- \
 case_run "nudge: a stale fact WITH a Recheck is not also counted as having none" 0 "1 stale fact with no assertion" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 # Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
-# count, and the recheck count, whose agent TTL is check-kb's (issue #30). One warning each; the
-# rest intact.
+# count (issue #30). One warning; the rest intact. The recheck count no longer needs check-kb: its
+# horizon and agent TTL are read through kbengine (#203).
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
 cp -r "$ENGINE/scripts/kbengine" "$TMP/due-nockb/kbengine"   # kb-verify imports it; check-kb is what is left out
 case_run "nudge: without check-kb the other categories still print" 0 "episodic notes awaiting distillation" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/episodic-due" --nudge
-case_run "nudge: without check-kb the recheck count is a one-line warning" 0 "could not compute facts due for recheck" -- \
+case_run "nudge: without check-kb the recheck count is still computed, through kbengine (#203)" 0 "1 fact due for recheck" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
+case_run "nudge: ...and is no warning that it could not be (#203)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge 2>&1 | grep -qF "could not compute facts due for recheck"' _ "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due"
 case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
 

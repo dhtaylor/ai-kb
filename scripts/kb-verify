@@ -143,21 +143,6 @@ def failure_detail(result):
     return "stale-recheck", f"exit {result.returncode}"
 
 
-def horizon_and_budget(root: pathlib.Path):
-    idx = (root / "INDEX.md").read_text(errors="replace")
-    h = re.search(r"^freshness_horizon:\s*(\d+)d", idx, re.M)
-    b = re.search(r"^verifier_budget:\s*(\d+)", idx, re.M)
-    return (int(h.group(1)) if h else None), (int(b.group(1)) if b else None)
-
-
-def agent_ttl(root: pathlib.Path, horizon: int) -> int:
-    """The domain's agent-stamp TTL: its agent_ttl:, else a tenth of the horizon (§7), by
-    check-kb's own rule. Raises ValueError on one check-kb would fail."""
-    idx = (root / "INDEX.md").read_text(errors="replace")
-    m = re.search(r"^agent_ttl:[ \t]*(.*?)[ \t]*$", idx, re.M)
-    return load_check_kb().agent_ttl(m.group(1) if m else None, horizon)
-
-
 def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
     """A stamped section is due for recheck once its age exceeds its trust tier's TTL —
     the domain's agent TTL for an agent stamp, the full horizon for a human one (§7).
