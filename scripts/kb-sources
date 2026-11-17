@@ -46,10 +46,9 @@ itself (issue #117)):
                   conflated with "dead" or with "unchanged" (§6).
                   category: source-unreachable
 
-THE QUEUE reuses kb-watch's primitives exactly as kb-verify does (imported from
-`scripts/kb-watch`, not re-specified): `new_queue_file`, `yaml_scalar` (the URL and error
-text are untrusted), `existing_ids`, `ensure_routed`. One record per dead or unreachable
-stub URL, in the library that owns the stub:
+THE QUEUE is written through kbengine.queue, as kb-verify and kb-watch do (#202): the file's
+template, the escaping (the URL and error text are untrusted), the dedupe and the router line. One record per
+dead or unreachable stub URL, in the library that owns the stub:
 
     id          8 hex chars of sha1(f"{category}|{stub}|{url}") — a rerun reproduces it and
                 does not duplicate; a URL that changes class (unreachable, then dead) is a
@@ -66,28 +65,15 @@ Usage: kb-sources <library-or-tree> [--yes]
 Exit 0 when every URL is alive (or nothing was fetched), 1 when any was dead or unreachable,
 2 on usage error.
 """
-import hashlib, importlib.machinery, importlib.util, pathlib, re, sys
+import pathlib, re, sys
 
-from kbengine import factfiles
+from kbengine import factfiles, queue
 
 UA = "kb-sources/1 (knowledge-base liveness check; HEAD only unless refused)"
 TIMEOUT = 10
 LIVENESS_MANUAL = re.compile(r"^\s*-\s*\*\*Liveness:\*\*\s*manual\s*$")
 URL_LINE = re.compile(r"^\s*-\s*\*\*(?:URL[^:*]*|Artifact location):\*\*\s*(https?://[^\s<>`]+)")
 LINK = re.compile(r"\[\[([^\]|#]+)")
-TODAY = __import__("datetime").date.today().isoformat()
-
-
-def load_kb_watch():
-    """Import scripts/kb-watch byte-identical (no .py suffix, so an explicit loader), without
-    writing bytecode next to it — the queue template, escaping and dedupe live in one place."""
-    path = pathlib.Path(__file__).resolve().parent / "kb-watch"
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader("kb_watch", str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod
 
 
 def markdown_files(root):
@@ -203,54 +189,6 @@ def fetch(url):
     return "unreachable", f"HTTP {code}", final
 
 
-def render_record(rec, kb_watch):
-    lines = [f"- id: {rec['id']}"]
-    for key in ("category", "status", "stub"):
-        lines.append(f"  {key}: {kb_watch.yaml_scalar(rec[key], untrusted=False)}")
-    for key in ("url", "detail", "dependants"):
-        lines.append(f"  {key}: {kb_watch.yaml_scalar(rec[key], untrusted=True)}")
-    lines.append(f"  date: {kb_watch.yaml_scalar(rec['date'], untrusted=False)}")
-    return "\n".join(lines) + "\n\n"
-
-
-def append_records(queue_path, records, kb_watch):
-    """kb-verify's file-level behaviour: create from kb-watch's template and route it from the
-    INDEX, or splice into the last ```yaml fence."""
-    body = "".join(render_record(r, kb_watch) for r in records)
-    if not queue_path.is_file():
-        domain, scope, err = kb_watch.library_domain_scope(queue_path.parent)
-        if err:
-            return err
-        kb_watch.atomic_write(
-            queue_path, kb_watch.new_queue_file(domain, scope)[:-len(kb_watch.FENCE_CLOSE)] + body + kb_watch.FENCE_CLOSE)
-        return kb_watch.ensure_routed(queue_path.parent)
-    text = queue_path.read_text(errors="replace")
-    spans = list(re.finditer(r"```yaml\n(?:.*?\n)?```\n", text, re.S))
-    if spans:
-        at = spans[-1].end() - len(kb_watch.FENCE_CLOSE)
-        text = text[:at] + body + text[at:]
-    else:
-        text = text.rstrip("\n") + "\n\n" + kb_watch.FENCE_OPEN + body + kb_watch.FENCE_CLOSE
-    kb_watch.atomic_write(queue_path, text)
-    return None
-
-
-def stable_id(category, stub, url):
-    return hashlib.sha1(f"{category}|{stub}|{url}".encode()).hexdigest()[:8]
-
-
-def read_only_entry(path):
-    """The registry entry if the library at path is registered read-only (ADR-0020), else None."""
-    import importlib.machinery, importlib.util
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader(
-        "kb_libraries", str(pathlib.Path(__file__).resolve().parent / "kb-libraries"))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod, mod.read_only(path)
-
-
 def main(argv):
     args = [a for a in argv if not a.startswith("--")]
     flags = {a for a in argv if a.startswith("--")}
@@ -262,7 +200,7 @@ def main(argv):
         print(f"kb-sources: {root} is neither a library (no INDEX.md) nor a directory of libraries",
               file=sys.stderr); return 2
     # A read-only library (ADR-0020) is its publisher's to check: --yes would queue into it.
-    kl, ro = read_only_entry(root)
+    kl, ro = queue.read_only_entry(root)
     if ro and "--yes" in flags:
         print(kl.refusal("kb-sources", ro), file=sys.stderr); return 2
     if not (root / "INDEX.md").is_file():   # a directory of libraries: skip the read-only ones
@@ -305,30 +243,27 @@ def main(argv):
         if cls == "alive" and final != u:
             print(f"    note: redirected to {final} — the stub may want the new address")
 
-    kb_watch = load_kb_watch()
     bad, queued, dupes = 0, 0, 0
     for lib in libs:
-        queue_path, records = lib / "needs-attention.md", []
-        seen = kb_watch.existing_ids(queue_path)
+        queue_path, findings = lib / "needs-attention.md", []
         for l, slug, rel, url, deps in found:
             cls, detail, _ = results[url]
             if l != lib or cls == "alive":
                 continue
             bad += 1
             category = "source-dead" if cls == "dead" else "source-unreachable"
-            rid = stable_id(category, rel, url)
-            if rid in seen:
-                dupes += 1; continue
-            seen.add(rid)
-            records.append({"id": rid, "category": category, "status": "open", "stub": rel,
-                            "url": url, "detail": detail, "date": TODAY,
-                            "dependants": f"{len(deps)}: " + "; ".join(deps) if deps else "0"})
-        if records:
-            err = append_records(queue_path, records, kb_watch)
-            if err:
-                print(f"kb-sources: could not queue to {queue_path}: {err}", file=sys.stderr)
+            cited = f"{len(deps)}: " + "; ".join(deps) if deps else "0"
+            findings.append(queue.Finding(
+                category, (rel, url),
+                {"stub": rel, "url": url, "detail": detail, "dependants": cited},
+                frozenset({"url", "detail", "dependants"})))
+        if findings:
+            result = queue.append(lib, findings, "kb-sources")
+            dupes += len(result.skipped)
+            if result.error:
+                print(f"kb-sources: could not queue to {queue_path}: {result.error}", file=sys.stderr)
             else:
-                queued += len(records)
+                queued += len(result.new)
     if not bad:
         print("\nAll URLs alive. Nothing queued.")
         return 0
