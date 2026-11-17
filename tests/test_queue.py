@@ -112,6 +112,20 @@ class Writing(Library):
         self.assertIn("has no INDEX.md", r.error)
         self.assertFalse(self.queue.exists())
 
+    def test_domain_and_scope_are_read_from_the_frontmatter_only(self):       # #203
+        (self.root / "INDEX.md").write_text("---\nname: fx-index\n---\n# fx\n\ndomain: body\nscope: general\n")
+        self.assertEqual(queue.library_domain_scope(self.root),
+                         (None, None, f"{self.root / 'INDEX.md'} has no domain:/scope: in its frontmatter"))
+        r = self.append(finding())
+        self.assertIn("has no domain:/scope: in its frontmatter", r.error)
+        self.assertFalse(self.queue.exists())
+
+    def test_a_quoted_domain_with_a_trailing_comment_reads_as_the_value(self):    # #203
+        (self.root / "INDEX.md").write_text("---\ndomain: \"fx\"  # name\nscope: 'general' # tier\n---\n# fx\n")
+        self.assertEqual(queue.library_domain_scope(self.root), ("fx", "general", None))
+        self.append(finding())
+        self.assertIn("domain: fx\nscope: general\n", self.queue.read_text())
+
     def test_a_read_only_library_is_refused(self):
         with mock.patch.object(queue, "read_only_entry",
                                lambda p: (FakeRegistry({"name": "fx"}), {"name": "fx"})):
