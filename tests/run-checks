@@ -1848,6 +1848,14 @@ case_run "nudge: ...and is no warning that it could not be (#203)" 1 "" -- \
 case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
 
+# A kb_contract the engine cannot read: the nudge says so in one line. It crashed instead (#203).
+build_clean "$NFX/kb/contract-banana"
+sed -i 's/^kb_contract: .*$/kb_contract: banana/' "$NFX/kb/contract-banana/INDEX.md"
+case_run "nudge: a malformed kb_contract is reported as unreadable, not a crash (#203)" 0 "kb_contract cannot be read" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/contract-banana" --nudge
+case_run "nudge: ...with no traceback (#203)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge 2>&1 | grep -qF Traceback' _ "$ENGINE/scripts/kb-due" "$NFX/kb/contract-banana"
+
 # 5. A malformed (unreadable) queue file: one-line warning, never a crash, exit 0 — and
 #    every other tree and category still gets reported. Root only: chmod 000 has no
 #    effect for root, so the negative control would be vacuous there.

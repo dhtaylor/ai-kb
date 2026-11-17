@@ -366,9 +366,7 @@ def nudge_for(s: dict, kb_verify, check_kb, packets=(), retire=None):
         warnings.append(f"{lbl}: could not read the contract version ({e}) — skipped")
         st = None
     if st in ("behind", "ahead", "unsupported", "malformed"):
-        counts["contract"] = {"behind": f"{contract.fmt(v)} (behind)", "ahead": f"{contract.fmt(v)} (ahead)",
-                              "unsupported": f"{contract.fmt(v)} (unsupported)",
-                              "malformed": "(unreadable)"}[st]
+        counts["contract"] = "(unreadable)" if st == "malformed" else f"{contract.fmt(v)} ({st})"
     if st == "behind":
         parts.append(f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
                      f"(CONVENTIONS §14 says what it adds; check-kb lists it)")

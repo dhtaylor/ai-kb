@@ -6,6 +6,8 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-due --nudge` no longer crashes on a library whose `kb_contract:` is malformed (#203). It
+  stopped with a traceback; it now says the contract cannot be read and goes on to the next tree.
 - `kb-due`'s recheck count no longer needs `check-kb` beside it (#203). It read the horizon and agent
   TTL through `check-kb`, so a `kb-due` copied without it printed "could not compute facts due for
   recheck"; it now reads them through `kbengine`, as `kb-report` does, and prints the count.
