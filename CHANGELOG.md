@@ -6,6 +6,27 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Two edge cases in a library's root `INDEX.md` frontmatter read differently (#203). On a repeated
+  key the first occurrence now wins; `check-kb` and `kb-catalog` kept the last. `kb-libraries` now
+  treats a `domain:` value outside `[\w-]+` (such as `foo#bar`) as a name mismatch.
+- `kb-due --nudge` no longer crashes on a library whose `kb_contract:` is malformed (#203). It
+  stopped with a traceback; it now says the contract cannot be read and goes on to the next tree.
+- `kb-due`'s recheck count no longer needs `check-kb` beside it (#203). It read the horizon and agent
+  TTL through `check-kb`, so a `kb-due` copied without it printed "could not compute facts due for
+  recheck"; it now reads them through `kbengine`, as `kb-report` does, and prints the count.
+- A trailing ` # comment` after a value in a library's root `INDEX.md` is no part of the value, and
+  a quoted value is read without its quotes (#203). `check-kb` failed `name: "widgets"  # note`
+  against the filename `widgets`; `kb-prepare` named a library `"fx"`, quotes and all; `kb-catalog`
+  listed a scope as `general  # note`; `kb-verify` ignored a quoted `freshness_horizon`, and
+  `kb-due` read a quoted `last_swept` as never swept; a new queue file copied a scope's comment into
+  its frontmatter. One rule now reads every value: drop a ` #` comment outside quotes, then one
+  pair of matching quotes. It only relaxes what a library may write, so it needs no contract version.
+- `kb-due`, `kb-verify`, `kb-prepare` and the queue module read a library's root `INDEX.md` fields
+  from its frontmatter only (#203). They searched the whole file, so a `last_swept:`, `archived:`,
+  `freshness_horizon:`, `verifier_budget:`, `agent_ttl:` or `domain:` line in the body, which is
+  prose, could be read as a declaration when the frontmatter had none. One reader of that file now
+  serves every script (`kbengine/library.py`), as `kbengine/contract.py` does for the contract
+  versions.
 - `check-transient` no longer reads `.claude/` or `.claude-plugin/` (#201). It listed its own excluded
   folders, which lacked those two, so a dated or ticket-titled heading in a library's Claude Code
   settings or plugin folder was reported as a fact file's. It now prunes the same folders as

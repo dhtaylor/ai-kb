@@ -14,6 +14,8 @@ render(finding)                                  one finding as its queue text.
 import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, sys
 from dataclasses import dataclass
 
+from . import library
+
 TODAY = datetime.date.today().isoformat()
 MAX_LEN = 200
 ID_RE = re.compile(r"^\s*-\s*id:\s*([0-9a-f]{8})\s*$")
@@ -80,12 +82,10 @@ def library_domain_scope(library_root: pathlib.Path):
     idx = library_root / "INDEX.md"
     if not idx.is_file():
         return None, None, f"{library_root} has no INDEX.md — not a library root"
-    text = idx.read_text(errors="replace")
-    d = re.search(r"^domain:\s*(.+)$", text, re.M)
-    s = re.search(r"^scope:\s*(.+)$", text, re.M)
-    if not d or not s:
+    lib = library.library(library_root)
+    if not lib.name or not lib.scope:
         return None, None, f"{idx} has no domain:/scope: in its frontmatter"
-    return d.group(1).strip(), s.group(1).strip(), None
+    return lib.name, lib.scope, None
 
 
 def existing_ids(queue_path: pathlib.Path):

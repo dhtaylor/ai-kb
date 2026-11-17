@@ -80,15 +80,9 @@ Exit 0 always: being due is a nudge, never a failure.
 """
 import collections, datetime, importlib.machinery, importlib.util, pathlib, re, shlex, subprocess, sys
 
-from kbengine import factfiles, queue
+from kbengine import contract, factfiles, library, queue
 
-DEFAULT_INTERVAL = 30
 TODAY = datetime.date.today()
-
-
-def field(text, name):
-    m = re.search(rf"^{name}:\s*(\S+)\s*(?:\s#.*)?$", text, re.M)   # a trailing YAML comment is allowed
-    return m.group(1) if m else None
 
 
 def label(tree: pathlib.Path):
@@ -100,19 +94,12 @@ def status(tree: pathlib.Path):
     idx = tree / "INDEX.md"
     if not idx.is_file():
         return None
-    text = idx.read_text(errors="replace")
-    interval = field(text, "sweep_interval") or f"{DEFAULT_INTERVAL}d"
-    days = int(re.sub(r"\D", "", interval) or DEFAULT_INTERVAL)
-    swept = field(text, "last_swept")
-    m = re.search(r"^archived:\s*(.+?)\s*$", text, re.M)   # issue #141: a read-only archive
-    row = {"tree": tree, "age": None, "interval": days, "due": True, "archived": m.group(1) if m else None}
-    if swept in (None, "never"):
+    lib = library.library(tree)   # issue #141: archived is a read-only archive
+    row = {"tree": tree, "age": None, "interval": lib.sweep_interval, "due": True, "archived": lib.archived}
+    if lib.last_swept is None:     # never swept, or a date this cannot read: due either way
         return row
-    try:
-        row["age"] = (TODAY - datetime.date.fromisoformat(swept)).days
-    except ValueError:
-        return row
-    row["due"] = row["age"] > days
+    row["age"] = (TODAY - lib.last_swept).days
+    row["due"] = row["age"] > lib.sweep_interval
     return row
 
 
@@ -137,12 +124,13 @@ def recheck_due(root: pathlib.Path, kb_verify):
     verifier_budget. Returns None (not zero) when the tree declares no freshness_horizon —
     that is not an overdue count of zero, it is "not computable", and the two must not read
     the same in the nudge."""
-    horizon, budget = kb_verify.horizon_and_budget(root)
-    if horizon is None:
+    lib = library.library(root)
+    if lib.horizon is None:
         return None
-    budget = budget or 5
-    due, _found, _with_cmd = kb_verify.due_sections(root, horizon, kb_verify.agent_ttl(root, horizon))
-    return due[:budget]
+    if lib.agent_ttl is None:
+        raise ValueError(lib.problem("agent_ttl"))
+    due, _found, _with_cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
+    return due[:lib.budget]
 
 
 def stale_unasserted(root: pathlib.Path, kb_verify):
@@ -151,12 +139,13 @@ def stale_unasserted(root: pathlib.Path, kb_verify):
     recheck_due() counts only what a command can settle, so between sweeps they were silent.
     The same is_due() decides, so there is one judgment of "due". Not capped by
     verifier_budget: the budget limits what kb-verify RUNS, and nothing runs these."""
-    horizon, _budget = kb_verify.horizon_and_budget(root)
-    if horizon is None:
+    lib = library.library(root)
+    if lib.horizon is None:
         return None
-    ttl = kb_verify.agent_ttl(root, horizon)
-    _due, found, _with_cmd = kb_verify.due_sections(root, horizon, ttl)
-    return [s for s in found if not s["cmd"] and kb_verify.is_due(s, horizon, ttl)]
+    if lib.agent_ttl is None:
+        raise ValueError(lib.problem("agent_ttl"))
+    _due, found, _with_cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
+    return [s for s in found if not s["cmd"] and kb_verify.is_due(s, lib.horizon, lib.agent_ttl)]
 
 
 def queue_due(root: pathlib.Path):
@@ -217,7 +206,7 @@ def sweep_baseline(root: pathlib.Path, check_kb):
     INDEX.md's last_swept line. A sweep not yet committed is compared with the files as they are,
     so nothing reads as new. Keys hold no file path: a section moved by kb-organize-domain is the
     same source, not a new one."""
-    swept = field((root / "INDEX.md").read_text(errors="replace"), "last_swept")
+    swept = library.read((root / "INDEX.md").read_text(errors="replace")).get("last_swept")
     if swept in (None, "never"):
         return None
     r = git(root, "rev-parse", "--show-prefix")
@@ -226,7 +215,7 @@ def sweep_baseline(root: pathlib.Path, check_kb):
     prefix = r.stdout.decode().strip()
     commit = git(root, "log", "-1", "--format=%H", "-G", "^last_swept:", "--", "INDEX.md").stdout.decode().strip()
     committed = git(root, "show", f"{commit}:./INDEX.md").stdout.decode(errors="replace") if commit else ""
-    if not commit or field(committed, "last_swept") != swept:
+    if not commit or library.read(committed).get("last_swept") != swept:
         return unstamped_keys(root, check_kb)
     names = git(root, "ls-tree", "-r", "--name-only", "--full-name", commit, "--", ".").stdout.decode().splitlines()
     wanted = [n for n in names if n.endswith(".md") and n.startswith(prefix)
@@ -369,26 +358,23 @@ def nudge_for(s: dict, kb_verify, check_kb, packets=(), retire=None):
         parts.append(f"{plural(us, 'unsourced section')} (no Source: line)")
 
     try:   # ADR-0016: a library behind the contract is told; never a failure
-        if check_kb is None:
-            raise RuntimeError("check-kb could not be loaded")
-        st, v, newest, newer = check_kb.contract_status(check_kb.declared_contract(tree))
-    except ValueError:
-        st = "malformed"
+        found = library.library(tree).contract
+        if found is None:
+            contract.known_contracts()    # this engine cannot read its own §14: raises why
+        st, v, newest, newer = found
     except Exception as e:
         warnings.append(f"{lbl}: could not read the contract version ({e}) — skipped")
         st = None
     if st in ("behind", "ahead", "unsupported", "malformed"):
-        counts["contract"] = {"behind": f"{check_kb.fmt(v)} (behind)", "ahead": f"{check_kb.fmt(v)} (ahead)",
-                              "unsupported": f"{check_kb.fmt(v)} (unsupported)",
-                              "malformed": "(unreadable)"}[st]
+        counts["contract"] = "(unreadable)" if st == "malformed" else f"{contract.fmt(v)} ({st})"
     if st == "behind":
-        parts.append(f"built to contract {check_kb.fmt(v)}; this engine knows {check_kb.fmt(newest)} "
+        parts.append(f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
                      f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
     elif st == "ahead":
-        parts.append(f"declares contract {check_kb.fmt(v)}, newer than this engine "
-                     f"({check_kb.fmt(newest)}) — upgrade the engine")
+        parts.append(f"declares contract {contract.fmt(v)}, newer than this engine "
+                     f"({contract.fmt(newest)}) — upgrade the engine")
     elif st == "unsupported":
-        parts.append(f"declares contract {check_kb.fmt(v)}, which this engine does not support — not served")
+        parts.append(f"declares contract {contract.fmt(v)}, which this engine does not support — not served")
     elif st == "malformed":
         parts.append("kb_contract cannot be read — not served (check-kb says why)")
 

@@ -94,7 +94,7 @@ Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
 
-from kbengine import factfiles, queue
+from kbengine import factfiles, library, queue
 
 URL =re.compile(r"https?://[^\s'\"|;)<>]+")
 # A command fetches when it runs one of these (issue #185); a URL that is only text in it (a
@@ -141,21 +141,6 @@ def failure_detail(result):
     if result.returncode in (126, 127):
         return "stale-recheck-error", f"exit {result.returncode} (command not found or not executable)"
     return "stale-recheck", f"exit {result.returncode}"
-
-
-def horizon_and_budget(root: pathlib.Path):
-    idx = (root / "INDEX.md").read_text(errors="replace")
-    h = re.search(r"^freshness_horizon:\s*(\d+)d", idx, re.M)
-    b = re.search(r"^verifier_budget:\s*(\d+)", idx, re.M)
-    return (int(h.group(1)) if h else None), (int(b.group(1)) if b else None)
-
-
-def agent_ttl(root: pathlib.Path, horizon: int) -> int:
-    """The domain's agent-stamp TTL: its agent_ttl:, else a tenth of the horizon (§7), by
-    check-kb's own rule. Raises ValueError on one check-kb would fail."""
-    idx = (root / "INDEX.md").read_text(errors="replace")
-    m = re.search(r"^agent_ttl:[ \t]*(.*?)[ \t]*$", idx, re.M)
-    return load_check_kb().agent_ttl(m.group(1) if m else None, horizon)
 
 
 def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
@@ -384,16 +369,16 @@ def main(argv) -> int:
         except (ValueError, IndexError):
             print("kb-verify: --budget needs a number", file=sys.stderr); return 2
 
-    horizon, budget = horizon_and_budget(root)
+    lib = library.library(root)
+    horizon = lib.horizon
     if horizon is None:
         print(f"kb-verify: {root}/INDEX.md declares no freshness_horizon — nothing to judge staleness by",
               file=sys.stderr)
         return 2
-    budget = budget_override or budget or 5
-    try:
-        ttl = agent_ttl(root, horizon)
-    except ValueError as e:
-        print(f"kb-verify: {root}/INDEX.md: {e}", file=sys.stderr); return 2
+    budget = budget_override or lib.budget
+    ttl = lib.agent_ttl
+    if ttl is None:
+        print(f"kb-verify: {root}/INDEX.md: {lib.problem('agent_ttl')}", file=sys.stderr); return 2
 
     due, found, with_cmd = due_sections(root, horizon, ttl, "--all" in flags)
     skipped_attended = [s for s in due if s["attended"]] if unattended else []

@@ -134,6 +134,15 @@ build_clean "$TMP/badname"
 sed -i 's/^name: widgets$/name: gadgets/' "$TMP/badname/widgets.md"
 case_run "name that disagrees with filename" 1 "does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/badname"
 
+# #203: a trailing comment is no part of a value, quoted or not. check-kb took `"widgets"  # note`
+# whole and failed it against the filename; a name that really disagrees still fails.
+build_clean "$TMP/qname"
+sed -i 's/^name: widgets$/name: "widgets"  # the slug/' "$TMP/qname/widgets.md"
+case_run "a quoted name with a trailing comment matches its filename (#203)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/qname"
+build_clean "$TMP/qbadname"
+sed -i 's/^name: widgets$/name: "gadgets"  # the slug/' "$TMP/qbadname/widgets.md"
+case_run "...and a quoted name that disagrees still fails (#203)" 1 "name 'gadgets' does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/qbadname"
+
 build_clean "$TMP/deadlink"
 printf '\nSee [[nowhere]].\n' >> "$TMP/deadlink/widgets.md"
 case_run "dead [[slug]] link" 1 "dead" -- "$ENGINE/scripts/check-kb" "$TMP/deadlink"
@@ -734,6 +743,7 @@ case_run "triage-tier file declaring Read fails" 1 "outside the 'triage' tier's 
 BFX="$TMP/bootstrap-fx"; mkdir -p "$BFX/scripts" "$BFX/.claude-plugin"
 cp "$ENGINE/scripts/kb-bootstrap" "$BFX/scripts/kb-bootstrap"; chmod +x "$BFX/scripts/kb-bootstrap"
 cp "$ENGINE/scripts/kb-libraries" "$BFX/scripts/kb-libraries"   # kb-bootstrap asks it which targets are links
+cp -r "$ENGINE/scripts/kbengine" "$BFX/scripts/kbengine"   # kb-libraries imports it
 printf '# fixture contract\n' > "$BFX/CONVENTIONS.md"
 printf '{"name":"fx-market","plugins":[{"name":"fx-plugin"}]}\n' > "$BFX/.claude-plugin/marketplace.json"
 printf '#!/usr/bin/env bash\ntrue\n' > "$BFX/scripts/kb-session-start"
@@ -1019,6 +1029,12 @@ case_run "agent_ttl: an invalid one is a kb-due warning, never a crash" 0 "agent
   "$ENGINE/scripts/kb-due" "$TMP/ttl-eq" --nudge
 ttl_lib "$TMP/ttl-bad" "agent_ttl: a month"
 case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
+# #203: a field is read from the frontmatter. A freshness_horizon: line in the body is prose, and
+# read as the horizon it let kb-verify judge staleness by a number the library never declared.
+build_clean "$TMP/vbody"; sed -i '/^freshness_horizon:/d' "$TMP/vbody/INDEX.md"
+printf '\nfreshness_horizon: 90d\n' >> "$TMP/vbody/INDEX.md"
+case_run "kb-verify: a freshness_horizon: line in the body is not the horizon (#203)" 2 "declares no freshness_horizon" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vbody"
 
 # Issue #80: importing an extensionless script as a module (an ad-hoc SourceFileLoader, as an
 # agent or a person debugging does) writes scripts/__pycache__/, and the engine checkout then
@@ -1794,6 +1810,13 @@ case_run "nudge: sections with no Source: line are counted" 0 "2 unsourced secti
   "$ENGINE/scripts/kb-due" "$NFX/kb/unsourced-due" --nudge
 case_run "nudge: a fully sourced library reports no unsourced sections" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "unsourced"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/nothing-due"
+# #203: a field is read from the frontmatter, not the whole file. A last_swept: line in the body is
+# prose; read as a declaration, it made a library never swept look swept an hour ago.
+build_clean "$NFX/kb/body-swept"
+sed -i '/^last_swept:/d' "$NFX/kb/body-swept/INDEX.md"
+printf '\nlast_swept: %s\n' "$(date +%F)" >> "$NFX/kb/body-swept/INDEX.md"
+case_run "kb-due: a last_swept: line in the body is not a sweep (#203)" 0 "body-swept: never swept" -- \
+  env HOME="$TMP/archhome" "$ENGINE/scripts/kb-due" "$NFX/kb/body-swept" --quiet
 # Issue #63: a stale fact with no Recheck is due too. kb-verify cannot settle it, so it is its own
 # category, told apart from rechecks a command can run, and it is not capped by verifier_budget.
 build_clean "$NFX/kb/stale-noassert"
@@ -1811,17 +1834,27 @@ case_run "nudge: ...and not as facts a recheck can run" 1 "" -- \
 case_run "nudge: a stale fact WITH a Recheck is not also counted as having none" 0 "1 stale fact with no assertion" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 # Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
-# count, and the recheck count, whose agent TTL is check-kb's (issue #30). One warning each; the
-# rest intact.
+# count (issue #30). One warning; the rest intact. The recheck count no longer needs check-kb: its
+# horizon and agent TTL are read through kbengine (#203).
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
 cp -r "$ENGINE/scripts/kbengine" "$TMP/due-nockb/kbengine"   # kb-verify imports it; check-kb is what is left out
 case_run "nudge: without check-kb the other categories still print" 0 "episodic notes awaiting distillation" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/episodic-due" --nudge
-case_run "nudge: without check-kb the recheck count is a one-line warning" 0 "could not compute facts due for recheck" -- \
+case_run "nudge: without check-kb the recheck count is still computed, through kbengine (#203)" 0 "1 fact due for recheck" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
+case_run "nudge: ...and is no warning that it could not be (#203)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge 2>&1 | grep -qF "could not compute facts due for recheck"' _ "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due"
 case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
+
+# A kb_contract the engine cannot read: the nudge says so in one line. It crashed instead (#203).
+build_clean "$NFX/kb/contract-banana"
+sed -i 's/^kb_contract: .*$/kb_contract: banana/' "$NFX/kb/contract-banana/INDEX.md"
+case_run "nudge: a malformed kb_contract is reported as unreadable, not a crash (#203)" 0 "kb_contract cannot be read" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/contract-banana" --nudge
+case_run "nudge: ...with no traceback (#203)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge 2>&1 | grep -qF Traceback' _ "$ENGINE/scripts/kb-due" "$NFX/kb/contract-banana"
 
 # 5. A malformed (unreadable) queue file: one-line warning, never a crash, exit 0 — and
 #    every other tree and category still gets reported. Root only: chmod 000 has no
@@ -3609,6 +3642,12 @@ case_run "kb-prepare: the header says pending" 0 "" -- grep -qx 'status: pending
 case_run "kb-prepare: the packet is redacted before it is written" 0 "[redacted: secret]" -- cat "$PKF"
 case_run "kb-prepare: ...and holds no credential" 1 "" -- grep -q 'AKIA' "$PKF"
 case_run "kb-prepare: the library is untouched" 0 "" -- bash -c '[ -z "$(git -C "$1" status --porcelain)" ]' _ "$PL"
+# #203: the library's name is the domain: of its frontmatter. A domain: line in the body is prose.
+PB="$PK/kb/bodyname"; build_clean "$PB"; sed -i '/^domain:/d' "$PB/INDEX.md"
+printf '\ndomain: elsewhere\n' >> "$PB/INDEX.md"
+git -C "$PB" add -A && git -C "$PB" -c user.email=t@t -c user.name=t commit -qm init
+case_run "kb-prepare: a domain: line in the body is not the library's name (#203)" 0 "kb-prepare: bodyname: nothing to prepare" -- \
+  prep distill "$PB"
 case_run "kb-prepare: a packet already waiting is not drafted again" 1 "already waiting" -- prep distill "$PL"
 case_run "kb-prepare: an output directory inside the library is refused" 2 "outside" -- \
   prep distill "$PL" --out "$PL/packets" --force
@@ -3670,6 +3709,7 @@ case_run "kb-audit describes resuming from a review packet" 0 "" -- \
 # repository and comparing its refs to the ones recorded when it was made.
 BK="$TMP/backup"; BKH="$BK/home"; mkdir -p "$BKH" "$BK/eng/scripts"
 cp "$ENGINE/scripts/kb-backup" "$ENGINE/scripts/kb-libraries" "$BK/eng/scripts/"
+cp -r "$ENGINE/scripts/kbengine" "$BK/eng/scripts/kbengine"   # kb-libraries imports it
 git init -q "$BK/eng" && git -C "$BK/eng" add -A && git -C "$BK/eng" -c user.email=t@t -c user.name=t commit -qm engine
 build_clean "$BK/libs/fx"; git -C "$BK/libs/fx" -c user.email=t@t -c user.name=t commit -qm init
 git -C "$BK/libs/fx" tag v1
@@ -4047,6 +4087,7 @@ case_run "ref: ...and list no longer shows a ref" 1 "" -- bash -c 'HOME="$1" "$2
 # which warns (the consumer can't fix a published library) instead of failing as a dead link.
 same_origin() { python3 -c 'import importlib.machinery as m, importlib.util as u, sys
 sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[1] + "/scripts")   # kb-libraries imports kbengine, found beside it as a script finds it
 l = m.SourceFileLoader("kl", sys.argv[1] + "/scripts/kb-libraries"); s = u.spec_from_loader("kl", l)
 k = u.module_from_spec(s); l.exec_module(k); sys.exit(0 if k.same_origin(sys.argv[2], sys.argv[3]) else 1)' "$ENGINE" "$1" "$2"; }
 case_run "origins: https and ssh forms of one repository are the same" 0 "" -- same_origin https://example.com/acme/lib.git git@example.com:acme/lib
@@ -4134,6 +4175,15 @@ case_run "kb-catalog: the count says how many are served" 0 "3 registered, 2 ser
 case_run "kb-catalog: no registry is a clean empty catalog" 0 "no libraries are registered" -- \
   env HOME="$TMP/cat-empty-home" "$ENGINE/scripts/kb-catalog"
 case_run "kb-catalog: it takes no arguments" 2 "usage" -- kbcat --all
+# #203: a trailing comment is no part of a value, quoted or not. The catalog showed `general  # note`
+# as the scope and left the quotes and comment on a quoted description.
+CH2="$TMP/cathome2"; mkdir -p "$CH2"; build_clean "$CD/delta"
+sed -i 's/^scope: general$/scope: general  # the tie-breaker says general/; s/^description: a test fixture\.$/description: "Router for delta"  # note/' "$CD/delta/INDEX.md"
+HOME="$CH2" "$ENGINE/scripts/kb-library" add "$CD/delta" >/dev/null
+case_run "kb-catalog: a trailing comment is not part of the scope (#203)" 0 "delta  [general]  " -- \
+  env HOME="$CH2" "$ENGINE/scripts/kb-catalog"
+case_run "kb-catalog: a quoted description with a trailing comment reads as the description (#203)" 0 "  covers: Router for delta" -- \
+  env HOME="$CH2" "$ENGINE/scripts/kb-catalog"
 
 # ------------------------------------------- check-transient: dated and ticket headings (#136) ----
 # A fact file states current state. A date or a ticket id in a heading is the shape the field
@@ -4298,6 +4348,20 @@ contract_header() {
   [ -n "$head" ] && [ "$head" = "$newest" ] && echo "header $head matches §14" || { echo "header says ${head:-nothing}, §14's newest is $newest"; return 1; }
 }
 case_run "CONVENTIONS: the header names the newest contract version in §14" 0 "matches §14" -- contract_header
+
+# kb-init writes the contract version a new library declares, as a literal in a heredoc. Publishing a
+# version means raising it by hand, so a version published without it would scaffold libraries that
+# are born behind (#203). The second case is the negative control: a stale literal is caught.
+init_contract() { # init_contract <kb-init> <CONVENTIONS.md>
+  local init newest
+  init=$(sed -n 's/^kb_contract: "\([0-9][0-9]*\.[0-9][0-9]*\)"$/\1/p' "$1" | head -1)
+  newest=$(awk '/^## [0-9]+\. Contract versions/{p=1;next} /^## /{p=0} p && /^### [0-9]+\.[0-9]+ *$/{print $2}' "$2" | sort -t. -k1,1n -k2,2n | tail -1)
+  [ -n "$init" ] && [ "$init" = "$newest" ] && echo "kb-init writes $init, the newest in §14" || { echo "kb-init writes ${init:-nothing}, §14's newest is $newest"; return 1; }
+}
+case_run "kb-init: the contract version it writes is the newest in §14" 0 "the newest in §14" -- \
+  init_contract "$ENGINE/scripts/kb-init" "$ENGINE/CONVENTIONS.md"
+sed 's/^kb_contract: "[0-9.]*"$/kb_contract: "2.0"/' "$ENGINE/scripts/kb-init" > "$TMP/kb-init-stale"
+case_run "kb-init: a stale contract version is caught" 1 "writes 2.0" -- init_contract "$TMP/kb-init-stale" "$ENGINE/CONVENTIONS.md"
 
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"

@@ -25,8 +25,9 @@ Exit 0, or 2 on a usage error or an unreadable registry.
 """
 import importlib.machinery, importlib.util, pathlib, re, sys
 
+from kbengine import library
+
 SCRIPTS = pathlib.Path(__file__).resolve().parent
-KEY = re.compile(r"^(description|scope):\s*(.*?)\s*$")
 NOT_COVERED = "Not covered here:"
 ROUTER_LINE = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\)")
 
@@ -39,23 +40,16 @@ def load(name, filename):
     return mod
 
 
-def unquote(v: str) -> str:
-    return v[1:-1] if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'" else v
-
-
 def describe(index: pathlib.Path):
     """(scope, description, not-covered, topics) from a root INDEX.md. A Not covered here line is a body
     line outside a code fence; a line it wraps onto (the next non-blank, non-list line) is joined."""
     lines = index.read_text(errors="replace").splitlines()
-    fields, body = {}, lines
+    lib, body = library.library(index.parent), lines
     if lines and lines[0].strip() == "---":
         for i, line in enumerate(lines[1:], 1):
             if line.strip() == "---":
                 body = lines[i + 1:]
                 break
-            m = KEY.match(line)
-            if m:
-                fields[m.group(1)] = unquote(m.group(2))
     not_covered, fence, topics = None, False, []
     for i, line in enumerate(body):
         if line.lstrip().startswith("```"):
@@ -71,8 +65,8 @@ def describe(index: pathlib.Path):
                     break
                 parts.append(nxt.strip())
             not_covered = " ".join(p for p in parts if p)
-    return (fields.get("scope", "?"), fields.get("description", "(no description)"), not_covered,
-            topics)
+    return (lib.scope if lib.scope is not None else "?",
+            lib.description if lib.description is not None else "(no description)", not_covered, topics)
 
 
 def main(argv) -> int:
