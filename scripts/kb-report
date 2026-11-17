@@ -30,6 +30,8 @@ Usage: kb-report [tree ...] [--out DIR]
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
+from kbengine import queue
+
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 
 
@@ -92,7 +94,7 @@ def not_found_week(mods: dict) -> dict:
 
 
 def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> list:
-    kb_due, kb_verify, kb_watch, check_kb = mods["kb_due"], mods["kb_verify"], mods["kb_watch"], mods["check_kb"]
+    kb_due, kb_verify, check_kb = mods["kb_due"], mods["kb_verify"], mods["check_kb"]
     root, out = tree.resolve(), []
     mine = [(p, h) for p, h in packets if h.get("library_path") == str(root)]
     for p, h in mine:
@@ -102,15 +104,9 @@ def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> l
 
     qpath = root / "needs-attention.md"
     if qpath.is_file():
-        listed = set()
-        for r in kb_watch.parse_records(qpath.read_text(errors="replace")):
-            if r.get("status") == "open":
-                if r.get("id") is not None:   # a duplicated id is one finding, listed once (#172)
-                    if r["id"] in listed:
-                        continue
-                    listed.add(r["id"])
-                out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
-                           f"Triage it in needs-attention.md.")
+        for r in queue.open_findings(qpath.read_text(errors="replace")):   # a duplicated id is one finding (#172)
+            out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
+                       f"Triage it in needs-attention.md.")
 
     horizon, _budget = kb_verify.horizon_and_budget(root)
     if horizon is not None:
@@ -174,7 +170,7 @@ def main(argv) -> int:
         trees = [t for t in trees if t.resolve() not in consumed]
         mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
                 "kb_sources": load_module("kb_sources", "kb-sources"),
-                "kb_watch": load_module("kb_watch", "kb-watch"), "check_kb": load_module("check_kb", "check-kb"),
+                "check_kb": load_module("check_kb", "check-kb"),
                 "kb_telemetry": load_module("kb_telemetry", "kb-telemetry"),
                 "kb_libraries": load_module("kb_libraries", "kb-libraries")}
         packets = load_module("kb_apply", "kb-apply").pending()

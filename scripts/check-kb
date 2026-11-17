@@ -43,7 +43,7 @@ Exit 0 clean, 1 on any defect.
 import datetime, pathlib, re, subprocess, sys
 from collections import Counter
 
-from kbengine import factfiles
+from kbengine import factfiles, queue
 
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
@@ -467,20 +467,20 @@ def main(root: pathlib.Path) -> int:
     for lib in sorted(set(declared) - named):
         warnings.append(f"{index}: links_to names '{lib}', which no link uses — remove it (§3)")
 
-    # Queue records the readers skip (#168): kb-due and kb-report read only kb-watch's record shape,
+    # Queue records the readers skip (#168): kb-due and kb-report read only the queue module's record shape,
     # so a record in any other is missing from the nudge and the report. A warning at every version:
     # the contract never defined the shape.
-    queue = root / "needs-attention.md"
-    if queue.is_file():
-        qtext, kw = queue.read_text(errors="replace"), engine_module("kb_watch", "kb-watch")
-        for n, line in kw.unreadable_records(qtext):
-            warnings.append(f"{queue}:{n}: a queue line kb-due and kb-report cannot read: '{line.strip()[:60]}'. "
+    qfile = root / "needs-attention.md"
+    if qfile.is_file():
+        found = queue.problems(qfile.read_text(errors="replace"))
+        for n, line in found.unreadable:
+            warnings.append(f"{qfile}:{n}: a queue line kb-due and kb-report cannot read: '{line.strip()[:60]}'. "
                             f"Write each record as `- id: <8 hex>` followed by two-space-indented "
                             f"`key: value` lines (kb-audit Step 3)")
         # Two records with one id are one finding (#172): the nudge and the report count it once.
         # A warning at every version, for the same reason.
-        for rid, ns in sorted(kw.duplicate_ids(qtext).items()):
-            warnings.append(f"{queue}: id {rid} appears at lines {', '.join(map(str, ns[:-1]))} and {ns[-1]}: "
+        for rid, ns in sorted(found.duplicates.items()):
+            warnings.append(f"{qfile}: id {rid} appears at lines {', '.join(map(str, ns[:-1]))} and {ns[-1]}: "
                             f"one finding, so keep one record and delete the rest")
 
     defects += orphans(root, files)
