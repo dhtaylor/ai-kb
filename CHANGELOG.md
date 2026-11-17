@@ -6,6 +6,28 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-report` lists the queue records it cannot read (#204). `kb-due` has counted them since #168,
+  but the report skipped them in silence, so an unreadable record was missing from both the queue
+  items and the decisions. It now says how many there are, and that `check-kb` names the lines.
+- `kb-due --nudge` no longer names a sweep that a pending `kb-audit` packet already covers, or the
+  episodic notes a pending `kb-distill` packet covers (#204). It named both the packet and the work
+  inside it, so the same decision showed twice; `kb-report` already left the second out. A packet
+  covers only what its skill does: an audit packet does not hide the notes, nor a distill packet the
+  sweep. `--quiet` and the plain listing still show a due sweep.
+- `kb-report` goes on when the library registry cannot be read (#204), as `kb-due` does. It stopped
+  with exit 2 and "could not load the engine's readers". It now warns on stderr that the registry is
+  unreadable, reports any library named on the command line, and finds none to report otherwise.
+- `kb-report` no longer stops at the first library it cannot read (#204). A malformed `agent_ttl:`
+  or an unreadable `needs-attention.md` ended the whole run with exit 2 and no report. It now writes
+  "Could not compute …" as an item under that library and reports the others. Exit 2 stays for an
+  engine that cannot load its readers, or a report folder inside a library.
+- `kb-report` lists a library whose contract is newer than the engine's (#204). It named a library
+  behind the contract, or on one the engine cannot serve, but said nothing about one ahead, which
+  `kb-due` already told to upgrade the engine.
+- `kb-report` leaves out a library that declares `archived:` and is not registered (#204), as
+  `kb-due` already did (#141). It listed that library's sweep and anything else due, though a
+  read-only archive cannot act on a decision. A registered library is still reported: it is served
+  whatever it declares.
 - Two edge cases in a library's root `INDEX.md` frontmatter read differently (#203). On a repeated
   key the first occurrence now wins; `check-kb` and `kb-catalog` kept the last. `kb-libraries` now
   treats a `domain:` value outside `[\w-]+` (such as `foo#bar`) as a name mismatch.

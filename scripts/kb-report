@@ -7,15 +7,19 @@ Reading all of them is a chore. This reads them and writes one file a week, outs
 listing per library only what a person has to decide:
 
 - a review packet waiting, and how to act on it;
-- each open queue item: its category, and where (file § section, source stub or watched source);
+- each open queue item: its category, and where (file § section, source stub or watched source),
+  and how many records of the queue could not be read at all;
 - rechecks that are due but marked `Recheck (attended):`, which only a person can run;
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
 - while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
-- a library behind the contract, or on one this engine cannot serve;
+- a library behind the contract, ahead of this engine's, or on one this engine cannot serve;
+- anything about a library this could not work out, named as an item under it: a failure in one
+  library never stops the report, so a person finds out instead of reading a report that left it out;
 - kb-retrieve runs in the past 7 days that answered `fact not found` (kb-telemetry, #147): an absent
   topic named in the root `Not covered here:` line makes the next such question far cheaper. The
   report gives the count and cost; `kb-telemetry --not-found` lists the questions.
 
+A library declaring `archived:` that is not registered is left out, as `kb-due` leaves it out (#141).
 A library with nothing to decide gets no section. When no library has anything, the report says so
 in one line. Either way the file is written, so a quiet week can be told from a week the job did not
 run. It never holds a fact's, a source's or a packet's text: paths, counts, headings and ids only.
@@ -26,11 +30,13 @@ latest report while it is under eight days old and lists decisions.
 
 Usage: kb-report [tree ...] [--out DIR]
   With no tree, every registered library. Schedulable (#95): exit 0 nothing to decide, 1 decisions
-  written, 2 could not run.
+  written, 2 could not run (the engine's readers would not load, or the report's own folder is inside a
+  library). A library that cannot be read is an item under its name, not a failure.
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
-from kbengine import contract, library, queue
+from kbengine import attention, contract
+from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 
@@ -93,56 +99,63 @@ def not_found_week(mods: dict) -> dict:
     return out
 
 
-def decisions_for(tree: pathlib.Path, mods: dict, packets: list, gaps=None) -> list:
-    kb_due, kb_verify = mods["kb_due"], mods["kb_verify"]
-    root, out = tree.resolve(), []
-    mine = [(p, h) for p, h in packets if h.get("library_path") == str(root)]
-    for p, h in mine:
+def computed(value, what: str, out: list):
+    """`value`, or None after listing under the library that `what` could not be worked out (#204): a
+    failure in one library is an item for a person, not the end of the report."""
+    if isinstance(value, Failed):
+        out.append(f"Could not compute {what} ({value.kind}). Run check-kb on the library to see why.")
+        return None
+    return value
+
+
+def decisions_for(att, names: dict, gaps=None) -> list:
+    root, out = att.root, []
+    for p, h in att.packets:
         out.append(f"Review packet: {h.get('packet', '?')}, prepared {h.get('prepared', '?')[:10]}. "
                    f"Ask a session to review it (`kb-apply show {p}`).")
-    covered = {h.get("packet") for _, h in mine}
 
-    qpath = root / "needs-attention.md"
-    if qpath.is_file():
-        for r in queue.open_findings(qpath.read_text(errors="replace")):   # a duplicated id is one finding (#172)
-            out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
-                       f"Triage it in needs-attention.md.")
+    for r in computed(att.queue, "the open queue items", out) or []:
+        out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
+                   f"Triage it in needs-attention.md.")
 
-    lib = library.library(root)
-    if lib.horizon is not None:
-        if lib.agent_ttl is None:
-            raise ValueError(lib.problem("agent_ttl"))
-        due, _found, _cmd = kb_verify.due_sections(root, lib.horizon, lib.agent_ttl)
-        attended = [s for s in due if s.get("attended")]
-        if attended:
-            out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
-                       f"`kb-verify {root} --yes`.")
+    bad = att.queue_unreadable   # records the queue reader skips are named, not lost (#168, #204)
+    if not (isinstance(bad, Failed) and bad == att.queue):   # a queue that cannot be read is listed once
+        bad = computed(bad, "the unreadable queue records", out)
+        if bad:
+            out.append(f"{len(bad)} unreadable queue record(s) in needs-attention.md, which the report cannot "
+                       f"list: check-kb names the lines.")
 
-    st = kb_due.status(root)
-    if st and st["due"] and "kb-audit" not in covered:
+    rechecks = computed(att.rechecks, "the facts due for recheck", out)
+    attended = rechecks.attended if rechecks else []
+    if attended:
+        out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
+                   f"`kb-verify {root} --yes`.")
+
+    if att.sweep.due and not att.sweep_covered:
         out.append("Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule.")
-    if st and st["due"]:
+    if att.sweep.due:
         # Once per sweep interval: listed while the sweep is due, gone once it is done (#120).
-        manual = mods["kb_sources"].manual_stubs(root)
+        manual = computed(att.manual_stubs, "the source stubs marked Liveness: manual", out)
         if manual:
             out.append(f"{len(manual)} source(s) marked Liveness: manual, which only a person can check: "
                        f"{', '.join(manual)}. Open each and confirm it still holds what its facts cite.")
-    notes = kb_due.episodic_count(root)
-    if notes and "kb-distill" not in covered:
+    notes = computed(att.episodic, "the notes awaiting distillation", out)
+    if notes and not att.distill_covered:
         out.append(f"{notes} note(s) awaiting distillation and no packet drafted: run kb-distill.")
 
-    found = library.library(root).contract
-    if found is None:
-        contract.known_contracts()    # this engine cannot read its own §14: raises why
-    state, v, newest, _newer = found
+    found = computed(att.contract, "the contract version", out)
+    state, v, newest, _newer = found or (None, None, None, None)
     if state == "behind":
         out.append(f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
                    f"Decide whether to adopt it (CONVENTIONS §14).")
+    elif state == "ahead":
+        out.append(f"Declares contract {contract.fmt(v)}, newer than this engine ({contract.fmt(newest)}). "
+                   f"Upgrade the engine.")
     elif state in ("unsupported", "malformed"):
         out.append("Its contract version cannot be served by this engine; check-kb says why.")
 
     mine = (gaps or {}).get(root, [])
-    name = next((n for n, p in mods["kb_libraries"].installed().items() if pathlib.Path(p).resolve() == root), None)
+    name = names.get(root)
     if mine and name:
         limit = sum(r["limit"] for r in mine)
         out.append(f"{len(mine)} kb-retrieve run(s) this week answered `fact not found`, costing "
@@ -163,21 +176,28 @@ def main(argv) -> int:
             print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
         trees.append(pathlib.Path(argv[i])); i += 1
     try:
-        if not trees:
-            trees = list(load_module("kb_libraries", "kb-libraries").installed().values())
-        # A read-only library is curated by its publisher, so nothing in it is this machine's
-        # decision (ADR-0020).
-        consumed = {e["path"].resolve() for e in load_module("kb_libraries", "kb-libraries").entries()
-                    if e["read_only"]}
-        trees = [t for t in trees if t.resolve() not in consumed]
-        mods = {"kb_due": load_module("kb_due", "kb-due"), "kb_verify": load_module("kb_verify", "kb-verify"),
-                "kb_sources": load_module("kb_sources", "kb-sources"),
-                "kb_telemetry": load_module("kb_telemetry", "kb-telemetry"),
-                "kb_libraries": load_module("kb_libraries", "kb-libraries")}
+        kl = load_module("kb_libraries", "kb-libraries")
+        attention.script("kb-verify"), attention.script("kb-sources")   # attention's readers: fail here, not per library
+        mods = {"kb_telemetry": load_module("kb_telemetry", "kb-telemetry"), "kb_libraries": kl}
         packets = load_module("kb_apply", "kb-apply").pending()
     except Exception as e:
         print(f"kb-report: could not load the engine's readers ({type(e).__name__})", file=sys.stderr)
         return 2
+    installed, consumed = {}, set()
+    try:   # the registry's one reader; an unreadable registry must not stop the report (#204)
+        installed = kl.installed()
+        # A read-only library is curated by its publisher, so nothing in it is this machine's
+        # decision (ADR-0020).
+        consumed = {e["path"].resolve() for e in kl.entries() if e["read_only"]}
+    except Exception as e:
+        print(f"kb-report: library registry unreadable, registered libraries skipped: {e}", file=sys.stderr)
+    if not trees:
+        trees = list(installed.values())
+    names = {}   # the registered name of each library, the first when it is registered twice
+    for n, p in installed.items():
+        names.setdefault(pathlib.Path(p).resolve(), n)
+    registered = set(names)
+    trees = [t for t in trees if t.resolve() not in consumed]
 
     dest_dir = reports_dir(out).resolve()
     for t in trees:
@@ -190,13 +210,16 @@ def main(argv) -> int:
         if not (t / "INDEX.md").is_file():
             continue
         try:
-            items = decisions_for(t, mods, packets, gaps)
+            att = attention.attention(t, packets, consumed)
+            if attention.shelved(att, registered):   # a read-only archive cannot act on a decision (#141)
+                continue
+            items = decisions_for(att, names, gaps)
         except Exception as e:
-            print(f"kb-report: {t}: could not be read ({type(e).__name__})", file=sys.stderr)
-            return 2
+            items = [f"Could not compute what needs a decision here ({type(e).__name__}). "
+                     f"Run check-kb on the library to see why."]
         if items:
             total += len(items)
-            sections.append(f"## {mods['kb_due'].label(t)}\n\n" + "\n".join(f"- {x}" for x in items) + "\n")
+            sections.append(f"## {attention.label(t)}\n\n" + "\n".join(f"- {x}" for x in items) + "\n")
 
     now = datetime.datetime.now(datetime.timezone.utc)
     year, week, _ = now.date().isocalendar()

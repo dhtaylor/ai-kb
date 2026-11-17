@@ -155,6 +155,7 @@ class Library:
     budget         verifier_budget: how many assertions one kb-verify run executes, 5 by default.
     sweep_interval days a kb-audit sweep stays good for, 30 by default.
     last_swept     the date of the last sweep; None for never or unreadable.
+    last_swept_text what `last_swept:` declares, as written (without quotes); None when it does not.
     archived       the text of `archived:`: a read-only archive nothing nudges about (#141).
     links_to       {library: origin} from the `links_to:` block (contract 2.6).
     terms          the normalized `keywords:` and `tags:`.
@@ -171,6 +172,7 @@ class Library:
     budget: int = DEFAULT_BUDGET
     sweep_interval: int = DEFAULT_INTERVAL
     last_swept: object = None
+    last_swept_text: object = None
     archived: object = None
     links_to: dict = field(default_factory=dict)
     terms: frozenset = frozenset()
@@ -222,7 +224,7 @@ def library(root) -> Library:
             lib.sweep_interval = int(re.sub(r"\D", "", interval) or DEFAULT_INTERVAL)
         else:
             problems.append(Problem("sweep_interval", f"sweep_interval: {interval!r} is not <N>d"))
-    swept = fm.get("last_swept")
+    swept = lib.last_swept_text = fm.get("last_swept")
     if swept not in (None, "never"):
         try:
             if not re.fullmatch(r"\S+", swept):

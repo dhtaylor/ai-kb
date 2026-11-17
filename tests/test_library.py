@@ -171,6 +171,9 @@ class Descriptor(unittest.TestCase):
         self.assertIsNone(lib.last_swept)
         self.assertIn("last_swept", lib.problem("last_swept"))
         self.assertEqual(self.lib('last_swept: "2026-10-16"').last_swept, datetime.date(2026, 10, 16))
+        self.assertEqual(self.lib('last_swept: "2026-10-16" # note').last_swept_text, "2026-10-16")
+        self.assertEqual(self.lib("last_swept: yesterday").last_swept_text, "yesterday")
+        self.assertIsNone(self.lib("domain: x").last_swept_text)
 
     def test_a_malformed_contract_is_a_state_and_a_problem(self):
         lib = self.lib("kb_contract: 2.6")
