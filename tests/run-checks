@@ -4461,6 +4461,46 @@ mkdir -p "$CK/init"; git init -q "$CK/init"
 case_run "KB_TODAY: kb-init dates the router it scaffolds" 0 "" -- \
   bash -c 'KB_TODAY=2026-03-04 "$1/scripts/kb-init" "$2" >/dev/null 2>&1; grep -q "created: 2026-03-04" "$2/knowledge/INDEX.md"' _ "$ENGINE" "$CK/init"
 
+# ------------------- the bash one-liners agree with kbengine.env about where things are (ADR-0021) ----
+# kb-session-start and kb-bootstrap are bash and cannot import kbengine.env, so each repeats a path in
+# one line. Python resolves the same path in one place; these cases fail the day the two differ, with
+# or without the overrides and with XDG_* set to somewhere else, which neither may follow.
+SY="$TMP/sync"; mkdir -p "$SY/home" "$SY/cwd"
+git config --file "$SY/home/.config/ai-kb/libraries" kb.migrated true 2>/dev/null || { mkdir -p "$SY/home/.config/ai-kb"; git config --file "$SY/home/.config/ai-kb/libraries" kb.migrated true; }
+sy_py() { # sy_py <env --path name> [VAR=value ...]: what kbengine.env resolves, under the test's HOME
+  local n="$1"; shift
+  env -i HOME="$SY/home" PATH="$PATH" PYTHONPATH="$ENGINE/scripts" XDG_STATE_HOME="$SY/xdg" XDG_CONFIG_HOME="$SY/xdg" ${@+"$@"} python3 -m kbengine.env --path "$n"
+}
+sy_expr() { # sy_expr <script> <ERE> [VAR=value ...]: the first quoted expression in the script matching ERE, as bash resolves it
+  local s="$1" re="$2"; shift 2
+  env -i HOME="$SY/home" PATH="$PATH" XDG_STATE_HOME="$SY/xdg" XDG_CONFIG_HOME="$SY/xdg" ${@+"$@"} \
+    bash -c 'tok=$(grep -oE -m1 "$2" "$1" | head -1); [ -n "$tok" ] || exit 1; eval "printf %s $tok"' _ "$s" "$re"
+}
+sy_agree() { # sy_agree <what> <bash value> <python value>
+  [ -n "$2" ] && [ "$2" = "$3" ] && echo "agree: $1" || { echo "DIVERGE $1: bash says '$2', kbengine.env says '$3'"; return 1; }
+}
+SY_REPORTS='"\$\{KB_REPORTS:-[^}]*\}"'; SY_REGISTRY='"\$HOME/\.config/ai-kb/libraries"'; SY_BACKUPS='"\$HOME/\.local/state/ai-kb/backups"'
+case_run "sync: kb-session-start's registry is kbengine.env's" 0 "agree" -- \
+  sy_agree registry "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REGISTRY")" "$(sy_py registry)"
+case_run "sync: kb-bootstrap's registry is kbengine.env's" 0 "agree" -- \
+  sy_agree registry "$(sy_expr "$ENGINE/scripts/kb-bootstrap" "$SY_REGISTRY")" "$(sy_py registry)"
+case_run "sync: kb-bootstrap's backup folder is under kbengine.env's state folder" 0 "agree" -- \
+  sy_agree backups "$(sy_expr "$ENGINE/scripts/kb-bootstrap" "$SY_BACKUPS")" "$(sy_py state)/backups"
+case_run "sync: kb-session-start's reports folder is kbengine.env's, by default" 0 "agree" -- \
+  sy_agree reports "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REPORTS")" "$(sy_py reports)"
+case_run "sync: ...and with KB_REPORTS set" 0 "agree" -- \
+  sy_agree reports "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REPORTS" KB_REPORTS="$SY/mine")" "$(sy_py reports KB_REPORTS="$SY/mine")"
+# And the running hook finds the report where kb-report writes it, the same two ways.
+sy_latest() { # sy_latest [VAR=value ...]: the "Latest kb-report" path session start names
+  (cd "$SY/cwd" && env -i HOME="$SY/home" PATH="$PATH" KB_NUDGE=weekly:mon KB_TODAY=2026-11-10 KB_ENGINE_ROOT="$ENGINE" XDG_STATE_HOME="$SY/xdg" ${@+"$@"} "$ENGINE/scripts/kb-session-start") |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"])' | sed -n 's/.*Latest kb-report: //p'
+}
+mkdir -p "$(sy_py reports)" "$SY/mine"; touch "$(sy_py reports)/2026-W45.md" "$SY/mine/2026-W45.md"
+case_run "sync: session start names the report in kbengine.env's reports folder" 0 "agree" -- \
+  sy_agree latest "$(sy_latest)" "$(sy_py reports)/2026-W45.md"
+case_run "sync: ...and in KB_REPORTS when it is set" 0 "agree" -- \
+  sy_agree latest "$(sy_latest KB_REPORTS="$SY/mine")" "$SY/mine/2026-W45.md"
+
 # ------------------------------------------- a home directory managed by Stow or similar (#138) ----
 # A dotfiles manager links files, or whole folders, from a repository synced across machines. Every
 # engine write goes through the link, so this machine's paths land in that repository. The engine

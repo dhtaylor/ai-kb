@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `tests/run-checks` compares the paths `kb-session-start` and `kb-bootstrap` resolve in bash (the
+  reports folder, the backup folder, the registry) with `kbengine.env`'s, with and without
+  `KB_REPORTS` and with `XDG_*` pointing elsewhere (#205). A change to one that the other does not
+  follow fails a case. Neither script reads `XDG_STATE_HOME` any longer (ADR-0021).
 - `KB_TODAY` (YYYY-MM-DD) now sets the date for the engine's Python as well as session start (#205).
   `check-kb`, `kb-verify`, `kb-due`, `kb-report`, `kb-prepare`, `kb-watch` and `kb-sources` read it
   through `kbengine.clock.today()` at the moment they need it, where each had frozen the real date at
