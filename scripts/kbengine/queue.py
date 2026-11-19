@@ -11,12 +11,11 @@ parse_records(text)                              every record, whatever its stat
 read_only_entry(path)                            (kb-libraries, registry entry or None) (ADR-0020).
 render(finding)                                  one finding as its queue text.
 """
-import datetime, hashlib, importlib.machinery, importlib.util, os, pathlib, re, sys
+import hashlib, importlib.machinery, importlib.util, os, pathlib, re, sys
 from dataclasses import dataclass
 
-from . import library
+from . import clock, library
 
-TODAY = datetime.date.today().isoformat()
 MAX_LEN = 200
 ID_RE = re.compile(r"^\s*-\s*id:\s*([0-9a-f]{8})\s*$")
 KV_RE = re.compile(r'^\s{2}(\w+):\s*"?(.*?)"?\s*$')
@@ -73,7 +72,7 @@ def render(f: Finding) -> str:
     lines = [f"- id: {f.id}", f"  category: {scalar(f.category, False)}", f"  status: {scalar('open', False)}"]
     for key, value in f.fields.items():
         lines.append(f"  {key}: {scalar(value, key in f.untrusted)}")
-    lines.append(f"  date: {scalar(TODAY, False)}")
+    lines.append(f"  date: {scalar(clock.today().isoformat(), False)}")
     return "\n".join(lines) + "\n\n"
 
 
@@ -107,7 +106,7 @@ def new_queue_file(domain: str, scope: str) -> str:
         "metadata:\n"
         "  type: index\n"
         "  node_type: memory\n"
-        f"  created: {TODAY}\n"
+        f"  created: {clock.today().isoformat()}\n"
         "tags: [meta, hygiene, queue, watcher]\n"
         "keywords: [needs attention, queue, findings, drift, watcher, unreachable]\n"
         "---\n"

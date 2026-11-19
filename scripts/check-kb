@@ -40,10 +40,10 @@ no knowledge content, so there is no sensible default and a silent one would
 report a clean run over zero files.
 Exit 0 clean, 1 on any defect.
 """
-import datetime, pathlib, re, subprocess, sys
+import pathlib, re, subprocess, sys
 from collections import Counter
 
-from kbengine import contract, factfiles, library, queue
+from kbengine import clock, contract, factfiles, library, queue
 
 # §5: reached by relative path, never a [[slug]] target, so exempt from the
 # filename-uniqueness and name-matches-filename rules.
@@ -54,7 +54,6 @@ EXAMPLE_LINKS = {"child.md", "subfolder/INDEX.md"}
 EXAMPLE_SLUGS = {"slug", "general:slug", "general:some-fact", "cross-link",
                  "source", "YYYY-MM-DD-domain-notes"}
 REQUIRED = ("name", "description", "domain", "scope")
-TODAY = datetime.date.today().isoformat()
 
 
 ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
@@ -257,7 +256,7 @@ def main(root: pathlib.Path) -> int:
                 found.append((n, f"{f}:{n}: indented {word}: line — kb-verify reads it only "
                                  f"at the start of a line, so this one certifies nothing"))
             for st in sec.stamps:
-                if st.date > TODAY:
+                if st.date > clock.today().isoformat():
                     found.append((st.line, f"{f}:{st.line}: stamp dated in the future ({st.date})"))
         defects += [d for _, d in sorted(found, key=lambda x: x[0])]
 
@@ -363,4 +362,4 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(__doc__.strip().split("\n\n")[-2], file=sys.stderr)
         sys.exit(2)
-    sys.exit(main(pathlib.Path(sys.argv[1])))
+    sys.exit(clock.guard(main, pathlib.Path(sys.argv[1])))

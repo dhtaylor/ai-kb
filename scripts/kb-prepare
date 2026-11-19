@@ -27,9 +27,9 @@ Usage: kb-prepare distill|audit <library> [--out DIR] [--budget-usd N] [--claude
 Prints the packet's path, never its text, so it is schedulable (#95). Exit 0 nothing to decide (not
 due, or the run proposed nothing), 1 a packet is waiting for a decision, 2 could not run.
 """
-import datetime, importlib.machinery, importlib.util, json, os, pathlib, re, shutil, subprocess, sys
+import datetime, importlib.machinery, importlib.util, json, os, pathlib, re, subprocess, sys
 
-from kbengine import attention, library, queue
+from kbengine import attention, clock, env, library, queue
 from kbengine.attention import Failed
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
@@ -126,7 +126,7 @@ def main(argv) -> int:
             print(f"kb-prepare: {name}: nothing to prepare for {packet}")
             return 0
 
-    claude = opts.get("--claude") or os.environ.get("KB_CLAUDE") or shutil.which("claude")
+    claude = opts.get("--claude") or env.claude_binary()
     if not claude:
         return fail("claude not found: pass --claude PATH or set KB_CLAUDE")
     budget = opts.get("--budget-usd", "1.00")
@@ -175,4 +175,4 @@ def main(argv) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))

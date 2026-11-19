@@ -123,7 +123,7 @@ if ! scan_out=$("$(dirname "$(python3 -c 'import os,sys; print(os.path.realpath(
 fi
 
 # 3. File it -------------------------------------------------------------------
-date=$(date +%F)
+date=$(date ${KB_TODAY:+-d "$KB_TODAY"} +%F)
 slug=$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')
 # Truncate at a word boundary, not mid-word.
 if [ ${#slug} -gt 60 ]; then slug=${slug:0:60}; slug=${slug%-*}; fi

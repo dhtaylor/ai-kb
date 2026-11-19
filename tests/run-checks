@@ -3793,6 +3793,14 @@ case_run "kb-telemetry: steps to that read, counting each tool call once" 0 "" -
 case_run "kb-telemetry: an uncited content read is a wasted read; INDEX is protocol overhead" 0 "| 1 | 1 |" -- printf '%s\n' "$TEL"
 case_run "kb-telemetry: no question, answer or file text is printed" 1 "" -- bash -c 'printf "%s\n" "$1" | grep -q SCHED-CANARY' _ "$TEL"
 case_run "kb-telemetry: eval runs are left out of normal use by default" 0 "1 eval run(s) left out" -- printf '%s\n' "$TEL"
+# CLAUDE_CONFIG_DIR moves where Claude Code writes its transcripts, so it moves where they are read (#205).
+# The same transcripts, copied under a config folder of their own, are found from an empty HOME only
+# when the variable names it.
+TLC="$TL/claude-elsewhere"; TLE="$TL/empty-home"; mkdir -p "$TLC" "$TLE"; cp -r "$TLH/.claude/projects" "$TLC/projects"
+case_run "kb-telemetry: CLAUDE_CONFIG_DIR names where the transcripts are" 0 "1 kb-retrieve run(s)" -- \
+  env HOME="$TLE" CLAUDE_CONFIG_DIR="$TLC" "$ENGINE/scripts/kb-telemetry" --since 2026-10-19 --until 2026-10-25
+case_run "kb-telemetry: ...and without it an empty HOME has none" 0 "0 kb-retrieve run(s)" -- \
+  env HOME="$TLE" "$ENGINE/scripts/kb-telemetry" --since 2026-10-19 --until 2026-10-25
 case_run "kb-telemetry: a window with no runs still gets a row" 0 "2026-10-26" -- ktel --since 2026-10-19 --until 2026-11-01 --window 7d
 case_run "kb-telemetry: a malformed --window is a usage error" 2 "" -- ktel --window week
 case_run "schedulable: kb-telemetry from / with a stripped environment" 0 "exit=0" -- \
@@ -3833,6 +3841,9 @@ SID=$(sed -n 's/^sample_id: //p' "$KES/sample.tsv" | head -1)
 mkrun a4 knowledge-tools:kb-retrieve "kb-eval $SID Q1" $'A widget holds up to 12 things.\nSources: widgets.md'
 case_run "kb-eval-sample grade: finds each case's transcript by its description and grades it" 0 "routing" -- \
   env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
+rm -rf "$TLC/projects"; cp -r "$TLH/.claude/projects" "$TLC/projects"
+case_run "kb-eval-sample grade: CLAUDE_CONFIG_DIR names where the transcripts are" 0 "460" -- \
+  env HOME="$TLE" CLAUDE_CONFIG_DIR="$TLC" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
 case_run "kb-eval-sample grade: writes the mapping both graders read" 0 "" -- grep -q '^Q1|.*agent-a4.jsonl$' "$KES/mapping"
 case_run "kb-eval-sample grade: joins each case with its cost" 0 "460" -- env HOME="$TLH" "$ENGINE/scripts/kb-eval-sample" grade "$KES"
 
@@ -4373,6 +4384,122 @@ case_run "kb-schedule run under a bare PATH still finds a tool from the installi
   bash -c '! grep -qs stale-recheck "$1"' _ "$KP/lib/needs-attention.md"
 case_run "kb-schedule run: ...so its kb-verify step passed" 0 "" -- \
   grep -q 'kb-verify lib exit=0' "$KPH/.local/state/ai-kb/schedule.log"
+
+# ----------------------------- the engine's files are at fixed paths, whatever XDG says (ADR-0021) ----
+# XDG_CONFIG_HOME is often set only in an interactive shell. kb-schedule install then wrote
+# schedule.conf under it, and the cron or systemd run, without it, read ~/.config: preparation off and
+# no saved PATH, silently. Install under XDG_*, run without it: the conf is still found. And no XDG_*
+# variable moves the packets, the reports or the log.
+XH="$TMP/xdg-fixed"; XHH="$XH/home"; XOTHER="$XH/elsewhere"; mkdir -p "$XHH" "$XH/userbin" "$XOTHER"
+printf '#!/bin/sh\nexit 0\n' > "$XH/userbin/kbtool"; chmod +x "$XH/userbin/kbtool"
+build_clean "$XH/lib"
+sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$XH/lib/widgets.md"
+printf 'Recheck: kbtool\n' >> "$XH/lib/widgets.md"
+git -C "$XH/lib" -c user.email=t@t -c user.name=t commit -qm init
+HOME="$XHH" "$ENGINE/scripts/kb-library" add "$XH/lib" >/dev/null 2>&1
+cat > "$XH/claudestub" <<STUB
+#!/bin/sh
+printf %s "\$CLAUDE_CONFIG_DIR" > "$XH/cc-seen"
+echo '{"result": "NO ITEMS"}'
+STUB
+chmod +x "$XH/claudestub"
+xsched() { # xsched PATH [VAR=value ...] -- kb-schedule arguments, run with only HOME, PATH and what is named
+  local p="$1" e=(); shift
+  while [ "$1" != -- ]; do e+=("$1"); shift; done; shift
+  env -i HOME="$XHH" PATH="$p" KS_LOG="$KS/log" KS_CRON="$XH/cron" KB_SYSTEMCTL="$KS/bin/systemctl" KB_CRONTAB="$KS/bin/crontab" \
+    ${e[@]+"${e[@]}"} "$ENGINE/scripts/kb-schedule" "$@"
+}
+xsched "$XH/userbin:$PATH" XDG_CONFIG_HOME="$XOTHER/config" XDG_STATE_HOME="$XOTHER/state" CLAUDE_CONFIG_DIR="$XOTHER/cc" -- install --backend cron --prepare --claude "$XH/claudestub" >/dev/null 2>&1
+case_run "kb-schedule install: schedule.conf is under ~/.config even with XDG_CONFIG_HOME set" 0 "" -- \
+  bash -c '[ -f "$1/.config/ai-kb/schedule.conf" ] && [ ! -e "$2/config" ]' _ "$XHH" "$XOTHER"
+xsched /usr/bin:/bin -- run >/dev/null 2>&1
+case_run "kb-schedule run, XDG_CONFIG_HOME unset: the conf is found (preparation was chosen)" 0 "kb-prepare distill lib exit=" -- \
+  cat "$XHH/.local/state/ai-kb/schedule.log"
+case_run "kb-schedule run, XDG_CONFIG_HOME unset: ...and so is the saved PATH" 0 "kb-verify lib exit=0" -- \
+  cat "$XHH/.local/state/ai-kb/schedule.log"
+case_run "kb-schedule install records CLAUDE_CONFIG_DIR as it ran with it" 0 "" -- \
+  grep -qx "claude_config_dir=$XOTHER/cc" "$XHH/.config/ai-kb/schedule.conf"
+case_run "kb-schedule run restores CLAUDE_CONFIG_DIR for the steps, as it does PATH" 0 "$XOTHER/cc" -- cat "$XH/cc-seen"
+case_run "kb-schedule: the log and lock are under ~/.local/state, not XDG_STATE_HOME" 0 "" -- \
+  bash -c '[ -f "$1/.local/state/ai-kb/schedule.lock" ] && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
+xsched /usr/bin:/bin XDG_STATE_HOME="$XOTHER/state" -- run >/dev/null 2>&1
+case_run "kb-schedule run with XDG_STATE_HOME set still logs to ~/.local/state" 0 "" -- \
+  bash -c '[ "$(grep -c "run started" "$1/.local/state/ai-kb/schedule.log")" = 2 ] && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
+env HOME="$XHH" XDG_STATE_HOME="$XOTHER/state" "$ENGINE/scripts/kb-report" "$XH/lib" >/dev/null 2>&1
+case_run "kb-report: XDG_STATE_HOME does not move the reports" 0 "" -- \
+  bash -c 'ls "$1"/.local/state/ai-kb/reports/*-W*.md >/dev/null 2>&1 && [ ! -e "$2/state" ]' _ "$XHH" "$XOTHER"
+mkdir -p "$XHH/.local/state/ai-kb/packets/fx"
+printf -- '---\npacket: kb-distill\nlibrary: fx\nlibrary_path: %s\nlibrary_head: x\nprepared: 2026-10-20T00:00:00Z\nstatus: pending\n---\n\nXDG-PACKET\n' \
+  "$XH/lib" > "$XHH/.local/state/ai-kb/packets/fx/2026-10-20-kb-distill.md"
+case_run "kb-apply list: XDG_STATE_HOME does not move the packets" 1 "1 packet(s) waiting" -- \
+  env HOME="$XHH" XDG_STATE_HOME="$XOTHER/state" "$ENGINE/scripts/kb-apply" list
+
+# ------------------------------------------------ KB_TODAY moves the engine's date logic (#205) ----
+# Staleness and sweep age are judged against kbengine.clock.today(), which reads KB_TODAY each time it
+# is asked. The library is stamped 2026-09-22 and swept the same day, so the same files are clean, or
+# stale, or dated in the future, depending only on the day the engine is told it is.
+CK="$TMP/clock"; mkdir -p "$CK"; build_clean "$CK/clocklib"
+sed -i 's/^last_swept: never$/last_swept: 2026-09-22/' "$CK/clocklib/INDEX.md"
+case_run "KB_TODAY: check-kb finds a stamp dated in the future when today is earlier" 1 "stamp dated in the future" -- \
+  env KB_TODAY=2026-09-01 "$ENGINE/scripts/check-kb" "$CK/clocklib"
+case_run "KB_TODAY: check-kb is clean the day after the stamp" 0 "clean" -- env KB_TODAY=2026-09-23 "$ENGINE/scripts/check-kb" "$CK/clocklib"
+case_run "KB_TODAY: kb-due sees a sweep one day old" 0 "" -- \
+  bash -c 'KB_TODAY=2026-09-23 "$1" "$2" | grep -Eq "clocklib +swept 1d ago"' _ "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: kb-due sees the same sweep seventy days old" 0 "" -- \
+  bash -c 'KB_TODAY=2026-12-01 "$1" "$2" | grep -Eq "clocklib +swept 70d ago"' _ "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: kb-due --nudge names the stale fact once the day is late enough" 0 "clocklib: sweep due (last swept 70d ago, every 30d); 1 stale fact" -- \
+  env KB_TODAY=2026-12-01 "$ENGINE/scripts/kb-due" "$CK/clocklib" --nudge
+case_run "KB_TODAY: kb-due --nudge says nothing of it the day after the stamp" 0 "" -- \
+  bash -c '! KB_TODAY=2026-09-23 "$1" "$2" --nudge | grep -q "clocklib: .*stale fact"' _ "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: a malformed value is exit 2 naming the variable, in check-kb" 2 "KB_TODAY" -- env KB_TODAY=tomorrow "$ENGINE/scripts/check-kb" "$CK/clocklib"
+case_run "KB_TODAY: ...and in kb-due, which does not fall back to the real date" 2 "KB_TODAY" -- env KB_TODAY=tomorrow "$ENGINE/scripts/kb-due" "$CK/clocklib"
+case_run "KB_TODAY: ...and in kb-verify" 2 "KB_TODAY" -- env KB_TODAY=tomorrow "$ENGINE/scripts/kb-verify" "$CK/clocklib" --yes
+cap_tree "$CK/cap"
+case_run "KB_TODAY: kb-capture dates the note it files" 0 "" -- \
+  bash -c 'cd "$1" && echo "Saw a thing." | KB_TODAY=2026-03-04 "$2/scripts/kb-capture" --title "clocked" --from - >/dev/null 2>&1; ls "$1"/knowledge/episodic/2026-03-04-* >/dev/null' _ "$CK/cap" "$ENGINE"
+mkdir -p "$CK/init"; git init -q "$CK/init"
+case_run "KB_TODAY: kb-init dates the router it scaffolds" 0 "" -- \
+  bash -c 'KB_TODAY=2026-03-04 "$1/scripts/kb-init" "$2" >/dev/null 2>&1; grep -q "created: 2026-03-04" "$2/knowledge/INDEX.md"' _ "$ENGINE" "$CK/init"
+
+# ------------------- the bash one-liners agree with kbengine.env about where things are (ADR-0021) ----
+# kb-session-start and kb-bootstrap are bash and cannot import kbengine.env, so each repeats a path in
+# one line. Python resolves the same path in one place; these cases fail the day the two differ, with
+# or without the overrides and with XDG_* set to somewhere else, which neither may follow.
+SY="$TMP/sync"; mkdir -p "$SY/home" "$SY/cwd"
+git config --file "$SY/home/.config/ai-kb/libraries" kb.migrated true 2>/dev/null || { mkdir -p "$SY/home/.config/ai-kb"; git config --file "$SY/home/.config/ai-kb/libraries" kb.migrated true; }
+sy_py() { # sy_py <env --path name> [VAR=value ...]: what kbengine.env resolves, under the test's HOME
+  local n="$1"; shift
+  env -i HOME="$SY/home" PATH="$PATH" PYTHONPATH="$ENGINE/scripts" XDG_STATE_HOME="$SY/xdg" XDG_CONFIG_HOME="$SY/xdg" ${@+"$@"} python3 -m kbengine.env --path "$n"
+}
+sy_expr() { # sy_expr <script> <ERE> [VAR=value ...]: the first quoted expression in the script matching ERE, as bash resolves it
+  local s="$1" re="$2"; shift 2
+  env -i HOME="$SY/home" PATH="$PATH" XDG_STATE_HOME="$SY/xdg" XDG_CONFIG_HOME="$SY/xdg" ${@+"$@"} \
+    bash -c 'tok=$(grep -oE -m1 "$2" "$1" | head -1); [ -n "$tok" ] || exit 1; eval "printf %s $tok"' _ "$s" "$re"
+}
+sy_agree() { # sy_agree <what> <bash value> <python value>
+  [ -n "$2" ] && [ "$2" = "$3" ] && echo "agree: $1" || { echo "DIVERGE $1: bash says '$2', kbengine.env says '$3'"; return 1; }
+}
+SY_REPORTS='"\$\{KB_REPORTS:-[^}]*\}"'; SY_REGISTRY='"\$HOME/\.config/ai-kb/libraries"'; SY_BACKUPS='"\$HOME/\.local/state/ai-kb/backups"'
+case_run "sync: kb-session-start's registry is kbengine.env's" 0 "agree" -- \
+  sy_agree registry "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REGISTRY")" "$(sy_py registry)"
+case_run "sync: kb-bootstrap's registry is kbengine.env's" 0 "agree" -- \
+  sy_agree registry "$(sy_expr "$ENGINE/scripts/kb-bootstrap" "$SY_REGISTRY")" "$(sy_py registry)"
+case_run "sync: kb-bootstrap's backup folder is under kbengine.env's state folder" 0 "agree" -- \
+  sy_agree backups "$(sy_expr "$ENGINE/scripts/kb-bootstrap" "$SY_BACKUPS")" "$(sy_py state)/backups"
+case_run "sync: kb-session-start's reports folder is kbengine.env's, by default" 0 "agree" -- \
+  sy_agree reports "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REPORTS")" "$(sy_py reports)"
+case_run "sync: ...and with KB_REPORTS set" 0 "agree" -- \
+  sy_agree reports "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REPORTS" KB_REPORTS="$SY/mine")" "$(sy_py reports KB_REPORTS="$SY/mine")"
+# And the running hook finds the report where kb-report writes it, the same two ways.
+sy_latest() { # sy_latest [VAR=value ...]: the "Latest kb-report" path session start names
+  (cd "$SY/cwd" && env -i HOME="$SY/home" PATH="$PATH" KB_NUDGE=weekly:mon KB_TODAY=2026-11-10 KB_ENGINE_ROOT="$ENGINE" XDG_STATE_HOME="$SY/xdg" ${@+"$@"} "$ENGINE/scripts/kb-session-start") |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["hookSpecificOutput"]["additionalContext"])' | sed -n 's/.*Latest kb-report: //p'
+}
+mkdir -p "$(sy_py reports)" "$SY/mine"; touch "$(sy_py reports)/2026-W45.md" "$SY/mine/2026-W45.md"
+case_run "sync: session start names the report in kbengine.env's reports folder" 0 "agree" -- \
+  sy_agree latest "$(sy_latest)" "$(sy_py reports)/2026-W45.md"
+case_run "sync: ...and in KB_REPORTS when it is set" 0 "agree" -- \
+  sy_agree latest "$(sy_latest KB_REPORTS="$SY/mine")" "$SY/mine/2026-W45.md"
 
 # ------------------------------------------- a home directory managed by Stow or similar (#138) ----
 # A dotfiles manager links files, or whole folders, from a repository synced across machines. Every

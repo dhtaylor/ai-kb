@@ -97,7 +97,7 @@ only at a terminal or with --dry-run, so an unattended run's log holds no source
 """
 import html.parser, json, pathlib, re, sys
 
-from kbengine import queue
+from kbengine import clock, queue
 
 # The old and new values are the source's own text (#95): the queue truncates and defangs them.
 UNTRUSTED = frozenset({"old", "new"})
@@ -308,4 +308,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(clock.guard(main, sys.argv[1:]))

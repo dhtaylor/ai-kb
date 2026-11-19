@@ -19,9 +19,10 @@ THE PATH (#165). A systemd user unit and a crontab line both start with a bare s
 leaves out per-user folders such as ~/.local/bin, where the claude installer puts claude. A Recheck
 calling a tool from one failed under the timer and was queued as stale although the fact held. So
 `install` records the PATH it was run with in schedule.conf, and `run` uses it for every step.
-Reinstall to change it.
+Reinstall to change it. CLAUDE_CONFIG_DIR (#205), where the report finds Claude Code's transcripts, is
+saved and restored the same way.
 
-The log, ${XDG_STATE_HOME:-~/.local/state}/ai-kb/schedule.log, records each step's exit code and
+The log, ~/.local/state/ai-kb/schedule.log (ADR-0021), records each step's exit code and
 nothing a step printed, so it never holds a fact's or a source's text. A run that finds another
 still holding the lock does nothing.
 
@@ -35,20 +36,20 @@ Usage: kb-schedule install [--backend systemd|cron] [--prepare] [--budget-usd N]
 status exits 0 installed, 1 not installed. run exits 0 when every step ran (findings included), 2
 when a step could not run. install and remove exit 0, or 2 on a usage or system error.
 """
-import datetime, fcntl, importlib.machinery, importlib.util, os, pathlib, shutil, subprocess, sys
+import datetime, fcntl, importlib.machinery, importlib.util, os, pathlib, subprocess, sys
+
+from kbengine import env
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ENGINE / "scripts"
 UNIT = "ai-kb-schedule"
 MARK = "# ai-kb-schedule"
-HOME = pathlib.Path.home()
-CONFIG_HOME = pathlib.Path(os.environ.get("XDG_CONFIG_HOME") or HOME / ".config")
-STATE = pathlib.Path(os.environ.get("XDG_STATE_HOME") or HOME / ".local" / "state") / "ai-kb"
-CONF = CONFIG_HOME / "ai-kb" / "schedule.conf"
-UNIT_DIR = CONFIG_HOME / "systemd" / "user"
+STATE = env.state_dir()
+CONF = env.config_dir() / "ai-kb" / "schedule.conf"
+UNIT_DIR = env.config_dir() / "systemd" / "user"
 LOG = STATE / "schedule.log"
-SYSTEMCTL = os.environ.get("KB_SYSTEMCTL", "systemctl")
-CRONTAB = os.environ.get("KB_CRONTAB", "crontab")
+SYSTEMCTL = env.systemctl_binary()
+CRONTAB = env.crontab_binary()
 
 
 def say(msg):
@@ -120,7 +121,7 @@ def install(opts: dict) -> int:
     if backend not in ("systemd", "cron"):
         return fail(f"unknown backend {backend}: use systemd or cron")
     prepare = "--prepare" in opts
-    claude = opts.get("--claude") or os.environ.get("KB_CLAUDE") or shutil.which("claude") or ""
+    claude = opts.get("--claude") or env.claude_binary() or ""
     if prepare and not claude:
         return fail("--prepare needs claude: pass --claude PATH")
     budget = opts.get("--budget-usd", "1.00")
@@ -158,7 +159,8 @@ def install(opts: dict) -> int:
 
     CONF.parent.mkdir(parents=True, exist_ok=True)
     CONF.write_text(f"backend={backend}\nprepare={'yes' if prepare else 'no'}\nbudget_usd={budget}\n"
-                    f"claude={claude}\nwatch={watch}\npath={os.environ.get('PATH', '')}\n")
+                    f"claude={claude}\nwatch={watch}\npath={os.environ.get('PATH', '')}\n"
+                    f"claude_config_dir={os.environ.get('CLAUDE_CONFIG_DIR', '')}\n")
     note_links(*([UNIT_DIR / f"{UNIT}.service", UNIT_DIR / f"{UNIT}.timer"] if backend == "systemd" else []), CONF)
     say(f"installed ({backend}, Mondays 07:00; preparation {'on, capped at $' + budget + ' a run' if prepare else 'off'}). "
         f"It queues, drafts and reports; it never edits a fact.")
@@ -212,6 +214,8 @@ def run() -> int:
     conf = read_conf()
     if conf.get("path"):   # the PATH install ran with, not the unit's bare one (#165)
         os.environ["PATH"] = conf["path"]
+    if conf.get("claude_config_dir"):   # where Claude Code keeps its transcripts, as install saw it
+        os.environ["CLAUDE_CONFIG_DIR"] = conf["claude_config_dir"]
     log = open(LOG, "a")
 
     def note(text):

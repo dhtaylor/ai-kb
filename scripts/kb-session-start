@@ -124,7 +124,7 @@ case "$nudge_setting" in
       today=$(LC_ALL=C date ${KB_TODAY:+-d "$KB_TODAY"} +%a 2>/dev/null | tr '[:upper:]' '[:lower:]')
       if [ "$today" != "$want" ]; then
         show_nudge=0
-        latest=$(ls -1 "${KB_REPORTS:-${XDG_STATE_HOME:-$HOME/.local/state}/ai-kb/reports}"/*.md 2>/dev/null | sort | tail -n 1)
+        latest=$(ls -1 "${KB_REPORTS:-$HOME/.local/state/ai-kb/reports}"/*.md 2>/dev/null | sort | tail -n 1)
         nudge_line="The librarian's nudge is weekly (kb.nudge=weekly:${want}) and is not shown today. Do not start upkeep unprompted; kb-due --nudge reports what is due on demand.${latest:+ Latest kb-report: ${latest}}"
       fi
     fi ;;

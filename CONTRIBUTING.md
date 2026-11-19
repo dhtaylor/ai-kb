@@ -367,6 +367,13 @@ It runs `check-exec-bits`, `check-secrets`, `check-embedded-facts` and `check-to
 - **A check or a contract rule changes with a case.** `tests/run-checks [-v]` takes about a minute and
   must stay green. Its fixtures declare the newest contract version, so publishing one means raising
   that line too.
+- **The engine's environment is declared in one place**, `scripts/kbengine/env.py`
+  (`python3 -m kbengine.env` prints each variable with its default and effect). Its files are at fixed
+  paths and no `XDG_*` variable moves them ([ADR-0021](documents/decisions/0021-engine-state-at-fixed-paths.md)).
+  `KB_TODAY=YYYY-MM-DD` is an injection point: staleness, sweep age and the date written into a queue
+  record or a new note all treat it as today (`kbengine.clock.today()`, read at the moment it is
+  needed). A malformed value is exit 2, not the real date. Timestamps, such as a report's `generated`
+  and ISO week, the schedule log and backup names, stay on the real clock.
 - **A contract version is a heading.** A new `### MAJOR.MINOR` in CONVENTIONS §14 is how an engine
   learns a version exists. `kb-init`'s scaffold and `kb-create-domain` write the newest, and
   `CHANGELOG.md` records the change under `## Unreleased`.

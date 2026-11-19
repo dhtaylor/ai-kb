@@ -6,6 +6,36 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `tests/run-checks` compares the paths `kb-session-start` and `kb-bootstrap` resolve in bash (the
+  reports folder, the backup folder, the registry) with `kbengine.env`'s, with and without
+  `KB_REPORTS` and with `XDG_*` pointing elsewhere (#205). A change to one that the other does not
+  follow fails a case. Neither script reads `XDG_STATE_HOME` any longer (ADR-0021).
+- `KB_TODAY` (YYYY-MM-DD) now sets the date for the engine's Python as well as session start (#205).
+  `check-kb`, `kb-verify`, `kb-due`, `kb-report`, `kb-prepare`, `kb-watch` and `kb-sources` read it
+  through `kbengine.clock.today()` at the moment they need it, where each had frozen the real date at
+  start; `kb-init` and `kb-capture` use it for the date they write. Timestamps (a report's `generated`
+  and ISO week, logs, backups) stay on the real clock. A malformed value exits 2 and names the
+  variable; it never falls back to the real date. It is documented in CONTRIBUTING as an injection
+  point. Nothing changes when it is unset.
+- `kb-telemetry` and `kb-eval-sample` honour `CLAUDE_CONFIG_DIR` (#205). They read transcripts from
+  `~/.claude/projects` only, though Claude Code writes them under that variable's folder when it is
+  set, and `kb-bootstrap` already followed it. `kb-report`'s count of fact-not-found runs reads the
+  same folder. `--projects` still wins. `kb-schedule install` now saves `CLAUDE_CONFIG_DIR` in
+  `schedule.conf`, and `run` restores it, as it does PATH; reinstall to record it.
+- **The engine no longer reads `XDG_STATE_HOME` or `XDG_CONFIG_HOME` (#205, ADR-0021).** Its files are
+  at fixed paths: packets, reports, `schedule.log`, `schedule.lock` and backups under
+  `~/.local/state/ai-kb/`, and `schedule.conf` and the systemd user unit folder under `~/.config/`.
+  This fixes a silent failure: with `XDG_CONFIG_HOME` set only in a terminal, `kb-schedule install`
+  wrote `schedule.conf` under it, and the cron or systemd run, which does not have it, read
+  `~/.config`, so it ran with preparation off and without the saved PATH. `KB_PACKETS` and
+  `KB_REPORTS` still override. **If you had either variable set, the engine no longer reads the old
+  folders: move your packets, reports, log and backups from `$XDG_STATE_HOME/ai-kb/` to
+  `~/.local/state/ai-kb/`, and run `kb-schedule install` again** (its conf and units were under
+  `$XDG_CONFIG_HOME`). Nothing is deleted. Git's own lookup of `$XDG_CONFIG_HOME/git/config` in
+  `kb-bootstrap` is unchanged.
+- `kbengine.env` declares every variable the engine reads, with its default and effect, and resolves
+  its locations in one place (#205). It replaces five copies of the state-folder rule and two of the
+  `KB_CLAUDE` fallback. `python3 -m kbengine.env --names` lists the variables.
 - `kb-report` lists the queue records it cannot read (#204). `kb-due` has counted them since #168,
   but the report skipped them in silence, so an unreadable record was missing from both the queue
   items and the decisions. It now says how many there are, and that `check-kb` names the lines.

@@ -7,7 +7,7 @@ Libraries are built in a temp dir; the registry is never read (read_only_entry i
 import pathlib, re, tempfile, unittest
 from unittest import mock
 
-from kbengine import queue
+from kbengine import clock, queue
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 INDEX = ("---\nname: fx-index\ndomain: fx\nscope: general\n---\n# fx\n\n"
@@ -61,7 +61,7 @@ class Writing(Library):
         self.append(finding())
         keys = re.findall(r"^(?:- |  )(\w+):", self.queue.read_text().split("```yaml\n")[1], re.M)
         self.assertEqual(keys, ["id", "category", "status", "source_id", "field", "old", "new", "date"])
-        self.assertIn(f'  date: "{queue.TODAY}"', self.queue.read_text())
+        self.assertIn(f'  date: "{clock.today().isoformat()}"', self.queue.read_text())
 
     def test_a_second_append_splices_into_the_last_fence(self):
         self.append(finding("a"))
@@ -233,7 +233,7 @@ class Reading(unittest.TestCase):
         f = finding()
         got = queue.parse_records("```yaml\n" + queue.render(f) + "```\n")
         self.assertEqual(got, [{"id": f.id, "category": "drift", "status": "open", "source_id": "src",
-                                "field": "a", "old": "o", "new": "new-a", "date": queue.TODAY}])
+                                "field": "a", "old": "o", "new": "new-a", "date": clock.today().isoformat()}])
 
 
 class AuditSkillExample(unittest.TestCase):
