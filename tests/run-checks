@@ -2789,8 +2789,6 @@ case_run "check-blast: repo with neither CONVENTIONS.md nor INDEX.md is a usage 
   "not a recognized repo kind" -- \
   sh -c "cd '$TMP/blast/neither' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
-# ------------------------------------------------------------------- done ----
-echo
 # ------------------------------------------------- Phase 5 exit criterion ----
 # "Stale or drifted facts surface as a queue rather than rotting silently": the whole
 # chain in one library. A stale fact whose Recheck now fails AND a watched source that
