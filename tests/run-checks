@@ -3017,9 +3017,9 @@ rec = ("- case: cross-root\n  question: Where is the widget limit explained?\n  
        "  expected_excerpt: \"[[beta:widgets]]\"\n\n")
 p.write_text(t[:t.rindex("```")] + rec.rstrip("\n") + "\n```\n")
 PY
-# NOT patch: this matches nothing (the line ends "things.", not "things"), so alpha's widgets.md has no
-# link to beta today. #214 found it; fixing it changes what the grade-routing cases below run on.
-sed -i 's/up to 12 things$/up to 12 things. See [[beta:widgets]]./' "$A/widgets.md"
+# alpha's widgets.md links to beta, the link the cross-root record's excerpt names (#221: this
+# sed once matched nothing, so the link was never there).
+patch "$A/widgets.md" 's/up to 12 things\.$/up to 12 things. See [[beta:widgets]]./'
 # Installed means registered (ADR-0014): alpha and beta are, in this suite's own registry.
 "$ENGINE/scripts/kb-library" add "$A" >/dev/null; "$ENGINE/scripts/kb-library" add "$B" >/dev/null
 grade_routing() { # grade_routing <name> <want-exit> <want-text> <Q-mapping lines...>
