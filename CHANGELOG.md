@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-due --nudge` counts every recheck that is due, not the `verifier_budget`'s worth (#211). It
+  said "5 facts due for recheck" for a library with 35 due; it now says "35 facts due for recheck,
+  5 a run (kb-verify … --yes)", and the summary line's "to recheck" counts all 35. Within the budget
+  the wording is unchanged. `kb-verify` itself, and what it runs, are unchanged.
 - The unit tests run on the suite's frozen clock too (#217): `tests/test_attention.py` dates its
   fixtures from `clock.today()` rather than the real date, so they pass whatever `KB_TODAY` says, and
   `run-checks` no longer unsets `KB_TODAY` for them. No change to `scripts/`.
