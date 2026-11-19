@@ -8,17 +8,18 @@ scripts. Each category is asserted on the structured result; nothing is printed.
 import datetime, os, pathlib, subprocess, tempfile, unittest
 from unittest import mock
 
-from kbengine import attention, contract, library, queue
+from kbengine import attention, clock, contract, library, queue
 from kbengine.attention import Failed
 
-TODAY = datetime.date.today()
 NEWEST = contract.fmt(max(contract.known_contracts()))
 FM = ("---\nname: widgets\ndescription: x.\nmemory_type: reference\ndomain: fx\nscope: general\n"
       "metadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n")
 
 
 def ago(n):
-    return (TODAY - datetime.timedelta(days=n)).isoformat()
+    """n days before the engine's today (clock.today(): KB_TODAY when set), so a stamp's age is
+    what the module under test sees, on the real clock or the suite's frozen one (#217)."""
+    return (clock.today() - datetime.timedelta(days=n)).isoformat()
 
 
 def section(title, age=None, by="agent", recheck=None, attended=False, source=True):
