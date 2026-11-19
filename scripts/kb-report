@@ -35,7 +35,7 @@ Usage: kb-report [tree ...] [--out DIR]
 """
 import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
 
-from kbengine import attention, clock, contract, env
+from kbengine import attention, clock, contract, env, registry
 from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
@@ -83,7 +83,7 @@ def not_found_week(mods: dict) -> dict:
     which names a library by its registered name. Never fails the report: no transcripts, or none
     readable, is no runs."""
     try:
-        roots = {n: pathlib.Path(p).resolve() for n, p in mods["kb_libraries"].installed().items()}
+        roots = {n: pathlib.Path(p).resolve() for n, p in registry.installed().items()}
         today = datetime.datetime.now(datetime.timezone.utc).date()   # transcripts are stamped in UTC
         runs, _evals = mods["kb_telemetry"].collect(env.claude_projects(),
                                                     today - datetime.timedelta(days=6), today)
@@ -173,19 +173,18 @@ def main(argv) -> int:
             print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
         trees.append(pathlib.Path(argv[i])); i += 1
     try:
-        kl = load_module("kb_libraries", "kb-libraries")
         attention.script("kb-verify"), attention.script("kb-sources")   # attention's readers: fail here, not per library
-        mods = {"kb_telemetry": load_module("kb_telemetry", "kb-telemetry"), "kb_libraries": kl}
+        mods = {"kb_telemetry": load_module("kb_telemetry", "kb-telemetry")}
         packets = load_module("kb_apply", "kb-apply").pending()
     except Exception as e:
         print(f"kb-report: could not load the engine's readers ({type(e).__name__})", file=sys.stderr)
         return 2
     installed, consumed = {}, set()
     try:   # the registry's one reader; an unreadable registry must not stop the report (#204)
-        installed = kl.installed()
+        installed = registry.installed()
         # A read-only library is curated by its publisher, so nothing in it is this machine's
         # decision (ADR-0020).
-        consumed = {e["path"].resolve() for e in kl.entries() if e["read_only"]}
+        consumed = registry.read_only_paths()
     except Exception as e:
         print(f"kb-report: library registry unreadable, registered libraries skipped: {e}", file=sys.stderr)
     if not trees:
