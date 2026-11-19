@@ -46,6 +46,14 @@ unset $(git rev-parse --local-env-vars)
 # cases that need it. HOME is already a throwaway, but GIT_CONFIG_GLOBAL/SYSTEM bypass it.
 SUITE_CLEARED_VARS="KB_LIBRARY_HOME KB_ENGINE_ROOT KB_SYSTEMCTL KB_CRONTAB KB_NUDGE KB_TODAY GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE"
 unset $SUITE_CLEARED_VARS
+# The suite's clock is frozen (#205): every date a fixture is built from, and the day the engine
+# judges it on, is this one, so a case's result does not change as the real calendar moves. It is
+# 2026-10-10 so build_clean's stamp (2026-09-22) is 18 days old: 9d past the default agent TTL
+# (9d) and inside a human's (90d), which is what the cases that lean on it say. Set after the
+# clearing above, which unsets KB_TODAY. A case that runs the engine under `env -i` passes
+# KB_TODAY on, or it would judge the fixtures by the real calendar. The few cases that mirror the
+# real clock (a UTC timestamp, the ISO week, the weekday) say so and run with it unset.
+export KB_TODAY=2026-10-10
 
 fm() { # frontmatter: name, scope, [extra]
   printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
@@ -114,7 +122,7 @@ echo "run-checks: $ENGINE"
 case_run "suite clears git's repository environment, so a hook cannot aim fixtures at its repo (#127)" 0 "" -- \
   bash -c 'for v in $(git rev-parse --local-env-vars); do [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done'
 case_run "suite clears the engine's own environment, so a caller's shell cannot change a result (#181)" 0 "" -- \
-  bash -c 'for v in $0; do [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done' "$SUITE_CLEARED_VARS"
+  bash -c 'for v in $0; do [ "$v" = KB_TODAY ] && continue; [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done' "$SUITE_CLEARED_VARS"
 
 # ---------------------------------------------------------------- check-kb ----
 build_clean "$TMP/clean"
@@ -248,7 +256,7 @@ case_run "no script depends on a third-party module" 1 "" -- \
 # sections out. scripts/ is on the path for this one command only, as Python puts it there for
 # a script that runs from it.
 case_run "kbengine: the in-process tests pass (tests/test_factfiles.py)" 0 "OK" -- \
-  env PYTHONPATH="$ENGINE/scripts" python3 -m unittest discover -s "$ENGINE/tests" -p 'test_*.py'
+  env -u KB_TODAY PYTHONPATH="$ENGINE/scripts" python3 -m unittest discover -s "$ENGINE/tests" -p 'test_*.py'
 
 # ------------------------------------------------------------- check-scope ----
 build_clean "$TMP/scopeok"
@@ -865,7 +873,7 @@ printf 'Recheck: true\n' >> "$TMP/vmethod/widgets.md"
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review/' "$TMP/vmethod/widgets.md"
 "$ENGINE/scripts/kb-verify" "$TMP/vmethod" --all --yes --apply >/dev/null 2>&1
 case_run "--apply restamp records method: query" 0 "by: agent · method: query" -- \
-  grep -F "Verified: $(date +%F)" "$TMP/vmethod/widgets.md"
+  grep -F "Verified: $KB_TODAY" "$TMP/vmethod/widgets.md"
 
 # Rechecks that cannot fail (issues #34, #41): a doc-review assertion that greps a page for its
 # own title, or one sentence reused across many sections, passes while the page exists. Found
@@ -982,7 +990,7 @@ sed -i 's/^scope: general$/scope: general\nverified: 2026-01-01/' "$TMP/vfloor/w
 sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "$TMP/vfloor/widgets.md"
 printf 'Recheck: true\n' >> "$TMP/vfloor/widgets.md"
 "$ENGINE/scripts/kb-verify" "$TMP/vfloor" --all --yes --apply >/dev/null 2>&1
-case_run "--apply moves the frontmatter floor with the restamp" 0 "verified: $(date +%F)" -- \
+case_run "--apply moves the frontmatter floor with the restamp" 0 "verified: $KB_TODAY" -- \
   grep -F "verified:" "$TMP/vfloor/widgets.md"
 case_run "--apply leaves a library check-kb still passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/vfloor"
 
@@ -1004,7 +1012,7 @@ case_run "stale section with no assertion is named, not skipped" 0 "no assertion
 ttl_lib() { # ttl_lib <dir> [agent_ttl line]
   build_clean "$1"
   printf 'Recheck: true\n' >> "$1/widgets.md"
-  sed -i "s/^Verified: .*\$/Verified: $(date -d '20 days ago' +%F) · by: agent · method: manual/" "$1/widgets.md"
+  sed -i "s/^Verified: .*\$/Verified: $(date -d "$KB_TODAY -20 days" +%F) · by: agent · method: manual/" "$1/widgets.md"
   [ -n "${2:-}" ] && sed -i "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/" "$1/INDEX.md"
   return 0
 }
@@ -1119,7 +1127,7 @@ case_run "--yes: the command actually runs" 0 "" -- test -e "$TMP/vgate-sentinel
 # the untouched wrong fact, and the restamped true fact together.
 # Dates are computed, never typed: a literal "today" turns this into a test that
 # fails on its own the next morning.
-VTODAY=$(date +%F)
+VTODAY=$KB_TODAY
 build_clean "$TMP/vfixture"
 printf 'port=8080\n' > "$TMP/vfixture/system-config.txt"
 
@@ -1577,7 +1585,7 @@ case_run "kb-sources: a 404 is not retried as a plain client" 0 "" -- \
 
 # ---------------------------------------------------------------- kb-due ----
 build_clean "$TMP/due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$TMP/due/INDEX.md"   # computed: a typed date expires
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$TMP/due/INDEX.md"   # computed: a typed date expires
 case_run "recently swept tree is not due" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" "$TMP/due"
 
 build_clean "$TMP/overdue"
@@ -1586,7 +1594,7 @@ case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" "$TMP
 
 # A trailing YAML comment is valid and must not hide the value (issue #28).
 build_clean "$TMP/due-comment"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)  # swept by me/; s/^sweep_interval: 30d\$/sweep_interval: 7d  # weekly/" "$TMP/due-comment/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY  # swept by me/; s/^sweep_interval: 30d\$/sweep_interval: 7d  # weekly/" "$TMP/due-comment/INDEX.md"
 case_run "kb-due: last_swept with an inline comment is read" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" "$TMP/due-comment"
 case_run "kb-due: sweep_interval with an inline comment is read" 0 "every 7d" -- "$ENGINE/scripts/kb-due" "$TMP/due-comment"
 
@@ -1603,10 +1611,10 @@ NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
 # 1. Nothing due anywhere: fresh sweep, a fresh agent-stamped fact with no Recheck, no
 #    queue, no episodic/. --nudge must print nothing at all.
 build_clean "$NFX/kb/nothing-due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/nothing-due/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/nothing-due/INDEX.md"
 # The fact must really be fresh: build_clean's literal 2026-09-22 stamp ages past the 9d agent TTL,
 # and this case passed only because the nudge ignored stale facts with no Recheck (issue #63).
-sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/nothing-due/widgets.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $KB_TODAY/" "$NFX/kb/nothing-due/widgets.md"
 HOME="$TMP/nfxhome" "$ENGINE/scripts/kb-library" add "$NFX/kb/nothing-due" >/dev/null   # installed = registered
 case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
   bash -c '[ -z "$(HOME="$2" "$1" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome"
@@ -1614,7 +1622,7 @@ case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
 # 2. A stale fact carrying a Recheck: due for recheck, and the Recheck must NOT run —
 #    proven with a sentinel file, the same technique kb-verify's own fixture uses.
 build_clean "$NFX/kb/recheck-due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/recheck-due/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/recheck-due/INDEX.md"
 NUDGE_SENTINEL="$TMP/nudge-sentinel"
 rm -f "$NUDGE_SENTINEL"
 fm stale-recheck general > "$NFX/kb/recheck-due/stale-recheck.md"
@@ -1689,7 +1697,7 @@ case_run "nudge: acknowledged count does not also read as two" 1 "" -- \
 #    and kb/knowledge-architecture, which spell the heading two different ways). The
 #    honest proxy is therefore a raw count, named as exactly that.
 build_clean "$NFX/kb/episodic-due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/episodic-due/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/episodic-due/INDEX.md"
 mkdir -p "$NFX/kb/episodic-due/episodic"
 for n in 1 2; do
   printf -- '---\nname: 2026-01-0%s-note\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\nmetadata: {type: episodic, node_type: memory, created: 2026-01-0%s}\ntags: [fx, episodic]\nkeywords: [episodic]\n---\n# note %s\n' \
@@ -1702,7 +1710,7 @@ case_run "nudge: episodic notes are counted, INDEX.md excluded" 0 "2 episodic no
 # A distilled note is not awaiting distillation. Both spellings in use are recognised: the
 # canonical "## Distilled" (kb-distill Step 5) and older notes' "## Distillation record".
 # Counting them would ask about the same notes at every session start, forever.
-for h in "Distilled $(date +%F)" "Distillation record"; do
+for h in "Distilled $KB_TODAY" "Distillation record"; do
   f="$NFX/kb/episodic-due/episodic/2026-01-0$(( ${#h} % 7 + 3 ))-done.md"
   printf -- '---\nname: %s\ndescription: fixture\nmemory_type: episodic\ndomain: fx\nscope: general\nmetadata: {type: episodic, node_type: memory, created: 2026-01-01}\ntags: [fx, episodic]\nkeywords: [episodic]\n---\n# done\n\n## %s\nFacts went to x.md.\n' \
     "$(basename "$f" .md)" "$h" > "$f"
@@ -1734,9 +1742,9 @@ case_run "nudge: a fully stamped library reports no unstamped sections" 1 "" -- 
 # Issue #64: §6 stacks one stamp per source, so a Source: line with no Verified: of its own is
 # unstamped even when the section's other source is stamped. Counted per Source: line.
 build_clean "$NFX/kb/stacked-due"   # never swept, as above
-sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/stacked-due/widgets.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $KB_TODAY/" "$NFX/kb/stacked-due/widgets.md"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nSource: vendor sheet\nVerified: %s · by: agent · method: manual\n\n## Colour\n\nRed.\n\nSource: manual\nVerified: %s · by: agent · method: manual\nSource: vendor sheet\nVerified: %s · by: agent · method: manual\n' \
-  "$(date +%F)" "$(date +%F)" "$(date +%F)" >> "$NFX/kb/stacked-due/widgets.md"
+  "$KB_TODAY" "$KB_TODAY" "$KB_TODAY" >> "$NFX/kb/stacked-due/widgets.md"
 case_run "nudge: a stacked source with no stamp of its own is counted" 0 "1 unstamped source (never verified)" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/stacked-due" --nudge
 # Issue #142: once a library has been swept, the nudge names only the unstamped sources that are new
@@ -1747,7 +1755,7 @@ gitc() { git -C "$1" -c user.email=t@t -c user.name=t commit -qm "$2" >/dev/null
 build_clean "$NFX/kb/delta-due"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-due/widgets.md"
 git -C "$NFX/kb/delta-due" add -A; gitc "$NFX/kb/delta-due" seed
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/delta-due/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/delta-due/INDEX.md"
 git -C "$NFX/kb/delta-due" add -A; gitc "$NFX/kb/delta-due" sweep
 case_run "nudge: right after a committed sweep, no unstamped line (#142)" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-due"
@@ -1761,7 +1769,7 @@ case_run "kb-due without --nudge keeps the full unstamped count (#142)" 0 "2 uns
 # A section moved to another file after the sweep is the same source, not a new one.
 build_clean "$NFX/kb/delta-move"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-move/widgets.md"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/delta-move/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/delta-move/INDEX.md"
 git -C "$NFX/kb/delta-move" add -A; gitc "$NFX/kb/delta-move" sweep
 python3 - "$NFX/kb/delta-move/widgets.md" <<'PY'
 import sys; p = sys.argv[1]; t = open(p).read(); i = t.index("\n## Weight"); open(p, "w").write(t[:i] + "\n")
@@ -1775,7 +1783,7 @@ case_run "nudge: a section moved to another file since the sweep is not new (#14
 build_clean "$NFX/kb/delta-uncommitted"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-uncommitted/widgets.md"
 git -C "$NFX/kb/delta-uncommitted" add -A; gitc "$NFX/kb/delta-uncommitted" seed
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/delta-uncommitted/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/delta-uncommitted/INDEX.md"
 case_run "nudge: a sweep not yet committed leaves nothing new (#142)" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-uncommitted"
 # A swept tree outside git has no sweep commit to compare with: the full count.
@@ -1803,8 +1811,8 @@ case_run "nudge: ...and told how to retire it (#141)" 0 "kb-library remove arch-
   env HOME="$TMP/archhome2" "$ENGINE/scripts/kb-due" --nudge
 # Issue #154: a section with no Source: line is counted too, and a sourced library reports none.
 build_clean "$NFX/kb/unsourced-due"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/unsourced-due/INDEX.md"
-sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$NFX/kb/unsourced-due/widgets.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/unsourced-due/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $KB_TODAY/" "$NFX/kb/unsourced-due/widgets.md"
 printf '\n## Colour\n\nRed.\n\n## Size\n\nSmall.\n' >> "$NFX/kb/unsourced-due/widgets.md"
 case_run "nudge: sections with no Source: line are counted" 0 "2 unsourced sections (no Source: line)" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/unsourced-due" --nudge
@@ -1814,18 +1822,18 @@ case_run "nudge: a fully sourced library reports no unsourced sections" 1 "" -- 
 # prose; read as a declaration, it made a library never swept look swept an hour ago.
 build_clean "$NFX/kb/body-swept"
 sed -i '/^last_swept:/d' "$NFX/kb/body-swept/INDEX.md"
-printf '\nlast_swept: %s\n' "$(date +%F)" >> "$NFX/kb/body-swept/INDEX.md"
+printf '\nlast_swept: %s\n' "$KB_TODAY" >> "$NFX/kb/body-swept/INDEX.md"
 case_run "kb-due: a last_swept: line in the body is not a sweep (#203)" 0 "body-swept: never swept" -- \
   env HOME="$TMP/archhome" "$ENGINE/scripts/kb-due" "$NFX/kb/body-swept" --quiet
 # Issue #63: a stale fact with no Recheck is due too. kb-verify cannot settle it, so it is its own
 # category, told apart from rechecks a command can run, and it is not capped by verifier_budget.
 build_clean "$NFX/kb/stale-noassert"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$NFX/kb/stale-noassert/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/stale-noassert/INDEX.md"
 sed -i "s/^Verified: 2026-09-22/Verified: 2026-01-01/" "$NFX/kb/stale-noassert/widgets.md"
 for i in 1 2 3 4 5 6; do
   printf '\n## Limit %s\n\nA widget holds %s.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n' "$i" "$i" >> "$NFX/kb/stale-noassert/widgets.md"
 done
-printf '\n## Fresh\n\nNew.\n\nSource: manual\nVerified: %s · by: agent · method: manual\n' "$(date +%F)" >> "$NFX/kb/stale-noassert/widgets.md"
+printf '\n## Fresh\n\nNew.\n\nSource: manual\nVerified: %s · by: agent · method: manual\n' "$KB_TODAY" >> "$NFX/kb/stale-noassert/widgets.md"
 case_run "nudge: stale facts with no Recheck are reported, all of them, past the budget" 0 \
   "7 stale facts with no assertion" -- "$ENGINE/scripts/kb-due" "$NFX/kb/stale-noassert" --nudge
 case_run "nudge: ...and not as facts a recheck can run" 1 "" -- \
@@ -1921,34 +1929,34 @@ Verified: 2026-01-01 · by: agent · method: manual
 Recheck: true
 EOF
 printf -- '- [stale-recheck](stale-recheck.md) — a stale fact with a Recheck\n' >> "$SFX/kb/libdue/INDEX.md"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX/kb/libdue/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$SFX/kb/libdue/INDEX.md"
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libdue" >/dev/null   # installed = registered
 
 case_run "kb-session-start: nudge block appears when something is due" 0 \
   "Due for a librarian's attention" -- \
-  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 case_run "kb-session-start: names the due library and its recheck count" 0 \
   "libdue: 1 fact due for recheck" -- \
-  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 # A library behind the contract is nudged; one on an unsupported major is named as not served.
 build_clean "$SFX/kb/libold"
-sed -i '/^kb_contract:/d; s/^last_swept: never$/last_swept: '"$(date +%F)"'/' "$SFX/kb/libold/INDEX.md"
-sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$SFX/kb/libold/widgets.md"
+sed -i '/^kb_contract:/d; s/^last_swept: never$/last_swept: '"$KB_TODAY"'/' "$SFX/kb/libold/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $KB_TODAY/" "$SFX/kb/libold/widgets.md"
 build_clean "$SFX/kb/libfuture"; sed -i 's/^kb_contract: .*$/kb_contract: "3.0"/' "$SFX/kb/libfuture/INDEX.md"
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libold" >/dev/null
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libfuture" >/dev/null 2>&1
 case_run "kb-session-start: a library behind the contract is nudged" 0 \
   "libold: built to contract 2.0" -- \
-  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 case_run "kb-session-start: an unsupported contract major is named as not served" 0 \
   "libfuture: unsupported-contract" -- \
-  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 
 # Issue #79: additionalContext reaches the model only, so the person never saw the nudge. A
 # condensed one-line systemMessage shows it to them; the full nudge stays in the context, and an
 # error message (here: libfuture is not served) comes first. One kb-due run gives both.
 sjson() { # sjson <home> <engine> <msg|ctx> [--subagent]
-  (cd "$TMP/session-cwd" && env -i HOME="$1" PATH="$PATH" "$2/scripts/kb-session-start" ${4:-}) |
+  (cd "$TMP/session-cwd" && env -i KB_TODAY=$KB_TODAY HOME="$1" PATH="$PATH" "$2/scripts/kb-session-start" ${4:-}) |
     python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("systemMessage","<none>") if sys.argv[1]=="msg" else d["hookSpecificOutput"]["additionalContext"])' "$3"
 }
 export -f sjson; export TMP   # the negative cases call it through bash -c; unexported, they pass vacuously
@@ -1979,11 +1987,11 @@ done
 cp -r "$ENGINE/scripts/kbengine" "$SFX2/scripts/kbengine"   # check-kb and kb-due import it
 cp "$ENGINE/CONVENTIONS.md" "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$SFX2/kb/libclean/INDEX.md"
-sed -i "s/^Verified: 2026-09-22/Verified: $(date +%F)/" "$SFX2/kb/libclean/widgets.md"   # really fresh (#63)
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$SFX2/kb/libclean/INDEX.md"
+sed -i "s/^Verified: 2026-09-22/Verified: $KB_TODAY/" "$SFX2/kb/libclean/widgets.md"   # really fresh (#63)
 SHOME2="$TMP/session-home2"; HOME="$SHOME2" "$ENGINE/scripts/kb-library" add "$SFX2/kb/libclean" >/dev/null
 case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
-  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
+  bash -c 'cd "$1" && env -i KB_TODAY=$KB_TODAY HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
   "$TMP/session-cwd" "$SHOME2" "$SFX2/scripts/kb-session-start"
 # The fixture library sits in the engine's own kb/, so mark this machine migrated (ADR-0014) or
 # session start rightly says it is unregistered, which is a message of its own.
@@ -1998,11 +2006,11 @@ case_run "kb-session-start: ...and no partial nudge in the context" 1 "" -- \
 # Issue #40: --subagent is the same engine context, as a SubagentStart event, without the
 # librarian's nudge (a retrieval subagent has no use for it).
 case_run "kb-session-start --subagent: emits a SubagentStart event" 0 '"hookEventName":"SubagentStart"' -- \
-  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' --subagent"
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' --subagent"
 case_run "kb-session-start --subagent: names the engine and its libraries" 0 "libdue -> $SFX/kb/libdue" -- \
-  sh -c "cd '$TMP/session-cwd' && env -i HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' --subagent"
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' --subagent"
 case_run "kb-session-start --subagent: carries no librarian nudge" 1 "" -- \
-  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" --subagent | grep -qF "Due for a librarian"' _ \
+  bash -c 'cd "$1" && env -i KB_TODAY=$KB_TODAY HOME="$2" PATH="$PATH" "$3" --subagent | grep -qF "Due for a librarian"' _ \
   "$TMP/session-cwd" "$SHOME" "$SFX/scripts/kb-session-start"
 
 # Issue #174: when the session-start nudge is shown is a per-user setting, kb.nudge in the registry
@@ -2011,7 +2019,7 @@ case_run "kb-session-start --subagent: carries no librarian nudge" 1 "" -- \
 # SHOME's libfuture is not served, so every case also shows a blocking problem that must survive.
 snudge() { # snudge <msg|ctx> <env VAR=val ...>  (SHOME, SFX; a fresh hermetic env each time)
   local w="$1"; shift
-  (cd "$TMP/session-cwd" && env -i HOME="$SHOME" PATH="$PATH" "$@" "$SFX/scripts/kb-session-start") |
+  (cd "$TMP/session-cwd" && env -i KB_TODAY=$KB_TODAY HOME="$SHOME" PATH="$PATH" "$@" "$SFX/scripts/kb-session-start") |
     python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("systemMessage","<none>") if sys.argv[1]=="msg" else d["hookSpecificOutput"]["additionalContext"])' "$w"
 }
 export -f snudge; export SHOME SFX
@@ -2054,17 +2062,20 @@ case_run "nudge setting: an unknown word warns and falls back" 0 "is not one of 
 NHOME2="$TMP/session-home-nudge"; rm -rf "$NHOME2"; cp -r "$SHOME" "$NHOME2"
 git config --file "$NHOME2/.config/ai-kb/libraries" kb.nudge off
 case_run "nudge setting: kb.nudge in the registry is read" 1 "" -- \
-  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
+  bash -c 'cd "$1" && env -i KB_TODAY=$KB_TODAY HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
   "$TMP/session-cwd" "$NHOME2" "$SFX/scripts/kb-session-start"
 case_run "nudge setting: \$KB_NUDGE overrides the registry" 0 "Due for a librarian" -- \
-  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" KB_NUDGE=always "$3"' _ \
+  bash -c 'cd "$1" && env -i KB_TODAY=$KB_TODAY HOME="$2" PATH="$PATH" KB_NUDGE=always "$3"' _ \
   "$TMP/session-cwd" "$NHOME2" "$SFX/scripts/kb-session-start"
 case_run "nudge setting: --subagent is unchanged by a setting" 0 "libdue -> $SFX/kb/libdue" -- \
-  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" "$3" --subagent' _ \
+  bash -c 'cd "$1" && env -i KB_TODAY=$KB_TODAY HOME="$2" PATH="$PATH" "$3" --subagent' _ \
   "$TMP/session-cwd" "$NHOME2" "$SFX/scripts/kb-session-start"
 # On demand, kb-due --nudge ignores the setting entirely.
 case_run "nudge setting: kb-due --nudge by hand ignores kb.nudge=off" 0 "libdue: 1 fact due for recheck" -- \
   env HOME="$NHOME2" KB_NUDGE=off "$SFX/scripts/kb-due" --nudge
+case_run "real clock: weekly:<today's weekday> shows the nudge on the day it is set for" 0 "Due for a librarian" -- \
+  bash -c 'cd "$1" && env -i HOME="$2" PATH="$PATH" KB_NUDGE=weekly:$(date +%a | tr A-Z a-z) "$3"' _ \
+  "$TMP/session-cwd" "$SHOME" "$SFX/scripts/kb-session-start"
 
 # --------------------------------------------------------- check-secrets ----
 # The check with the most expensive failure, and until now the only one with no
@@ -2784,7 +2795,7 @@ echo
 # drifted must both land in the library's queue, the session-start nudge must name both,
 # the fact must be untouched, and the library must still pass check-kb with its queue in it.
 X="$TMP/exit5"; build_clean "$X/kb/fx"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$X/kb/fx/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$X/kb/fx/INDEX.md"
 printf 'port=8080\n' > "$X/kb/fx/system-config.txt"
 fm service-port general > "$X/kb/fx/service-port.md"
 printf '%s\n' '# Service Port' '' '## Port' '' 'The service listens on port 9090.' '' \
@@ -3668,7 +3679,7 @@ case_run "kb-prepare: an unknown skill is a usage error" 2 "" -- prep organize "
 case_run "kb-prepare: its output names the packet, never its text" 1 "" -- \
   bash -c '"$1" distill "$2" --out "$3" --claude "$4" --force 2>&1 | grep -q SCHED-CANARY' _ "$ENGINE/scripts/kb-prepare" "$PL" "$PK/out3" "$PK/claude"
 
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$PL/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$PL/INDEX.md"
 rm -f "$STUB_LOG"
 case_run "kb-prepare audit: a sweep not due runs no model" 0 "nothing to prepare" -- prep audit "$PL" --out "$PO"
 sed -i "s/^last_swept: .*\$/last_swept: never/" "$PL/INDEX.md"
@@ -3858,8 +3869,8 @@ sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: manual/' "
 printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; false\n' >> "$RL/widgets.md"
 printf '\n## Live\n\nA live claim.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck (attended): true\n' >> "$RL/widgets.md"
 sed -i 's/^kb_contract: .*$/kb_contract: "2.1"/' "$RL/INDEX.md"
-for d in "$RL" "$RC"; do sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$d/INDEX.md"; done
-sed -i "s/^Verified: .*\$/Verified: $(date +%F) · by: agent · method: manual/" "$RC/widgets.md"
+for d in "$RL" "$RC"; do sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$d/INDEX.md"; done
+sed -i "s/^Verified: .*\$/Verified: $KB_TODAY · by: agent · method: manual/" "$RC/widgets.md"
 "$ENGINE/scripts/kb-verify" "$RL" --yes --unattended >/dev/null 2>&1
 for d in "$RL" "$RC"; do git -C "$d" add -A && git -C "$d" -c user.email=t@t -c user.name=t commit -qm init; done
 export KB_PACKETS="$RR/packets"; mkdir -p "$KB_PACKETS/fx"
@@ -3892,7 +3903,7 @@ printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$RM/INDEX.md"
 fm s-man general > "$RM/sources/s-man.md"; printf '# Source: s-man\n\n- **URL:** https://example.org/walled\n- **Liveness:** manual\n' >> "$RM/sources/s-man.md"
 case_run "kb-report: a sweep due lists the Liveness: manual stubs" 0 "" -- \
   bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md" && grep -qF "sources/s-man.md" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-due" "$WEEK"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$RM/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$RM/INDEX.md"
 case_run "kb-report: no sweep due, so the manual stubs are not listed" 1 "" -- \
   bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-calm" "$WEEK"
 
@@ -3915,7 +3926,7 @@ case_run "kb-report: ...and a registered archived library is still reported (#20
 
 # Issue #204 (b): kb-report lists a contract newer than the engine's, as kb-due does.
 RB="$RR/ahead"; build_clean "$RB"
-sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/; s/^kb_contract: .*\$/kb_contract: \"2.99\"/" "$RB/INDEX.md"
+sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/; s/^kb_contract: .*\$/kb_contract: \"2.99\"/" "$RB/INDEX.md"
 case_run "kb-report: a library on a contract newer than the engine is listed (#204)" 0 "newer than this engine" -- \
   kbr "$RAH" "$RR/ahead-out" "$RB"
 
@@ -4560,6 +4571,19 @@ case_run "kb-init: the contract version it writes is the newest in §14" 0 "the 
   init_contract "$ENGINE/scripts/kb-init" "$ENGINE/CONVENTIONS.md"
 sed 's/^kb_contract: "[0-9.]*"$/kb_contract: "2.0"/' "$ENGINE/scripts/kb-init" > "$TMP/kb-init-stale"
 case_run "kb-init: a stale contract version is caught" 1 "writes 2.0" -- init_contract "$TMP/kb-init-stale" "$ENGINE/CONVENTIONS.md"
+
+# ------------------------------------------- real-clock canaries: the frozen clock unset (#205) ----
+# The suite runs on KB_TODAY. These run with it unset, so the engine reads the real calendar, to
+# catch a script that only works when it is told the day (or that ignores the real one).
+RCL="$TMP/realclock"; build_clean "$RCL/lib"
+sed -i "s/^last_swept: never\$/last_swept: $(date +%F)/" "$RCL/lib/INDEX.md"
+sed -i "s/^Verified: .*\$/Verified: $(date +%F) · by: agent · method: manual/" "$RCL/lib/widgets.md"
+case_run "real clock: a library stamped and swept today is not due" 0 "" -- \
+  bash -c '[ -z "$(env -u KB_TODAY HOME="$3" KB_PACKETS="$3/packets" "$1" "$2" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$RCL/lib" "$RCL/home"
+case_run "real clock: ...and check-kb finds no stamp dated in the future" 0 "clean" -- \
+  env -u KB_TODAY "$ENGINE/scripts/check-kb" "$RCL/lib"
+case_run "real clock: kb-report names its file for the real ISO week, whatever KB_TODAY says" 0 "" -- \
+  bash -c 'env -u KB_TODAY HOME="$1" "$2" "$3" --out "$4" >/dev/null 2>&1; test -f "$4/$(date +%G-W%V).md"' _ "$TLH" "$ENGINE/scripts/kb-report" "$RCL/lib" "$RCL/reports"
 
 if [ "$FAIL" -eq 0 ]; then
   echo "run-checks: $PASS case(s), all as specified"
