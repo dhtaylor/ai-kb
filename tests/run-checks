@@ -34,17 +34,18 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 export HOME="$TMP/home"; mkdir -p "$HOME"
 # The same for every variable that moves a per-user location away from HOME: a CI runner sets
 # XDG_CONFIG_HOME, and with it set kb-schedule's test install landed in the runner's own config.
-unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_DATA_HOME XDG_CACHE_HOME KB_PACKETS KB_REPORTS KB_CLAUDE
+unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_DATA_HOME XDG_CACHE_HOME
 # Git sets GIT_DIR, GIT_INDEX_FILE and their kin for a hook, and the engine's pre-commit hook runs
 # this suite. Inherited, they point every fixture's git command at the repository being committed
 # to: a commit from a linked worktree once set that repository's core.bare and core.hooksPath and
 # staged the deletion of every file (#127). Clear each variable git itself calls repository-local.
 unset $(git rev-parse --local-env-vars)
-# The engine's own variables, and git's identity and config overrides, from a caller's shell. They win
-# over what a fixture sets: KB_LIBRARY_HOME over a registry's kb.libraryHome and <engine>/kb, so five
-# kb-library cases failed with it exported (#181). KB_ENGINE_ROOT is set explicitly, with env, by the
-# cases that need it. HOME is already a throwaway, but GIT_CONFIG_GLOBAL/SYSTEM bypass it.
-SUITE_CLEARED_VARS="KB_LIBRARY_HOME KB_ENGINE_ROOT KB_SYSTEMCTL KB_CRONTAB KB_NUDGE KB_TODAY GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE"
+# The engine's own variables, from kbengine.env (the one list of what the engine reads), and git's
+# identity and config overrides, from a caller's shell. They win over what a fixture sets:
+# KB_LIBRARY_HOME over a registry's kb.libraryHome and <engine>/kb, so five kb-library cases failed
+# with it exported (#181). KB_ENGINE_ROOT is set explicitly, with env, by the cases that need it.
+# HOME is already a throwaway, but GIT_CONFIG_GLOBAL/SYSTEM bypass it.
+SUITE_CLEARED_VARS="$(PYTHONPATH="$ENGINE/scripts" python3 -m kbengine.env --names | tr '\n' ' ')GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_NOSYSTEM GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_AUTHOR_DATE GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL GIT_COMMITTER_DATE"
 unset $SUITE_CLEARED_VARS
 # The suite's clock is frozen (#205): every date a fixture is built from, and the day the engine
 # judges it on, is this one, so a case's result does not change as the real calendar moves. It is
@@ -121,6 +122,7 @@ echo "run-checks: $ENGINE"
 # ------------------------------------------------------ the suite's own environment ----
 case_run "suite clears git's repository environment, so a hook cannot aim fixtures at its repo (#127)" 0 "" -- \
   bash -c 'for v in $(git rev-parse --local-env-vars); do [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done'
+# KB_TODAY is on the list, and is skipped here: it is cleared, then set to the suite's frozen day.
 case_run "suite clears the engine's own environment, so a caller's shell cannot change a result (#181)" 0 "" -- \
   bash -c 'for v in $0; do [ "$v" = KB_TODAY ] && continue; [ -z "${!v+x}" ] || { echo "$v is set"; exit 1; }; done' "$SUITE_CLEARED_VARS"
 
