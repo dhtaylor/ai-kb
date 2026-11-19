@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `tests/run-checks` runs on a frozen clock (#205): it exports `KB_TODAY=2026-10-10` and builds every
+  fixture date from it, where it used the real date, so no case changes result as the calendar moves.
+  Cases that check what the real clock does (the weekly nudge's weekday, `kb-report`'s ISO-week
+  filename, a library stamped and swept today) run with it unset. No change to `scripts/`.
 - `tests/run-checks` compares the paths `kb-session-start` and `kb-bootstrap` resolve in bash (the
   reports folder, the backup folder, the registry) with `kbengine.env`'s, with and without
   `KB_REPORTS` and with `XDG_*` pointing elsewhere (#205). A change to one that the other does not
