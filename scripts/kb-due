@@ -82,7 +82,7 @@ Exit 0 always: being due is a nudge, never a failure.
 """
 import importlib.machinery, importlib.util, pathlib, shlex, sys
 
-from kbengine import attention, clock, contract
+from kbengine import attention, clock, contract, registry
 from kbengine.attention import Failed, label
 
 
@@ -233,9 +233,8 @@ def main(argv) -> int:
 
     trees, registered, consumed = [], {}, set()
     try:   # the registry's one reader; an unreadable registry must not crash a session
-        kl = load_module("kb_libraries", "kb-libraries")
-        registered = {p: n for n, p in kl.installed().items()}
-        consumed = {e["path"].resolve() for e in kl.entries() if e["read_only"]}   # ADR-0020
+        registered = {p: n for n, p in registry.installed().items()}
+        consumed = registry.read_only_paths()   # ADR-0020
         trees += list(registered)
     except Exception as e:
         print(f"kb-due: library registry unreadable, registered libraries skipped: {e}", file=sys.stderr)

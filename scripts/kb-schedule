@@ -38,7 +38,7 @@ when a step could not run. install and remove exit 0, or 2 on a usage or system 
 """
 import datetime, fcntl, importlib.machinery, importlib.util, os, pathlib, subprocess, sys
 
-from kbengine import env
+from kbengine import env, registry
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 SCRIPTS = ENGINE / "scripts"
@@ -231,21 +231,16 @@ def run() -> int:
         return rc
 
     note("run started")
-    try:
-        libs = subprocess.run([str(SCRIPTS / "kb-libraries")], capture_output=True, text=True).stdout
-    except OSError:
-        libs = ""
-    try:   # a read-only library is its publisher's to verify (ADR-0020)
-        consumed = {l.split("\t")[0] for l in subprocess.run(
-            [str(SCRIPTS / "kb-libraries"), "--read-only"], capture_output=True, text=True).stdout.splitlines()}
-    except OSError:
-        consumed = set()
+    try:   # an unreadable registry serves nothing, as it always has here
+        libs = registry.entries()
+    except (RuntimeError, OSError):
+        libs = []
     rcs = []
-    for line in libs.splitlines():
-        state, name, path = (line.split("\t") + ["", "", ""])[:3]
-        if state != "ok":
+    for e in libs:
+        name, path = e["name"], str(e["path"])
+        if e["state"] != "ok":
             continue
-        if name in consumed:
+        if e["read_only"]:   # a read-only library is its publisher's to verify (ADR-0020)
             note(f"{name} skipped: read-only")
             continue
         rcs.append(step(f"kb-verify {name}", [str(SCRIPTS / "kb-verify"), path, "--yes", "--unattended"]))
