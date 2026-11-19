@@ -8,20 +8,19 @@ append(root, findings, tool, dry_run=False)      write the ones not already queu
 open_findings(text)                              the open records, one per id, the first winning.
 problems(text)                                   what the readers skip or double-count -> Problems.
 parse_records(text)                              every record, whatever its status.
-read_only_entry(path)                            (kb-libraries, registry entry or None) (ADR-0020).
+read_only_entry(path)                            (registry, entry or None) (ADR-0020).
 render(finding)                                  one finding as its queue text.
 """
-import hashlib, importlib.machinery, importlib.util, os, pathlib, re, sys
+import hashlib, os, pathlib, re
 from dataclasses import dataclass
 
-from . import clock, library
+from . import clock, library, registry
 
 MAX_LEN = 200
 ID_RE = re.compile(r"^\s*-\s*id:\s*([0-9a-f]{8})\s*$")
 KV_RE = re.compile(r'^\s{2}(\w+):\s*"?(.*?)"?\s*$')
 FENCE_OPEN = "```yaml\n"
 FENCE_CLOSE = "```\n"
-SCRIPTS = pathlib.Path(__file__).resolve().parent.parent
 
 
 # ------------------------------------------------------------------------------ findings ----
@@ -157,14 +156,9 @@ def ensure_routed(library_root: pathlib.Path):
 
 
 def read_only_entry(path):
-    """(kb-libraries, the registry entry if the library at path is registered read-only (ADR-0020),
-    else None). The registry is not in the package yet, so it is loaded from scripts/."""
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader("kb_libraries", str(SCRIPTS / "kb-libraries"))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod, mod.read_only(path)
+    """(the registry, the entry if the library at path is registered read-only (ADR-0020), else
+    None)."""
+    return registry, registry.read_only(path)
 
 
 def append(library_root, findings, tool: str, dry_run: bool = False) -> Result:
@@ -175,9 +169,9 @@ def append(library_root, findings, tool: str, dry_run: bool = False) -> Result:
     without writing."""
     root = pathlib.Path(library_root)
     queue_path = root / "needs-attention.md"
-    kl, ro = read_only_entry(root)
+    reg, ro = read_only_entry(root)
     if ro:
-        return Result([], [], kl.refusal(tool, ro))
+        return Result([], [], reg.refusal(tool, ro))
     seen = existing_ids(queue_path)
     fresh, new, skipped = [], [], []
     for f in findings:
