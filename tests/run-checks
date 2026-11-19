@@ -2407,19 +2407,19 @@ case_run "no CODEOWNERS resolves to unassigned, never a guess" 0 "unassigned" --
 # the same name in ANOTHER library is a wrong citation and has to stay one.
 build_clean "$TMP/ge/kb/fx"
 build_clean "$TMP/ge/kb/other"
-grade() { # grade <name> <want-exit> <want-text> <Q1 record>
+grade_eval() { # grade_eval <name> <want-exit> <want-text> <Q1 record>
   printf '%s\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' "$4" > "$TMP/ge/answers"
   case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/ge/kb/fx" "$TMP/ge/answers"
 }
-grade "grounded answer, library-relative citation, passes" 0 "3/3 passed" \
+grade_eval "grounded answer, library-relative citation, passes" 0 "3/3 passed" \
   "Q1|widgets.md|A widget holds up to 12 things."
-grade "library-prefixed citation resolves to the same file" 0 "3/3 passed" \
+grade_eval "library-prefixed citation resolves to the same file" 0 "3/3 passed" \
   "Q1|fx/widgets.md|A widget holds up to 12 things."
-grade "kb-rooted citation resolves to the same file" 0 "3/3 passed" \
+grade_eval "kb-rooted citation resolves to the same file" 0 "3/3 passed" \
   "Q1|kb/fx/widgets.md|A widget holds up to 12 things."
-grade "same-named file in another library is a wrong citation" 1 "expected 'widgets.md'" \
+grade_eval "same-named file in another library is a wrong citation" 1 "expected 'widgets.md'" \
   "Q1|other/widgets.md|A widget holds up to 12 things."
-grade "paraphrase of the excerpt is not grounded" 1 "excerpt not in answer" \
+grade_eval "paraphrase of the excerpt is not grounded" 1 "excerpt not in answer" \
   "Q1|widgets.md|Widgets take a dozen items at most."
 # The library given as a RELATIVE path: "." has no parent to anchor on unless it is
 # resolved first, and a kb-rooted citation then failed while graded from inside it.
@@ -3003,101 +3003,101 @@ PY
 sed -i 's/up to 12 things$/up to 12 things. See [[beta:widgets]]./' "$A/widgets.md"
 # Installed means registered (ADR-0014): alpha and beta are, in this suite's own registry.
 "$ENGINE/scripts/kb-library" add "$A" >/dev/null; "$ENGINE/scripts/kb-library" add "$B" >/dev/null
-grade() { # grade <name> <want-exit> <want-text> <Q-mapping lines...>
+grade_routing() { # grade_routing <name> <want-exit> <want-text> <Q-mapping lines...>
   local name="$1" ex="$2" tx="$3"; shift 3
   printf '%s\n' "$@" > "$RT/map"
   case_run "grade-routing: $name" "$ex" "$tx" -- "$ENGINE/scripts/grade-routing" "$A" "$RT/map"
 }
 mk_tr "$RT/pass.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
-grade "reads the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|pass.jsonl"
+grade_routing "reads the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|pass.jsonl"
 # Issue #78: kb-retrieve outlines the routed file's headings, then reads only the section that
 # answers. A partial Read (offset/limit) of the expected file is a Read of it.
 mk_tr "$RT/section.jsonl" "Read:$A/INDEX.md" "Grep:$A/widgets.md|content" "Read:$A/widgets.md|5|6"
-grade "an outline Grep, then a section Read of the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|section.jsonl"
+grade_routing "an outline Grep, then a section Read of the expected file: pass" 0 "1/1 graded case(s) passed" "Q1|section.jsonl"
 mk_tr "$RT/wrong.jsonl" "Read:$A/INDEX.md" "Read:$A/other.md"
-grade "reads a different file in the right library: fail" 1 "never Read" "Q1|wrong.jsonl"
+grade_routing "reads a different file in the right library: fail" 1 "never Read" "Q1|wrong.jsonl"
 mk_tr "$RT/nothing.jsonl" "Glob:$A/*.md"
-grade "reads nothing: fail" 1 "never Read" "Q1|nothing.jsonl"
+grade_routing "reads nothing: fail" 1 "never Read" "Q1|nothing.jsonl"
 mk_tr "$RT/unneeded.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
-grade "content read from an unneeded library: fail" 1 "unneeded beta" "Q1|unneeded.jsonl"
+grade_routing "content read from an unneeded library: fail" 1 "unneeded beta" "Q1|unneeded.jsonl"
 # Issue #88: the knowledge base is the registered libraries. A read of anything else, such as
 # an engine decision record, is off-KB and fails the case, negative cases included.
 ADR="$ENGINE/documents/decisions/0002-governance-without-enforcement.md"
 mk_tr "$RT/offkb-neg.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md|1|5" "Read:$ADR"
-grade "a negative case that reads an engine ADR: off-KB fails" 1 "off-KB: Read $ADR" "Q2|offkb-neg.jsonl"
+grade_routing "a negative case that reads an engine ADR: off-KB fails" 1 "off-KB: Read $ADR" "Q2|offkb-neg.jsonl"
 mk_tr "$RT/offkb-pos.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$ADR|10|20"
-grade "a positive case that also reads an engine ADR: off-KB fails" 1 "off-KB" "Q1|offkb-pos.jsonl"
+grade_routing "a positive case that also reads an engine ADR: off-KB fails" 1 "off-KB" "Q1|offkb-pos.jsonl"
 HIT="$ADR:12:push protection"   # one content-mode match line
 mk_tr "$RT/offkb-grep.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Grep:$ENGINE/documents|content@@$HIT"
-grade "a content-mode Grep showing an engine document: off-KB fails" 1 "off-KB: Grep returned $ADR" "Q1|offkb-grep.jsonl"
+grade_routing "a content-mode Grep showing an engine document: off-KB fails" 1 "off-KB: Grep returned $ADR" "Q1|offkb-grep.jsonl"
 mk_tr "$RT/offkb-list.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Grep:$ENGINE/documents|files_with_matches@@$ADR"
-grade "a Grep that only lists an engine document is not a read" 0 "1/1 graded" "Q1|offkb-list.jsonl"
+grade_routing "a Grep that only lists an engine document is not a read" 0 "1/1 graded" "Q1|offkb-list.jsonl"
 mk_tr "$RT/contract.jsonl" "Read:$ENGINE/CONVENTIONS.md" "Read:$A/INDEX.md" "Read:$A/widgets.md"
-grade "reading the contract the session context names is not off-KB" 0 "1/1 graded" "Q1|contract.jsonl"
+grade_routing "reading the contract the session context names is not off-KB" 0 "1/1 graded" "Q1|contract.jsonl"
 mk_tr "$RT/routeronly.jsonl" "Read:$A/INDEX.md" "Read:$B/INDEX.md" "Read:$A/widgets.md"
-grade "reading another library's router only is not content: pass" 0 "1/1 graded" "Q1|routeronly.jsonl"
+grade_routing "reading another library's router only is not content: pass" 0 "1/1 graded" "Q1|routeronly.jsonl"
 mk_tr "$RT/suffix.jsonl" "Read:$B/widgets.md"
-grade "same-named file in another library is not the expected file" 1 "never Read" "Q1|suffix.jsonl"
+grade_routing "same-named file in another library is not the expected file" 1 "never Read" "Q1|suffix.jsonl"
 mk_tr "$RT/golden.jsonl" "Read:$A/widgets.md" "Read:$A/fx-golden.md"
-grade "reading the golden set: contamination fails" 1 "contamination" "Q1|golden.jsonl"
+grade_routing "reading the golden set: contamination fails" 1 "contamination" "Q1|golden.jsonl"
 mk_tr "$RT/evalfolder.jsonl" "Read:$A/widgets.md" "Read:$RT/documents/eval-2026-01-01-sample/key.json"
-grade "reading an eval folder: contamination fails" 1 "contamination" "Q1|evalfolder.jsonl"
+grade_routing "reading an eval folder: contamination fails" 1 "contamination" "Q1|evalfolder.jsonl"
 mk_tr "$RT/globgolden.jsonl" "Read:$A/widgets.md" "Glob:$A/*-golden.md@@$A/fx-golden.md"
-grade "globbing for the golden set, result lists it: contamination fails" 1 "contamination" "Q1|globgolden.jsonl"
+grade_routing "globbing for the golden set, result lists it: contamination fails" 1 "contamination" "Q1|globgolden.jsonl"
 mk_tr "$RT/globgolden2.jsonl" "Read:$A/widgets.md" "Glob:$A/*-golden.md@@NONE"
-grade "globbing for the golden set, no result: contamination fails" 1 "contamination" "Q1|globgolden2.jsonl"
+grade_routing "globbing for the golden set, no result: contamination fails" 1 "contamination" "Q1|globgolden2.jsonl"
 mk_tr "$RT/dots.jsonl" "Read:$A/../alpha/./widgets.md"
-grade "absolute path with .. and . segments still resolves" 0 "1/1 graded" "Q1|dots.jsonl"
+grade_routing "absolute path with .. and . segments still resolves" 0 "1/1 graded" "Q1|dots.jsonl"
 mk_tr "$RT/kbrel.jsonl" "Read:kb/alpha/widgets.md"
-grade "kb-rooted relative path still resolves" 0 "1/1 graded" "Q1|kbrel.jsonl"
+grade_routing "kb-rooted relative path still resolves" 0 "1/1 graded" "Q1|kbrel.jsonl"
 mk_tr "$RT/librel.jsonl" "Read:alpha/widgets.md"
-grade "library-prefixed relative path still resolves" 0 "1/1 graded" "Q1|librel.jsonl"
+grade_routing "library-prefixed relative path still resolves" 0 "1/1 graded" "Q1|librel.jsonl"
 mk_tr "$RT/refusal.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md"
-grade "negative case: reads are reported, not required" 0 "1/1 graded" "Q2|refusal.jsonl"
-grade "negative case: contamination still fails" 1 "contamination" "Q2|golden.jsonl"
+grade_routing "negative case: reads are reported, not required" 0 "1/1 graded" "Q2|refusal.jsonl"
+grade_routing "negative case: contamination still fails" 1 "contamination" "Q2|golden.jsonl"
 # Issue #122: the contract forbids *-golden.md and documents/eval-*/, not a routed
 # sources/eval-*.md citation stub. Only the forbidden shapes are contamination.
 STUB="$A/sources/eval-2026-10-12-routing-run.md"
 mk_tr "$RT/evstub-read.jsonl" "Read:$A/widgets.md" "Read:$STUB"
-grade "reading a sources/eval-* stub is not contamination (issue #122)" 0 "1/1 graded" "Q1|evstub-read.jsonl"
+grade_routing "reading a sources/eval-* stub is not contamination (issue #122)" 0 "1/1 graded" "Q1|evstub-read.jsonl"
 mk_tr "$RT/evstub-grep.jsonl" "Read:$A/widgets.md" "Grep:$A|files_with_matches@@$STUB"
-grade "a Grep listing a sources/eval-* stub is not contamination (issue #122)" 0 "1/1 graded" "Q1|evstub-grep.jsonl"
+grade_routing "a Grep listing a sources/eval-* stub is not contamination (issue #122)" 0 "1/1 graded" "Q1|evstub-grep.jsonl"
 mk_tr "$RT/evdoc-grep.jsonl" "Read:$A/widgets.md" "Grep:$A|files_with_matches@@$A/documents/eval-2026-10-12/README.md"
-grade "a Grep listing documents/eval-*/README.md: contamination fails (issue #122)" 1 "contamination" "Q1|evdoc-grep.jsonl"
+grade_routing "a Grep listing documents/eval-*/README.md: contamination fails (issue #122)" 1 "contamination" "Q1|evdoc-grep.jsonl"
 mk_tr "$RT/evdir-grep.jsonl" "Read:$A/widgets.md" "Grep:$A/documents/eval-2026-10-12@@NONE"
-grade "a Grep scoped to a documents/eval-* folder: contamination fails (issue #122)" 1 "contamination" "Q1|evdir-grep.jsonl"
+grade_routing "a Grep scoped to a documents/eval-* folder: contamination fails (issue #122)" 1 "contamination" "Q1|evdir-grep.jsonl"
 # Issue #121: ripgrep omits the file name when the Grep's path is one file (12:text). Every
 # result line belongs to that file: content in content mode, a listing otherwise. A Grep is
 # still not a Read of the expected file (owner decision), so criterion (a) is unchanged.
 mk_tr "$RT/one-content.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|content@@5:A widget holds up to 12 things."
-grade "a single-file content Grep is content from that library (issue #121)" 1 "unneeded beta" "Q1|one-content.jsonl"
+grade_routing "a single-file content Grep is content from that library (issue #121)" 1 "unneeded beta" "Q1|one-content.jsonl"
 mk_tr "$RT/one-list.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|count@@5"
-grade "a single-file count Grep is a listing, not content (issue #121)" 0 "1/1 graded" "Q1|one-list.jsonl"
+grade_routing "a single-file count Grep is a listing, not content (issue #121)" 0 "1/1 graded" "Q1|one-list.jsonl"
 mk_tr "$RT/one-nomatch.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|content@@No matches found"
-grade "a single-file Grep with no matches attributes nothing (issue #121)" 0 "1/1 graded" "Q1|one-nomatch.jsonl"
+grade_routing "a single-file Grep with no matches attributes nothing (issue #121)" 0 "1/1 graded" "Q1|one-nomatch.jsonl"
 mk_tr "$RT/one-golden.jsonl" "Read:$A/widgets.md" "Grep:$A/fx-golden.md|content@@3:question: x"
-grade "a single-file content Grep of the golden set: contamination fails (issue #121)" 1 "contamination" "Q1|one-golden.jsonl"
+grade_routing "a single-file content Grep of the golden set: contamination fails (issue #121)" 1 "contamination" "Q1|one-golden.jsonl"
 # A path with a -<digits>- segment (a session UUID in a checkout path) must not be split there
 # when a content-mode line is parsed: path-N-text, path:N:text.
 mk_tr "$RT/dashseg.jsonl" "Read:$A/widgets.md" "Grep:$A|content@@$A/run-4444-x/fx-golden.md-12-context line"
-grade "a content-mode Grep line whose path contains -4444- is not split there" 1 "contamination" "Q1|dashseg.jsonl"
+grade_routing "a content-mode Grep line whose path contains -4444- is not split there" 1 "contamination" "Q1|dashseg.jsonl"
 mk_tr "$RT/one-notread.jsonl" "Read:$A/INDEX.md" "Grep:$A/widgets.md|content@@5:A widget holds up to 12 things."
-grade "a single-file content Grep is not a Read of the expected file (issue #121)" 1 "never Read" "Q1|one-notread.jsonl"
+grade_routing "a single-file content Grep is not a Read of the expected file (issue #121)" 1 "never Read" "Q1|one-notread.jsonl"
 mk_tr "$RT/one-xroot.jsonl" "Read:$A/widgets.md" "Grep:$B/widgets.md|content@@5:A widget holds up to 12 things."
-grade "a single-file content Grep supplies a cross-root case's sibling content (issue #121)" 0 "1/1 graded" "Q4|one-xroot.jsonl"
+grade_routing "a single-file content Grep supplies a cross-root case's sibling content (issue #121)" 0 "1/1 graded" "Q4|one-xroot.jsonl"
 # Issue #40: a subagent that searched some other knowledge tree read nothing under kb/, and
 # its refusal looked like a correct one. Any case, negative included, must read the engine's kb/.
 mkdir -p "$RT/legacy/knowledge"; printf '# legacy
 ' > "$RT/legacy/knowledge/INDEX.md"
 mk_tr "$RT/legacy.jsonl" "Read:$RT/legacy/knowledge/INDEX.md"
-grade "negative case answered from another knowledge tree: fail" 1 "no installed library was Read" "Q2|legacy.jsonl"
+grade_routing "negative case answered from another knowledge tree: fail" 1 "no installed library was Read" "Q2|legacy.jsonl"
 mk_tr "$RT/xboth.jsonl" "Read:$A/INDEX.md" "Read:$A/widgets.md" "Read:$B/widgets.md"
-grade "cross-root case: both libraries read: pass" 0 "1/1 graded" "Q4|xboth.jsonl"
-grade "cross-root case: linked library never read: fail" 1 "needed beta" "Q4|pass.jsonl"
-grade "several cases: one failing fails the run" 1 "1/2 graded" "Q1|pass.jsonl" "Q4|pass.jsonl"
-grade "mapping line without a transcript is a format error" 2 "expected Q<n>|<transcript>" "Q1"
-grade "case outside the golden set is a format error" 2 "not a case" "Q9|pass.jsonl"
-grade "missing transcript is a format error" 2 "not found" "Q1|absent.jsonl"
+grade_routing "cross-root case: both libraries read: pass" 0 "1/1 graded" "Q4|xboth.jsonl"
+grade_routing "cross-root case: linked library never read: fail" 1 "needed beta" "Q4|pass.jsonl"
+grade_routing "several cases: one failing fails the run" 1 "1/2 graded" "Q1|pass.jsonl" "Q4|pass.jsonl"
+grade_routing "mapping line without a transcript is a format error" 2 "expected Q<n>|<transcript>" "Q1"
+grade_routing "case outside the golden set is a format error" 2 "not a case" "Q9|pass.jsonl"
+grade_routing "missing transcript is a format error" 2 "not found" "Q1|absent.jsonl"
 # Issue #36: a cross-root case may name its expected_file in the other library, as
 # <library>:<path>. The oracle then says WHICH file holds the answer, and every tier checks it.
 XR="$TMP/xr"; build_clean "$XR/kb/alpha"; build_clean "$XR/kb/beta"
@@ -3324,27 +3324,27 @@ case_run "library hook on an unregistered copy skips cross-library links" 0 "not
 NL=$'\n'
 fm golden-ratio general > "$A/golden-ratio.md"; printf '# Golden ratio\n\nPhi.\n' >> "$A/golden-ratio.md"
 mk_tr "$RT/gr.jsonl" "Read:$A/widgets.md" "Read:$A/golden-ratio.md"
-grade "a file merely named golden-ratio.md is not the golden set" 0 "1/1 graded" "Q1|gr.jsonl"
+grade_routing "a file merely named golden-ratio.md is not the golden set" 0 "1/1 graded" "Q1|gr.jsonl"
 mk_tr "$RT/gp.jsonl" "Read:$A/INDEX.md" "Grep:$A|content@@$A/widgets.md:5:A widget holds up to 12 things." "Read:$A/widgets.md"
-grade "Grep content hit in the expected file only: pass" 0 "1/1 graded" "Q1|gp.jsonl"
+grade_routing "Grep content hit in the expected file only: pass" 0 "1/1 graded" "Q1|gp.jsonl"
 mk_tr "$RT/gb.jsonl" "Grep:$A|content@@$A/fx-golden.md:9:  expected_excerpt: \"up to 12 things\"" "Read:$A/widgets.md"
-grade "Grep content that returns the golden set: contamination fails" 1 "Grep returned" "Q1|gb.jsonl"
+grade_routing "Grep content that returns the golden set: contamination fails" 1 "Grep returned" "Q1|gb.jsonl"
 mk_tr "$RT/gbf.jsonl" "Grep:$A|files_with_matches@@$A/fx-golden.md" "Read:$A/widgets.md"
-grade "Grep file list naming the golden set: contamination fails" 1 "Grep returned" "Q1|gbf.jsonl"
+grade_routing "Grep file list naming the golden set: contamination fails" 1 "Grep returned" "Q1|gbf.jsonl"
 mk_tr "$RT/gbc.jsonl" "Grep:$A|content@@$A/widgets.md-4-text${NL}--${NL}$A/fx-golden.md-9-x" "Read:$A/widgets.md"
-grade "Grep context line (path-line-text) naming the golden set fails" 1 "Grep returned" "Q1|gbc.jsonl"
+grade_routing "Grep context line (path-line-text) naming the golden set fails" 1 "Grep returned" "Q1|gbc.jsonl"
 mk_tr "$RT/gc.jsonl" "Grep:$RT/kb|content@@$A/widgets.md:5:a${NL}$B/widgets.md:5:a" "Read:$A/widgets.md"
-grade "Grep content returning another library's file: unneeded content fails" 1 "unneeded beta" "Q1|gc.jsonl"
+grade_routing "Grep content returning another library's file: unneeded content fails" 1 "unneeded beta" "Q1|gc.jsonl"
 mk_tr "$RT/gcl.jsonl" "Grep:$RT/kb|files_with_matches@@$A/widgets.md${NL}$B/widgets.md" "Read:$A/widgets.md"
-grade "Grep file list naming another library: reported, not failed" 0 "listed by Grep, not read: beta" "Q1|gcl.jsonl"
+grade_routing "Grep file list naming another library: reported, not failed" 0 "listed by Grep, not read: beta" "Q1|gcl.jsonl"
 mk_tr "$RT/gcc.jsonl" "Grep:$RT/kb|count@@$A/widgets.md:1${NL}$B/widgets.md:1" "Read:$A/widgets.md"
-grade "Grep counts naming another library: reported, not failed" 0 "1/1 graded" "Q1|gcc.jsonl"
+grade_routing "Grep counts naming another library: reported, not failed" 0 "1/1 graded" "Q1|gcc.jsonl"
 mk_tr "$RT/gn.jsonl" "Grep:$A|content@@NONE" "Read:$A/widgets.md"
-grade "unanswered Grep whose scope holds the golden set fails, and says so" 1 "scope assumed read" "Q1|gn.jsonl"
+grade_routing "unanswered Grep whose scope holds the golden set fails, and says so" 1 "scope assumed read" "Q1|gn.jsonl"
 mk_tr "$RT/gn2.jsonl" "Grep:$RT/kb|content@@NONE" "Read:$A/widgets.md"
-grade "unanswered content Grep over kb/ counts every library as read" 1 "unneeded beta" "Q1|gn2.jsonl"
+grade_routing "unanswered content Grep over kb/ counts every library as read" 1 "unneeded beta" "Q1|gn2.jsonl"
 mk_tr "$RT/gn3.jsonl" "Grep:$RT/kb|files_with_matches@@NONE" "Read:$A/widgets.md"
-grade "unanswered files-mode Grep: golden set in scope still fails" 1 "Grep scope holds" "Q1|gn3.jsonl"
+grade_routing "unanswered files-mode Grep: golden set in scope still fails" 1 "Grep scope holds" "Q1|gn3.jsonl"
 # A Grep's exclusion glob (leading !) names what it skips, not what it touched. kb-retrieve is
 # told to pass one, so a compliant agent must not fail for it; with a result, only the result counts.
 mk_grep() { # mk_grep <out.jsonl> <path> <mode> <glob> <head_limit|-> <result|NONE> <then-Read file>
@@ -3366,19 +3366,19 @@ PY
 }
 XG='!{**/*-golden.md,**/documents/eval-*/**}'
 mk_grep "$RT/xg1.jsonl" "$A" content "$XG" - "$A/widgets.md:5:A widget holds up to 12 things." "$A/widgets.md"
-grade "exclusion glob with a result of expected-library files: pass" 0 "contamination=none" "Q1|xg1.jsonl"
+grade_routing "exclusion glob with a result of expected-library files: pass" 0 "contamination=none" "Q1|xg1.jsonl"
 mk_grep "$RT/xg2.jsonl" "$A" content "$XG" - NONE "$A/widgets.md"
-grade "exclusion glob with no result is not contamination" 0 "contamination=none" "Q1|xg2.jsonl"
+grade_routing "exclusion glob with no result is not contamination" 0 "contamination=none" "Q1|xg2.jsonl"
 mk_grep "$RT/xg3.jsonl" "$A" files_with_matches "$XG" - NONE "$A/widgets.md"
-grade "exclusion glob, files mode, no result: the golden set is excluded from scope" 0 "1/1 graded" "Q1|xg3.jsonl"
+grade_routing "exclusion glob, files mode, no result: the golden set is excluded from scope" 0 "1/1 graded" "Q1|xg3.jsonl"
 mk_grep "$RT/xg4.jsonl" "$A" content "$XG" - "$A/fx-golden.md:9:  expected_excerpt: x" "$A/widgets.md"
-grade "exclusion glob does not excuse a result that returns the golden set" 1 "Grep returned" "Q1|xg4.jsonl"
+grade_routing "exclusion glob does not excuse a result that returns the golden set" 1 "Grep returned" "Q1|xg4.jsonl"
 mk_grep "$RT/xg5.jsonl" "$RT/kb" content "$XG" - NONE "$A/widgets.md"
-grade "exclusion glob, unanswered Grep over kb/: contamination none, other libraries still read" 1 "contamination=none" "Q1|xg5.jsonl"
+grade_routing "exclusion glob, unanswered Grep over kb/: contamination none, other libraries still read" 1 "contamination=none" "Q1|xg5.jsonl"
 mk_grep "$RT/cap.jsonl" "$RT/kb" content "$XG" 40 "kb/alpha/widgets.md:5:A widget holds up to 12 things.${NL}kb/alpha/INDEX.md:7:- widgets${NL}${NL}[Showing results with pagination = limit: 40, offset: 0]" "$A/widgets.md"
-grade "capped content Grep with a pagination note: content-in is the returned library only" 0 "content-in=alpha  contamination=none" "Q1|cap.jsonl"
+grade_routing "capped content Grep with a pagination note: content-in is the returned library only" 0 "content-in=alpha  contamination=none" "Q1|cap.jsonl"
 printf 'not json\n' > "$RT/bad.jsonl"
-grade "transcript that is not JSONL is a format error" 2 "not JSON" "Q1|bad.jsonl"
+grade_routing "transcript that is not JSONL is a format error" 2 "not JSON" "Q1|bad.jsonl"
 case_run "grade-routing: no arguments is a usage error" 2 "usage" -- "$ENGINE/scripts/grade-routing"
 
 # --worktree sees what retrieval sees: untracked files too, but not ignored ones.
