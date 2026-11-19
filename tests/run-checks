@@ -60,6 +60,17 @@ fm() { # frontmatter: name, scope, [extra]
   printf -- '---\nname: %s\ndescription: a test fixture.\nmemory_type: reference\ndomain: fx\nscope: %s\n%smetadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n' "$1" "$2" "${3:-}"
 }
 
+# patch <file> <sed-expr>: edit a fixture in place, and stop the whole run if the edit changed
+# nothing. A sed that matches no line is a fixture that is not the one the case names, and the
+# case would pass all the same (#214). Not for an edit that may legitimately do nothing.
+patch() {
+  local f="$1" before
+  [ -f "$f" ] || { echo "run-checks: patch: no such file: $f" >&2; exit 2; }
+  before=$(cksum < "$f")
+  sed -i "$2" "$f"
+  [ "$(cksum < "$f")" != "$before" ] || { echo "run-checks: patch changed nothing in $f: sed '$2'" >&2; exit 2; }
+}
+
 # A valid library: router, one fact, a conformant golden set. Every defect fixture
 # below is this, with exactly one thing broken.
 #   build_clean <dir> [scope] [--swept V] [--contract V] [--budget N] [--stamp DATE] [--horizon V]
@@ -159,16 +170,16 @@ fm buried general > "$TMP/subtree/deep/buried.md"; printf '# Buried\n\nListed, b
 case_run "subtree under an unrouted sub-index is orphaned" 1 "deep/buried.md" -- "$ENGINE/scripts/check-kb" "$TMP/subtree"
 
 build_clean "$TMP/badname"
-sed -i 's/^name: widgets$/name: gadgets/' "$TMP/badname/widgets.md"
+patch "$TMP/badname/widgets.md" 's/^name: widgets$/name: gadgets/'
 case_run "name that disagrees with filename" 1 "does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/badname"
 
 # #203: a trailing comment is no part of a value, quoted or not. check-kb took `"widgets"  # note`
 # whole and failed it against the filename; a name that really disagrees still fails.
 build_clean "$TMP/qname"
-sed -i 's/^name: widgets$/name: "widgets"  # the slug/' "$TMP/qname/widgets.md"
+patch "$TMP/qname/widgets.md" 's/^name: widgets$/name: "widgets"  # the slug/'
 case_run "a quoted name with a trailing comment matches its filename (#203)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/qname"
 build_clean "$TMP/qbadname"
-sed -i 's/^name: widgets$/name: "gadgets"  # the slug/' "$TMP/qbadname/widgets.md"
+patch "$TMP/qbadname/widgets.md" 's/^name: widgets$/name: "gadgets"  # the slug/'
 case_run "...and a quoted name that disagrees still fails (#203)" 1 "name 'gadgets' does not match filename" -- "$ENGINE/scripts/check-kb" "$TMP/qbadname"
 
 build_clean "$TMP/deadlink"
@@ -218,7 +229,7 @@ case_run "a raw artifact under documents/ and a dotfile under sources/ pass" 0 "
 # sourced section is unstamped or nothing is stamped. A stamp may not be dated in the future.
 floor_lib() { # floor_lib <dir> <verified-value> -- widgets.md declares that floor
   build_clean "$1"
-  sed -i "s/^scope: general\$/scope: general\nverified: $2/" "$1/widgets.md"
+  patch "$1/widgets.md" "s/^scope: general\$/scope: general\nverified: $2/"
 }
 floor_lib "$TMP/floorok" 2026-09-22
 case_run "floor: matching the one stamp passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorok"
@@ -232,7 +243,7 @@ printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$TMP/floor
 case_run "floor: unknown over an unstamped sourced section passes" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorpartialok"
 floor_lib "$TMP/floorconf" 2026-09-22
 printf '\n## Colour\n\nstatus: CONFLICTED · since: 2026-01-01\n\nClaim A: red. Claim B: blue.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n\n## Size\n\nSource: manual\n' >> "$TMP/floorconf/widgets.md"
-sed -i 's/^## Size$/## Size\n\nstatus: CONFLICTED · since: 2026-01-01/' "$TMP/floorconf/widgets.md"
+patch "$TMP/floorconf/widgets.md" 's/^## Size$/## Size\n\nstatus: CONFLICTED · since: 2026-01-01/'
 case_run "floor: CONFLICTED sections' stamps and gaps are ignored" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/floorconf"
 floor_lib "$TMP/floorstacked" 2026-09-22
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\nSource: vendor sheet\nVerified: 2026-09-22 · by: agent · method: manual\n' >> "$TMP/floorstacked/widgets.md"
@@ -260,7 +271,7 @@ mkdir -p "$TMP/collidegit/documents/widgets"
 case_run "a file named like a folder under documents/ does not collide" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/collidegit"
 
 build_clean "$TMP/badfm"
-sed -i 's/^domain: fx$/domain fx/' "$TMP/badfm/widgets.md"          # a key with no colon
+patch "$TMP/badfm/widgets.md" 's/^domain: fx$/domain fx/'          # a key with no colon
 case_run "malformed frontmatter is reported, not skipped" 1 "unparseable frontmatter" -- \
   "$ENGINE/scripts/check-kb" "$TMP/badfm"
 
@@ -283,11 +294,11 @@ case_run "clean library passes check-scope" 0 "clean" -- "$ENGINE/scripts/check-
 
 # A trailing YAML comment is valid and must not hide the scope (issue #43).
 build_clean "$TMP/scopecomment"
-sed -i 's/^scope: general$/scope: general  # the tie-breaker says general/' "$TMP/scopecomment/widgets.md"
+patch "$TMP/scopecomment/widgets.md" 's/^scope: general$/scope: general  # the tie-breaker says general/'
 case_run "scope: with an inline comment is read" 0 "clean" -- "$ENGINE/scripts/check-scope" "$TMP/scopecomment"
 
 build_clean "$TMP/scopemix"
-sed -i 's/^scope: general$/scope: product:acme/' "$TMP/scopemix/widgets.md"
+patch "$TMP/scopemix/widgets.md" 's/^scope: general$/scope: product:acme/'
 case_run "file scope disagreeing with its library" 1 "disagrees with its library" -- "$ENGINE/scripts/check-scope" "$TMP/scopemix"
 
 build_clean "$TMP/libwithrepo" "repo:fx"
@@ -335,11 +346,11 @@ build_clean "$TMP/goldok"
 case_run "conformant golden set passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldok"
 
 build_clean "$TMP/goldexcerpt"
-sed -i 's/up to 12 things/up to 20 things/' "$TMP/goldexcerpt/fx-golden.md"
+patch "$TMP/goldexcerpt/fx-golden.md" 's/up to 12 things/up to 20 things/'
 case_run "golden excerpt not in the file it names" 1 "excerpt not found" -- "$ENGINE/scripts/check-golden" "$TMP/goldexcerpt"
 
 build_clean "$TMP/goldfile"
-sed -i 's/expected_file: widgets.md/expected_file: nowhere.md/' "$TMP/goldfile/fx-golden.md"
+patch "$TMP/goldfile/fx-golden.md" 's/expected_file: widgets.md/expected_file: nowhere.md/'
 case_run "golden record naming a missing file" 1 "does not exist" -- "$ENGINE/scripts/check-golden" "$TMP/goldfile"
 
 build_clean "$TMP/goldneg"
@@ -394,7 +405,7 @@ build_reach() { # build_reach <dir> <path of an extra file, library-relative> [r
   fm "$(basename "$2" .md)" general > "$1/$2"
   printf '# Gadgets\n\nA gadget weighs 7 grams.\n' >> "$1/$2"
   [ -n "${3:-}" ] && printf -- '- [gadgets](%s) — what gadgets weigh\n' "$2" >> "$1/INDEX.md"
-  sed -i "0,/expected_file: widgets.md/s||expected_file: $2|; 0,/up to 12 things/s||A gadget weighs 7 grams|" "$1/fx-golden.md"
+  patch "$1/fx-golden.md" "0,/expected_file: widgets.md/s||expected_file: $2|; 0,/up to 12 things/s||A gadget weighs 7 grams|"
 }
 build_reach "$TMP/goldreach" gadgets.md routed
 case_run "golden expected_file reachable through the router passes" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/goldreach"
@@ -403,7 +414,7 @@ case_run "golden expected_file that is an orphan fails" 1 "not reachable" -- "$E
 build_reach "$TMP/golddocs" documents/gadgets.md
 case_run "golden expected_file under documents/ (orphan-exempt) fails" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/golddocs"
 build_clean "$TMP/goldself"
-sed -i '0,/expected_file: widgets.md/s||expected_file: fx-golden.md|; 0,/up to 12 things/s|up to 12 things|case: positive|' "$TMP/goldself/fx-golden.md"
+patch "$TMP/goldself/fx-golden.md" '0,/expected_file: widgets.md/s||expected_file: fx-golden.md|; 0,/up to 12 things/s|up to 12 things|case: positive|'
 case_run "golden expected_file that is the golden set itself fails" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/goldself"
 build_clean "$TMP/goldnoindex"; rm "$TMP/goldnoindex/INDEX.md"
 case_run "golden library with no root INDEX.md fails reachability" 1 "not reachable" -- "$ENGINE/scripts/check-golden" "$TMP/goldnoindex"
@@ -591,7 +602,7 @@ REGD="$TMP/reg"; mkdir -p "$REGD/elsewhere" "$REGD/kb"
 build_clean "$REGD/elsewhere/alpha"; build_clean "$REGD/kb/beta"
 # A library's folder can be called anything: this one is a clone into gamma-main/.
 build_clean "$REGD/elsewhere/gamma-main"
-sed -i 's/^domain: gamma-main$/domain: gamma/' "$REGD/elsewhere/gamma-main/INDEX.md"
+patch "$REGD/elsewhere/gamma-main/INDEX.md" 's/^domain: gamma-main$/domain: gamma/'
 git -C "$REGD/elsewhere/gamma-main" add -A
 ln -s "$REGD/kb/beta" "$REGD/beta-link"
 REG_ALPHA="$(cd "$REGD/elsewhere/alpha" && pwd -P)"; REG_BETA="$(cd "$REGD/kb/beta" && pwd -P)"
@@ -611,26 +622,26 @@ cp -r "$REG_ALPHA" "$REGD/alpha-copy"
 case_run "registry: a second library with a registered, live name is refused" 1 "one name, one library" -- kbl add "$REGD/alpha-copy"
 mkdir -p "$REGD/notlib"
 case_run "registry: a folder with no INDEX.md is not a library" 1 "not a library" -- kbl add "$REGD/notlib"
-build_clean "$REGD/noname"; sed -i '/^domain:/d' "$REGD/noname/INDEX.md"
+build_clean "$REGD/noname"; patch "$REGD/noname/INDEX.md" '/^domain:/d'
 case_run "registry: a library that declares no name is refused" 1 "declares no domain" -- kbl add "$REGD/noname"
 # States: every non-ok state is reported by name, never dropped.
 mv "$REGD/elsewhere/gamma-main" "$REGD/gamma-moved"
 case_run "registry: a moved library is reported missing" 0 "missing	gamma	" -- kbls
 case_run "registry: re-adding a moved library updates its path" 0 "was missing at" -- kbl add "$REGD/gamma-moved"
 case_run "registry: ...and it is ok again" 0 "ok	gamma	" -- kbls
-sed -i 's/^domain: beta$/domain: beta2/' "$REG_BETA/INDEX.md"
+patch "$REG_BETA/INDEX.md" 's/^domain: beta$/domain: beta2/'
 case_run "registry: a library that renamed itself is a name mismatch" 0 "name-mismatch	beta	" -- kbls
-sed -i 's/^domain: beta2$/domain: beta/' "$REG_BETA/INDEX.md"
+patch "$REG_BETA/INDEX.md" 's/^domain: beta2$/domain: beta/'
 mv "$REG_BETA/INDEX.md" "$REG_BETA/INDEX.md.off"
 case_run "registry: a registered folder with no INDEX.md is not-a-library" 0 "not-a-library	beta	" -- kbls
 mv "$REG_BETA/INDEX.md.off" "$REG_BETA/INDEX.md"
 # A library on a contract major this engine does not support is not served (ADR-0016), and
 # neither is one whose version cannot be read (here, unquoted). Only state ok is served.
-sed -i 's/^kb_contract: .*$/kb_contract: "3.0"/' "$REG_BETA/INDEX.md"
+patch "$REG_BETA/INDEX.md" 's/^kb_contract: .*$/kb_contract: "3.0"/'
 case_run "registry: an unsupported contract major is unsupported-contract" 0 "unsupported-contract	beta	" -- kbls
-sed -i 's/^kb_contract: .*$/kb_contract: 2.1/' "$REG_BETA/INDEX.md"
+patch "$REG_BETA/INDEX.md" 's/^kb_contract: .*$/kb_contract: 2.1/'
 case_run "registry: an unreadable contract version is unsupported-contract" 0 "unsupported-contract	beta	" -- kbls
-sed -i 's/^kb_contract: .*$/kb_contract: "2.1"/' "$REG_BETA/INDEX.md"
+patch "$REG_BETA/INDEX.md" 's/^kb_contract: .*$/kb_contract: "2.1"/'
 case_run "registry: ...and a supported version is ok again" 0 "ok	beta	" -- kbls
 case_run "registry: remove unregisters and deletes nothing" 0 "nothing at $REG_ALPHA was deleted" -- kbl remove alpha
 case_run "registry: ...the files are still there" 0 "" -- test -f "$REG_ALPHA/widgets.md"
@@ -648,7 +659,7 @@ OHOME="$TMP/ovl-home"; mkdir -p "$OHOME"; OVD="$TMP/ovl"
 kbo() { HOME="$OHOME" "$ENGINE/scripts/kb-library" "$@"; }
 ovl_lib() { # name tags keywords
   build_clean "$OVD/$1"
-  sed -i "s/^tags: .*\$/tags: $2/; s/^keywords: .*\$/keywords: $3/" "$OVD/$1/INDEX.md"
+  patch "$OVD/$1/INDEX.md" "s/^tags: .*\$/tags: $2/; s/^keywords: .*\$/keywords: $3/"
 }
 ovl_lib boards "[boards, Work_Items, sprints, backlog]" "[epics, Story Points, pipelines]"
 ovl_lib backlogs "[backlog, work-item, sprint, scrum]" "[epic, story-points, velocity]"
@@ -679,7 +690,7 @@ case_run "overlap: the registry holds only the entries" 0 "library.backlogs.path
 LHOME="$TMP/lhook-home"; mkdir -p "$LHOME"
 build_clean "$TMP/lhook/solo"
 printf '\nSee [[gamma:widgets]].\n' >> "$TMP/lhook/solo/widgets.md"
-sed -i 's|^last_swept: never$|&\nlinks_to:\n  gamma: https://example.com/gamma.git|' "$TMP/lhook/solo/INDEX.md"   # contract 2.6
+patch "$TMP/lhook/solo/INDEX.md" 's|^last_swept: never$|&\nlinks_to:\n  gamma: https://example.com/gamma.git|'   # contract 2.6
 git -C "$TMP/lhook/solo" add -A
 HOME="$LHOME" "$ENGINE/scripts/kb-library" add "$TMP/lhook/solo" >/dev/null
 case_run "library hook warns, but does not fail, on a link into an absent library" 0 "unresolvable" -- \
@@ -862,7 +873,7 @@ case_run "a fenced example Recheck is not an assertion, and is never run (#199)"
 # #201: a stamp that names no by: or method: is still a stamp, and a missing by: reads as an agent's
 # (the shorter TTL). The default 2026-09-22 stamp is 9d past an agent's TTL and inside a human's.
 build_clean "$TMP/vnoby"
-sed -i 's/^Verified: .*$/Verified: 2026-09-22/' "$TMP/vnoby/widgets.md"
+patch "$TMP/vnoby/widgets.md" 's/^Verified: .*$/Verified: 2026-09-22/'
 printf 'Recheck: true\n' >> "$TMP/vnoby/widgets.md"
 case_run "a stamp with no by: or method: is seen, and due as an agent's (#201)" 0 "1 with a Recheck assertion, 1 due to run" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vnoby"
@@ -888,7 +899,7 @@ case_run "a failing assertion's stamp is never rewritten" 0 "Verified: 2026-01-0
 # Issue #16: a restamp is a query-method verification, whatever method it carried before.
 build_clean "$TMP/vmethod"
 printf 'Recheck: true\n' >> "$TMP/vmethod/widgets.md"
-sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review/' "$TMP/vmethod/widgets.md"
+patch "$TMP/vmethod/widgets.md" 's/^Verified: .*$/Verified: 2026-01-01 · by: agent · method: doc-review/'
 "$ENGINE/scripts/kb-verify" "$TMP/vmethod" --all --yes --apply >/dev/null 2>&1
 case_run "--apply restamp records method: query" 0 "by: agent · method: query" -- \
   grep -F "Verified: $KB_TODAY" "$TMP/vmethod/widgets.md"
@@ -1004,7 +1015,7 @@ case_run "recheck: a relative path that stays inside the library is not flagged"
 # A restamp moves the floor, so --apply rewrites a declared verified: to match (issue #27);
 # otherwise kb-verify's own output would fail check-kb in the library's pre-commit.
 build_clean "$TMP/vfloor" --stamp 2026-01-01
-sed -i 's/^scope: general$/scope: general\nverified: 2026-01-01/' "$TMP/vfloor/widgets.md"
+patch "$TMP/vfloor/widgets.md" 's/^scope: general$/scope: general\nverified: 2026-01-01/'
 printf 'Recheck: true\n' >> "$TMP/vfloor/widgets.md"
 "$ENGINE/scripts/kb-verify" "$TMP/vfloor" --all --yes --apply >/dev/null 2>&1
 case_run "--apply moves the frontmatter floor with the restamp" 0 "verified: $KB_TODAY" -- \
@@ -1028,7 +1039,7 @@ case_run "stale section with no assertion is named, not skipped" 0 "no assertion
 ttl_lib() { # ttl_lib <dir> [agent_ttl line]
   build_clean "$1" --stamp "$(date -d "$KB_TODAY -20 days" +%F)"
   printf 'Recheck: true\n' >> "$1/widgets.md"
-  [ -n "${2:-}" ] && sed -i "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/" "$1/INDEX.md"
+  [ -n "${2:-}" ] && patch "$1/INDEX.md" "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/"
   return 0
 }
 ttl_lib "$TMP/ttl-default"
@@ -1054,7 +1065,7 @@ ttl_lib "$TMP/ttl-bad" "agent_ttl: a month"
 case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
 # #203: a field is read from the frontmatter. A freshness_horizon: line in the body is prose, and
 # read as the horizon it let kb-verify judge staleness by a number the library never declared.
-build_clean "$TMP/vbody"; sed -i '/^freshness_horizon:/d' "$TMP/vbody/INDEX.md"
+build_clean "$TMP/vbody"; patch "$TMP/vbody/INDEX.md" '/^freshness_horizon:/d'
 printf '\nfreshness_horizon: 90d\n' >> "$TMP/vbody/INDEX.md"
 case_run "kb-verify: a freshness_horizon: line in the body is not the horizon (#203)" 2 "declares no freshness_horizon" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vbody"
@@ -1069,8 +1080,8 @@ case_run "a bytecode cache under scripts/ is ignored by git (#80)" 0 "" -- \
 # MAJOR.MINOR. Absent is read as 2.0, so a library that predates the field stays valid.
 kc_lib() { # kc_lib <dir> <kb_contract line, or empty for none>
   build_clean "$1"
-  sed -i '/^kb_contract:/d' "$1/INDEX.md"
-  [ -n "$2" ] && sed -i "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/" "$1/INDEX.md"
+  patch "$1/INDEX.md" '/^kb_contract:/d'
+  [ -n "$2" ] && patch "$1/INDEX.md" "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/"
   return 0
 }
 kc_lib "$TMP/kc-none" ""
@@ -1281,7 +1292,7 @@ build_clean "$TMP/vqueue-error"
 cat >> "$TMP/vqueue-error/widgets.md" <<'EOF'
 Recheck: this-command-does-not-exist-anywhere-xyz
 EOF
-sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: human · method: query/' "$TMP/vqueue-error/widgets.md"
+patch "$TMP/vqueue-error/widgets.md" 's/^Verified: .*$/Verified: 2026-01-01 · by: human · method: query/'
 "$ENGINE/scripts/kb-verify" "$TMP/vqueue-error" --yes >/dev/null 2>&1
 case_run "queue: a command that cannot be run is categorized distinctly" 0 "" -- \
   grep -qF 'category: "stale-recheck-error"' "$TMP/vqueue-error/needs-attention.md"
@@ -1534,7 +1545,7 @@ fm fx-sources general > "$LB/sources/INDEX.md"; printf '# Sources\n- [s-x](s-x.m
 printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$LB/INDEX.md"
 fm s-x general > "$LB/sources/s-x.md"; printf '# Source: s-x\n\n- **URL:** https://example.org/x\n- **Liveness:** sometimes\n' >> "$LB/sources/s-x.md"
 case_run "Liveness: a value other than manual fails check-kb from contract 2.4" 1 "Liveness" -- "$ENGINE/scripts/check-kb" "$LB"
-sed -i 's/^kb_contract: .*/kb_contract: "2.3"/' "$LB/INDEX.md"
+patch "$LB/INDEX.md" 's/^kb_contract: .*/kb_contract: "2.3"/'
 case_run "Liveness: a value other than manual is only a warning below 2.4" 0 "fails from contract 2.4" -- "$ENGINE/scripts/check-kb" "$LB"
 
 # Issue #154: a section with content and no Source: line was invisible: no check failed it, and
@@ -1542,7 +1553,7 @@ case_run "Liveness: a value other than manual is only a warning below 2.4" 0 "fa
 US="$TMP/unsourced"; build_clean "$US"
 printf '\n## Colour\n\nA widget is red.\n' >> "$US/widgets.md"
 case_run "unsourced: a section with content and no Source: fails check-kb from contract 2.5" 1 "'Colour' has no Source: line" -- "$ENGINE/scripts/check-kb" "$US"
-sed -i 's/^kb_contract: .*/kb_contract: "2.4"/' "$US/INDEX.md"
+patch "$US/INDEX.md" 's/^kb_contract: .*/kb_contract: "2.4"/'
 case_run "unsourced: below 2.5 it is only a warning" 0 "fails from contract 2.5" -- "$ENGINE/scripts/check-kb" "$US"
 USX="$TMP/unsourced-exempt"; build_clean "$USX"
 # The intro under the title, a heading with only subheadings under it, a heading in a code fence,
@@ -1607,7 +1618,7 @@ case_run "long-unswept tree is due" 0 "1 of 1" -- "$ENGINE/scripts/kb-due" "$TMP
 
 # A trailing YAML comment is valid and must not hide the value (issue #28).
 build_clean "$TMP/due-comment" --swept "$KB_TODAY  # swept by me"
-sed -i "s/^sweep_interval: 30d\$/sweep_interval: 7d  # weekly/" "$TMP/due-comment/INDEX.md"
+patch "$TMP/due-comment/INDEX.md" "s/^sweep_interval: 30d\$/sweep_interval: 7d  # weekly/"
 case_run "kb-due: last_swept with an inline comment is read" 0 "0 of 1" -- "$ENGINE/scripts/kb-due" "$TMP/due-comment"
 case_run "kb-due: sweep_interval with an inline comment is read" 0 "every 7d" -- "$ENGINE/scripts/kb-due" "$TMP/due-comment"
 
@@ -1656,7 +1667,7 @@ case_run "nudge: the Recheck assertion itself is never run" 1 "" -- test -e "$NU
 # #211: the count is the whole backlog, not the budget's worth; ", N a run" says how many one run
 # takes, and only when the backlog is more than that. Two stale Rechecks, verifier_budget 1.
 cp -r "$NFX/kb/recheck-due" "$TMP/overbudget"
-sed -i "s/^verifier_budget: 5\$/verifier_budget: 1/" "$TMP/overbudget/INDEX.md"
+patch "$TMP/overbudget/INDEX.md" "s/^verifier_budget: 5\$/verifier_budget: 1/"
 sed "s/^## Port\$/## Host/; s/^Recheck: .*\$/Recheck: true/" "$TMP/overbudget/stale-recheck.md" > "$TMP/overbudget/stale-recheck-2.md"
 printf -- '- [stale-recheck-2](stale-recheck-2.md) — a second stale fact with a Recheck\n' >> "$TMP/overbudget/INDEX.md"
 case_run "nudge: past the budget, the count is every due recheck and says how many a run takes (#211)" 0 \
@@ -1684,7 +1695,7 @@ build_clean "$NFX/kb/queue-due"
 cat >> "$NFX/kb/queue-due/widgets.md" <<'EOF'
 Recheck: false
 EOF
-sed -i 's/^Verified: .*$/Verified: 2026-01-01 · by: human · method: query/' "$NFX/kb/queue-due/widgets.md"
+patch "$NFX/kb/queue-due/widgets.md" 's/^Verified: .*$/Verified: 2026-01-01 · by: human · method: query/'
 fm second-fact general > "$NFX/kb/queue-due/second-fact.md"
 cat >> "$NFX/kb/queue-due/second-fact.md" <<'EOF'
 # Second Fact
@@ -1706,7 +1717,7 @@ case_run "nudge: two open queue items are counted" 0 "2 open queue item" -- \
 case_run "nudge: grouped by category" 0 "2 stale-recheck" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due" --nudge
 # Acknowledge one entry — a human's triage action, nothing kb-due itself ever does.
-sed -i '0,/status: "open"/s//status: "acknowledged"/' "$NFX/kb/queue-due/needs-attention.md"
+patch "$NFX/kb/queue-due/needs-attention.md" '0,/status: "open"/s//status: "acknowledged"/'
 case_run "nudge: an acknowledged item is not counted" 0 "1 open queue item" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/queue-due" --nudge
 case_run "nudge: acknowledged count does not also read as two" 1 "" -- \
@@ -1776,7 +1787,7 @@ gitc() { git -C "$1" -c user.email=t@t -c user.name=t commit -qm "$2" >/dev/null
 build_clean "$NFX/kb/delta-due"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-due/widgets.md"
 git -C "$NFX/kb/delta-due" add -A; gitc "$NFX/kb/delta-due" seed
-sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/delta-due/INDEX.md"
+patch "$NFX/kb/delta-due/INDEX.md" "s/^last_swept: never\$/last_swept: $KB_TODAY/"
 git -C "$NFX/kb/delta-due" add -A; gitc "$NFX/kb/delta-due" sweep
 case_run "nudge: right after a committed sweep, no unstamped line (#142)" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-due"
@@ -1803,7 +1814,7 @@ case_run "nudge: a section moved to another file since the sweep is not new (#14
 build_clean "$NFX/kb/delta-uncommitted"
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/delta-uncommitted/widgets.md"
 git -C "$NFX/kb/delta-uncommitted" add -A; gitc "$NFX/kb/delta-uncommitted" seed
-sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$NFX/kb/delta-uncommitted/INDEX.md"
+patch "$NFX/kb/delta-uncommitted/INDEX.md" "s/^last_swept: never\$/last_swept: $KB_TODAY/"
 case_run "nudge: a sweep not yet committed leaves nothing new (#142)" 1 "" -- \
   bash -c '"$1" "$2" --nudge | grep -qF "(never verified)"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/delta-uncommitted"
 # A swept tree outside git has no sweep commit to compare with: the full count.
@@ -1814,7 +1825,7 @@ case_run "nudge: a swept tree outside git reports the full count (#142)" 0 "2 un
 # and drops out of the nudge; plain kb-due still lists it, marked archived. A registered library is
 # served whatever it says, so it is nudged as usual and told how to retire it.
 build_clean "$NFX/kb/arch-proj"
-sed -i 's/^last_swept: never$/&\narchived: 2026-11-01, moved to registered libraries/' "$NFX/kb/arch-proj/INDEX.md"
+patch "$NFX/kb/arch-proj/INDEX.md" 's/^last_swept: never$/&\narchived: 2026-11-01, moved to registered libraries/'
 printf '\n## Weight\n\nA widget weighs 3 kg.\n\nSource: manual\n' >> "$NFX/kb/arch-proj/widgets.md"
 mkdir -p "$TMP/archhome"
 case_run "nudge: an archived project tree prints nothing (#141)" 0 "" -- \
@@ -1823,7 +1834,7 @@ case_run "kb-due --quiet: an archived project tree is not due (#141)" 0 "" -- \
   bash -c '[ -z "$(HOME="$3" "$1" "$2" --quiet)" ]' _ "$ENGINE/scripts/kb-due" "$NFX/kb/arch-proj" "$TMP/archhome"
 case_run "kb-due: an archived project tree is still listed, marked archived (#141)" 0 "archived: 2026-11-01" -- \
   env HOME="$TMP/archhome" "$ENGINE/scripts/kb-due" "$NFX/kb/arch-proj"
-cp -r "$NFX/kb/arch-proj" "$NFX/kb/arch-lib" && sed -i 's/^domain: arch-proj$/domain: arch-lib/' "$NFX/kb/arch-lib/INDEX.md"
+cp -r "$NFX/kb/arch-proj" "$NFX/kb/arch-lib" && patch "$NFX/kb/arch-lib/INDEX.md" 's/^domain: arch-proj$/domain: arch-lib/'
 mkdir -p "$TMP/archhome2"; HOME="$TMP/archhome2" "$ENGINE/scripts/kb-library" add "$NFX/kb/arch-lib" >/dev/null 2>&1
 case_run "nudge: a registered library declaring archived: is still nudged (#141)" 0 "arch-lib: sweep due" -- \
   env HOME="$TMP/archhome2" "$ENGINE/scripts/kb-due" --nudge
@@ -1839,7 +1850,7 @@ case_run "nudge: a fully sourced library reports no unsourced sections" 1 "" -- 
 # #203: a field is read from the frontmatter, not the whole file. A last_swept: line in the body is
 # prose; read as a declaration, it made a library never swept look swept an hour ago.
 build_clean "$NFX/kb/body-swept"
-sed -i '/^last_swept:/d' "$NFX/kb/body-swept/INDEX.md"
+patch "$NFX/kb/body-swept/INDEX.md" '/^last_swept:/d'
 printf '\nlast_swept: %s\n' "$KB_TODAY" >> "$NFX/kb/body-swept/INDEX.md"
 case_run "kb-due: a last_swept: line in the body is not a sweep (#203)" 0 "body-swept: never swept" -- \
   env HOME="$TMP/archhome" "$ENGINE/scripts/kb-due" "$NFX/kb/body-swept" --quiet
@@ -1954,7 +1965,7 @@ case_run "kb-session-start: names the due library and its recheck count" 0 \
   sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
 # A library behind the contract is nudged; one on an unsupported major is named as not served.
 build_clean "$SFX/kb/libold" --swept "$KB_TODAY" --stamp "$KB_TODAY"
-sed -i '/^kb_contract:/d' "$SFX/kb/libold/INDEX.md"
+patch "$SFX/kb/libold/INDEX.md" '/^kb_contract:/d'
 build_clean "$SFX/kb/libfuture" --contract '"3.0"'
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libold" >/dev/null
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libfuture" >/dev/null 2>&1
@@ -2326,16 +2337,16 @@ mkdir -p "$TMP/stamp"; git init -q "$TMP/stamp"
 fm claim general > "$TMP/stamp/claim.md"
 printf '# Claim\n\n## A\n\nx\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\n' >> "$TMP/stamp/claim.md"
 git -C "$TMP/stamp" add -A; git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm seed >/dev/null 2>&1
-sed -i 's/by: agent/by: human/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -A
+patch "$TMP/stamp/claim.md" 's/by: agent/by: human/'; git -C "$TMP/stamp" add -A
 git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "restamp
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>" >/dev/null 2>&1
 case_run "agent-authored commit claiming human verification" 1 "by: human" -- \
   sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
 
-sed -i 's/by: human/by: agent/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -A
+patch "$TMP/stamp/claim.md" 's/by: human/by: agent/'; git -C "$TMP/stamp" add -A
 git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm undo >/dev/null 2>&1
-sed -i 's/by: agent/by: human/' "$TMP/stamp/claim.md"; git -C "$TMP/stamp" add -A
+patch "$TMP/stamp/claim.md" 's/by: agent/by: human/'; git -C "$TMP/stamp" add -A
 git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "a person checked it" >/dev/null 2>&1
 case_run "human stamp without an agent trailer is allowed" 0 "clean" -- \
   sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-stamps' HEAD~1..HEAD"
@@ -2382,7 +2393,7 @@ lib_head=$(git -C "$TMP/stamplib" rev-parse HEAD)
 stamp_step 0000000000000000000000000000000000000000 "$lib_head" > "$TMP/stamp-step.sh"
 case_run "library step: first push, no parent, agent commit stamping human — caught" 1 "by: human" -- \
   sh -c "cd '$TMP/stamplib' && ENGINE='$ENGINE' sh '$TMP/stamp-step.sh'"
-sed -i 's/by: human/by: agent/' "$TMP/stamplib/claim.md"; git -C "$TMP/stamplib" add -A
+patch "$TMP/stamplib/claim.md" 's/by: human/by: agent/'; git -C "$TMP/stamplib" add -A
 git -C "$TMP/stamplib" -c user.email=t@t -c user.name=t commit -qm "restamp honestly
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>" >/dev/null 2>&1
@@ -2442,7 +2453,7 @@ case_run "kb-rooted citation resolves when the library is given as ." 0 "3/3 pas
 # words are the file's own words and must pass. A paraphrase still must not.
 build_clean "$TMP/gq/kb/fx"
 printf 'A "gadget" is not a widget.\n' >> "$TMP/gq/kb/fx/widgets.md"
-sed -i 's/expected_excerpt: "up to 12 things"/expected_excerpt: A "gadget" is not a widget./' "$TMP/gq/kb/fx/fx-golden.md"
+patch "$TMP/gq/kb/fx/fx-golden.md" 's/expected_excerpt: "up to 12 things"/expected_excerpt: A "gadget" is not a widget./'
 gq() { # gq <name> <want-exit> <want-text> <Q1 record>
   printf '%s\nQ2||fact not found — check KB\nQ3||fact not found — check KB\n' "$4" > "$TMP/gq/answers"
   case_run "$1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/gq/kb/fx" "$TMP/gq/answers"
@@ -2705,14 +2716,14 @@ blast_base() { # blast_base <dir> [scope] -- a committed library, ready for a se
 
 BL1="$TMP/blast/delete"; blast_base "$BL1"
 rm "$BL1/widgets.md"
-sed -i '/widgets.md) — what widgets do/d' "$BL1/INDEX.md"
+patch "$BL1/INDEX.md" '/widgets.md) — what widgets do/d'
 git -C "$BL1" add -A; git -C "$BL1" -c user.email=t@t -c user.name=t commit -qm "delete fact" >/dev/null 2>&1
 case_run "check-blast: deleted fact file" 1 "widgets.md: fact file deleted" -- \
   sh -c "cd '$BL1' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 BL2="$TMP/blast/rename"; blast_base "$BL2"
 git -C "$BL2" mv widgets.md gizmos.md
-sed -i 's/widgets.md) — what widgets do/gizmos.md) — what widgets do/' "$BL2/INDEX.md"
+patch "$BL2/INDEX.md" 's/widgets.md) — what widgets do/gizmos.md) — what widgets do/'
 git -C "$BL2" add -A; git -C "$BL2" -c user.email=t@t -c user.name=t commit -qm "rename fact" >/dev/null 2>&1
 case_run "check-blast: renamed-away fact file" 1 "widgets.md: fact file renamed to gizmos.md" -- \
   sh -c "cd '$BL2' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
@@ -2720,7 +2731,7 @@ case_run "check-blast: renamed-away fact file" 1 "widgets.md: fact file renamed 
 BL3="$TMP/blast/conflict"; blast_base "$BL3"
 printf '\n## Disputed\n\nstatus: CONFLICTED · since: 2026-01-01\n\nClaim A: 12. Claim B: 20.\n' >> "$BL3/widgets.md"
 git -C "$BL3" add -A; git -C "$BL3" -c user.email=t@t -c user.name=t commit -qm "add conflict" >/dev/null 2>&1
-sed -i '/status: CONFLICTED/d' "$BL3/widgets.md"
+patch "$BL3/widgets.md" '/status: CONFLICTED/d'
 git -C "$BL3" add -A; git -C "$BL3" -c user.email=t@t -c user.name=t commit -qm "resolve conflict" >/dev/null 2>&1
 case_run "check-blast: CONFLICTED marker removed" 1 "widgets.md: removes a CONFLICTED marker (1 -> 0)" -- \
   sh -c "cd '$BL3' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
@@ -2729,33 +2740,33 @@ case_run "check-blast: CONFLICTED marker removed" 1 "widgets.md: removes a CONFL
 BL3U="$TMP/blast/uncorr"; blast_base "$BL3U"
 printf '\n## Calibration\n\nstatus: UNCORROBORATED · since: 2026-01-01\n\nA widget is calibrated to 3 mm.\n' >> "$BL3U/widgets.md"
 git -C "$BL3U" add -A; git -C "$BL3U" -c user.email=t@t -c user.name=t commit -qm "add uncorroborated" >/dev/null 2>&1
-sed -i '/status: UNCORROBORATED/d' "$BL3U/widgets.md"
+patch "$BL3U/widgets.md" '/status: UNCORROBORATED/d'
 git -C "$BL3U" add -A; git -C "$BL3U" -c user.email=t@t -c user.name=t commit -qm "drop marker" >/dev/null 2>&1
 case_run "check-blast: UNCORROBORATED marker removed" 1 "widgets.md: removes an UNCORROBORATED marker (1 -> 0)" -- \
   sh -c "cd '$BL3U' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 BL4="$TMP/blast/promote"; blast_base "$BL4" "product:acme"
-sed -i 's/^scope: product:acme$/scope: general/' "$BL4/widgets.md"
+patch "$BL4/widgets.md" 's/^scope: product:acme$/scope: general/'
 git -C "$BL4" add -A; git -C "$BL4" -c user.email=t@t -c user.name=t commit -qm "promote scope" >/dev/null 2>&1
 case_run "check-blast: scope promoted toward general" 1 "widgets.md: scope promoted product:acme -> general" -- \
   sh -c "cd '$BL4' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 # Issue #43: a comment on the new scope line must not hide the promotion from the gate.
 BL4C="$TMP/blast/promote-comment"; blast_base "$BL4C" "product:acme"
-sed -i 's/^scope: product:acme$/scope: general  # promoted/' "$BL4C/widgets.md"
+patch "$BL4C/widgets.md" 's/^scope: product:acme$/scope: general  # promoted/'
 git -C "$BL4C" add -A; git -C "$BL4C" -c user.email=t@t -c user.name=t commit -qm "promote scope" >/dev/null 2>&1
 case_run "check-blast: promotion with an inline comment is still caught" 1 "widgets.md: scope promoted product:acme -> general" -- \
   sh -c "cd '$BL4C' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 # A lateral reclassification (same rank) is not a promotion and must not fire.
 BL4B="$TMP/blast/lateral"; blast_base "$BL4B" "product:acme"
-sed -i 's/^scope: product:acme$/scope: org:acme/' "$BL4B/widgets.md"
+patch "$BL4B/widgets.md" 's/^scope: product:acme$/scope: org:acme/'
 git -C "$BL4B" add -A; git -C "$BL4B" -c user.email=t@t -c user.name=t commit -qm "lateral reclass" >/dev/null 2>&1
 case_run "check-blast: lateral product<->org reclass is not a promotion" 0 "clean (library repo" -- \
   sh -c "cd '$BL4B' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
 BL5="$TMP/blast/benign"; blast_base "$BL5"
-sed -i 's/A widget holds up to 12 things\./A widget holds up to 12 thing./' "$BL5/widgets.md"
+patch "$BL5/widgets.md" 's/A widget holds up to 12 things\./A widget holds up to 12 thing./'
 git -C "$BL5" add -A; git -C "$BL5" -c user.email=t@t -c user.name=t commit -qm "typo fix" >/dev/null 2>&1
 case_run "check-blast: benign typo passes" 0 "clean (library repo" -- \
   sh -c "cd '$BL5' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
@@ -2775,12 +2786,12 @@ printf '# ADR-0001\n\nOriginal text.\n' > "$BLE/documents/decisions/0001-fixture
 git init -q "$BLE"; git -C "$BLE" add -A
 git -C "$BLE" -c user.email=t@t -c user.name=t commit -qm base >/dev/null 2>&1
 
-sed -i 's/Section one\./Section one, revised./' "$BLE/CONVENTIONS.md"
+patch "$BLE/CONVENTIONS.md" 's/Section one\./Section one, revised./'
 git -C "$BLE" add -A; git -C "$BLE" -c user.email=t@t -c user.name=t commit -qm "edit contract" >/dev/null 2>&1
 case_run "check-blast: CONVENTIONS.md edit in engine repo" 1 "CONVENTIONS.md changed" -- \
   sh -c "cd '$BLE' && '$ENGINE/scripts/check-blast' HEAD~1 HEAD"
 
-sed -i 's/Original text\./Revised text./' "$BLE/documents/decisions/0001-fixture.md"
+patch "$BLE/documents/decisions/0001-fixture.md" 's/Original text\./Revised text./'
 git -C "$BLE" add -A; git -C "$BLE" -c user.email=t@t -c user.name=t commit -qm "edit adr" >/dev/null 2>&1
 case_run "check-blast: decision record edit in engine repo" 1 \
   "documents/decisions/0001-fixture.md: decision record changed" -- \
@@ -3006,6 +3017,8 @@ rec = ("- case: cross-root\n  question: Where is the widget limit explained?\n  
        "  expected_excerpt: \"[[beta:widgets]]\"\n\n")
 p.write_text(t[:t.rindex("```")] + rec.rstrip("\n") + "\n```\n")
 PY
+# NOT patch: this matches nothing (the line ends "things.", not "things"), so alpha's widgets.md has no
+# link to beta today. #214 found it; fixing it changes what the grade-routing cases below run on.
 sed -i 's/up to 12 things$/up to 12 things. See [[beta:widgets]]./' "$A/widgets.md"
 # Installed means registered (ADR-0014): alpha and beta are, in this suite's own registry.
 "$ENGINE/scripts/kb-library" add "$A" >/dev/null; "$ENGINE/scripts/kb-library" add "$B" >/dev/null
@@ -3108,7 +3121,7 @@ grade_routing "missing transcript is a format error" 2 "not found" "Q1|absent.js
 # <library>:<path>. The oracle then says WHICH file holds the answer, and every tier checks it.
 XR="$TMP/xr"; build_clean "$XR/kb/alpha"; build_clean "$XR/kb/beta"
 RT_HOME="$HOME"; export HOME="$TMP/xrhome"   # this block's own registry, holding its beta
-sed -i 's/up to 12 things\.$/up to 12 things. See [[beta:widgets]]./' "$XR/kb/alpha/widgets.md"
+patch "$XR/kb/alpha/widgets.md" 's/up to 12 things\.$/up to 12 things. See [[beta:widgets]]./'
 printf 'A beta widget is serviced yearly.\n' >> "$XR/kb/beta/widgets.md"
 fm stray general > "$XR/kb/beta/stray.md"; printf '# Stray\n\nA stray is never routed.\n' >> "$XR/kb/beta/stray.md"
 "$ENGINE/scripts/kb-library" add "$XR/kb/beta" >/dev/null
@@ -3289,11 +3302,11 @@ case_run "check-xlinks --installed resolves into a registered library" 0 "1 cros
 printf '\nAnd [[beta:no-such-thing]].\n' >> "$CA/widgets.md"
 case_run "check-xlinks --installed fails a dead link into a registered library" 1 "has no slug" -- \
   cons "$ENGINE/scripts/check-xlinks" --installed
-sed -i '/no-such-thing/d' "$CA/widgets.md"
+patch "$CA/widgets.md" '/no-such-thing/d'
 printf '\nAnd [[ghost:widgets]].\n' >> "$CA/widgets.md"
 case_run "check-xlinks --installed: an unregistered library is not installed" 0 "1 unresolvable" -- \
   cons "$ENGINE/scripts/check-xlinks" --installed
-sed -i '/ghost:widgets/d' "$CA/widgets.md"
+patch "$CA/widgets.md" '/ghost:widgets/d'
 # the golden-set tiers find a cross-root library through the registry, not lib.parent
 python3 - "$CA/fx-golden.md" <<'PY'
 import sys, pathlib
@@ -3319,7 +3332,7 @@ printf 'Q2|cons.jsonl\n' > "$CD/map"
 case_run "grade-routing: reading only an unregistered library is reading nothing in the KB" 1 "no installed library was Read" -- \
   cons "$ENGINE/scripts/grade-routing" "$CA" "$CD/map"
 # the engine's library hook: a commit breaking a registered sibling's citation is blocked
-rm "$CB/gadgets.md"; sed -i '/gadgets.md) — what a gadget is/d' "$CB/INDEX.md"; git -C "$CB" add -A
+rm "$CB/gadgets.md"; patch "$CB/INDEX.md" '/gadgets.md) — what a gadget is/d'; git -C "$CB" add -A
 case_run "library hook blocks a commit that breaks a registered sibling's citation" 1 "has no slug" -- \
   sh -c "cd '$CB' && env -i HOME='$CH' PATH='$PATH' '$ENGINE/library-hooks/pre-commit'"
 cp -r "$CB" "$TMP/beta-scratch"
@@ -3415,7 +3428,7 @@ sched() { # sched <cmd...>: run from / with a stripped environment; prints exit=
 }
 
 SCH="$TMP/sched"; build_clean "$SCH/kb/fx" --stamp 2026-01-01
-sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$SCH/kb/fx/widgets.md"
+patch "$SCH/kb/fx/widgets.md" 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/'
 printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; printf "SCHED-%%s\\n" CANARY-ERR >&2; false\n' >> "$SCH/kb/fx/widgets.md"
 build_clean "$SCH/kb/quiet"
 
@@ -3463,12 +3476,12 @@ case_run "kb-watch replaces the queue file, never rewrites it in place" 0 "" -- 
 
 # kb-sources prints URLs, stub paths and the headings that depend on them, never the text.
 SS="$TMP/schedsrc"; build_clean "$SS"
-sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$SS/widgets.md"
+patch "$SS/widgets.md" 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/'
 mkdir -p "$SS/sources"; fm fx-sources general > "$SS/sources/INDEX.md"; printf '# Sources\n- [s-gone](s-gone.md) — stub\n' >> "$SS/sources/INDEX.md"
 printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$SS/INDEX.md"
 fm s-gone general > "$SS/sources/s-gone.md"
 printf '# Source: s-gone\n\n- **URL:** http://127.0.0.1:%s/gone\n- **Origin:** SCHED-CANARY-STUB\n' "$SP" >> "$SS/sources/s-gone.md"
-sed -i 's/^Source: manual$/Source: [[s-gone]]/' "$SS/widgets.md"
+patch "$SS/widgets.md" 's/^Source: manual$/Source: [[s-gone]]/'
 case_run "schedulable: kb-sources on a library with no URLs exits 0" 0 "exit=0" -- sched "$ENGINE/scripts/kb-sources" "$SCH/kb/quiet" --yes
 case_run "schedulable: kb-sources dead URL exits 1 and prints no fact text" 1 "exit=1" -- \
   sched "$ENGINE/scripts/kb-sources" "$SS" --yes
@@ -3534,7 +3547,7 @@ case_run "contract 2.2 is known, with what it adds" 0 "2.2" -- \
 # cross-root link does.
 NC="$TMP/notcovered"; build_clean "$NC"
 printf 'Not covered here: gadgets — held by [[nc-peer:widgets]]\n' >> "$NC/INDEX.md"
-sed -i 's|^last_swept: never$|&\nlinks_to:\n  nc-peer: https://example.com/nc-peer.git|' "$NC/INDEX.md"   # contract 2.6
+patch "$NC/INDEX.md" 's|^last_swept: never$|&\nlinks_to:\n  nc-peer: https://example.com/nc-peer.git|'   # contract 2.6
 case_run "Not covered here: a line with content passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$NC"
 NE="$TMP/notcovered-empty"; build_clean "$NE"
 printf '**Not covered here:**\n' >> "$NE/INDEX.md"
@@ -3657,7 +3670,7 @@ case_run "kb-prepare: the packet is redacted before it is written" 0 "[redacted:
 case_run "kb-prepare: ...and holds no credential" 1 "" -- grep -q 'AKIA' "$PKF"
 case_run "kb-prepare: the library is untouched" 0 "" -- bash -c '[ -z "$(git -C "$1" status --porcelain)" ]' _ "$PL"
 # #203: the library's name is the domain: of its frontmatter. A domain: line in the body is prose.
-PB="$PK/kb/bodyname"; build_clean "$PB"; sed -i '/^domain:/d' "$PB/INDEX.md"
+PB="$PK/kb/bodyname"; build_clean "$PB"; patch "$PB/INDEX.md" '/^domain:/d'
 printf '\ndomain: elsewhere\n' >> "$PB/INDEX.md"
 git -C "$PB" add -A && git -C "$PB" -c user.email=t@t -c user.name=t commit -qm init
 case_run "kb-prepare: a domain: line in the body is not the library's name (#203)" 0 "kb-prepare: bodyname: nothing to prepare" -- \
@@ -3682,10 +3695,10 @@ case_run "kb-prepare: an unknown skill is a usage error" 2 "" -- prep organize "
 case_run "kb-prepare: its output names the packet, never its text" 1 "" -- \
   bash -c '"$1" distill "$2" --out "$3" --claude "$4" --force 2>&1 | grep -q SCHED-CANARY' _ "$ENGINE/scripts/kb-prepare" "$PL" "$PK/out3" "$PK/claude"
 
-sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$PL/INDEX.md"
+patch "$PL/INDEX.md" "s/^last_swept: never\$/last_swept: $KB_TODAY/"
 rm -f "$STUB_LOG"
 case_run "kb-prepare audit: a sweep not due runs no model" 0 "nothing to prepare" -- prep audit "$PL" --out "$PO"
-sed -i "s/^last_swept: .*\$/last_swept: never/" "$PL/INDEX.md"
+patch "$PL/INDEX.md" "s/^last_swept: .*\$/last_swept: never/"
 case_run "kb-prepare audit: a sweep due writes a packet" 1 "packet written" -- prep audit "$PL" --out "$PO"
 case_run "kb-prepare audit: the model gets the mechanical checks' results, since it cannot run them" 0 "" -- \
   grep -qF 'check-kb' "$STUB_LOG"
@@ -3867,7 +3880,7 @@ case_run "kb-eval-sample grade: joins each case with its cost" 0 "460" -- env HO
 # only what needs a person, per library. Never a fact's or source's text: paths, counts, headings, ids.
 RR="$TMP/report"; RL="$RR/kb/fx"; RC="$RR/kb/calm"
 build_clean "$RL" --stamp 2026-01-01 --contract '"2.1"' --swept "$KB_TODAY"; build_clean "$RC" --swept "$KB_TODAY" --stamp "$KB_TODAY"
-sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$RL/widgets.md"
+patch "$RL/widgets.md" 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/'
 printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; false\n' >> "$RL/widgets.md"
 printf '\n## Live\n\nA live claim.\n\nSource: manual\nVerified: 2026-01-01 · by: agent · method: manual\nRecheck (attended): true\n' >> "$RL/widgets.md"
 "$ENGINE/scripts/kb-verify" "$RL" --yes --unattended >/dev/null 2>&1
@@ -3902,7 +3915,7 @@ printf -- '- [sources](sources/INDEX.md) — source stubs\n' >> "$RM/INDEX.md"
 fm s-man general > "$RM/sources/s-man.md"; printf '# Source: s-man\n\n- **URL:** https://example.org/walled\n- **Liveness:** manual\n' >> "$RM/sources/s-man.md"
 case_run "kb-report: a sweep due lists the Liveness: manual stubs" 0 "" -- \
   bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md" && grep -qF "sources/s-man.md" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-due" "$WEEK"
-sed -i "s/^last_swept: never\$/last_swept: $KB_TODAY/" "$RM/INDEX.md"
+patch "$RM/INDEX.md" "s/^last_swept: never\$/last_swept: $KB_TODAY/"
 case_run "kb-report: no sweep due, so the manual stubs are not listed" 1 "" -- \
   bash -c '"$1" "$2" --out "$3" >/dev/null 2>&1; grep -qF "Liveness: manual" "$3/$4.md"' _ "$ENGINE/scripts/kb-report" "$RM" "$RR/man-calm" "$WEEK"
 
@@ -3914,7 +3927,7 @@ export -f kbr; export ENGINE
 RA="$RR/arch"; RAH="$RA/home"; mkdir -p "$RAH"
 for d in gone kept; do
   build_clean "$RA/$d"
-  sed -i 's/^last_swept: never$/&\narchived: legacy copy/' "$RA/$d/INDEX.md"
+  patch "$RA/$d/INDEX.md" 's/^last_swept: never$/&\narchived: legacy copy/'
   git -C "$RA/$d" add -A; git -C "$RA/$d" -c user.email=t@t -c user.name=t commit -qm init
 done
 HOME="$RAH" "$ENGINE/scripts/kb-library" add "$RA/kept" >/dev/null 2>&1
@@ -3931,7 +3944,7 @@ case_run "kb-report: a library on a contract newer than the engine is listed (#2
 # Issue #204 (d): a library kb-report cannot read is an item under its name; the others are still
 # reported and the exit is 1 (decisions waiting), not 2. agent_ttl as long as the horizon is unusable.
 RD="$RR/cantread"; build_clean "$RD/bad"
-sed -i 's/^verifier_budget: 5$/&\nagent_ttl: 90d/' "$RD/bad/INDEX.md"
+patch "$RD/bad/INDEX.md" 's/^verifier_budget: 5$/&\nagent_ttl: 90d/'
 case_run "kb-report: a library that cannot be read does not stop the report, exit 1 (#204)" 1 "report written" -- \
   env HOME="$RAH" "$ENGINE/scripts/kb-report" "$RD/bad" "$RL" "$RC" --out "$RD/out"
 case_run "kb-report: ...it is an item under that library (#204)" 0 "" -- \
@@ -4039,7 +4052,7 @@ case_run "kb-schedule: the lingering hint names the user" 0 "" -- grep -qF 'logi
 # run: every step, every registered library, in order, logged by exit code only; then the report.
 KR="$KS/run"; mkdir -p "$KR/home"
 build_clean "$KR/lib/fx" --stamp 2026-01-01
-sed -i 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/' "$KR/lib/fx/widgets.md"
+patch "$KR/lib/fx/widgets.md" 's/^A widget holds up to 12 things\.$/A widget holds up to 12 things. SCHED-CANARY-BODY/'
 printf 'Recheck: printf "SCHED-%%s\\n" CANARY-OUT; false\n' >> "$KR/lib/fx/widgets.md"
 mkdir -p "$KR/lib/fx/episodic"; fm 2026-10-01-fx-notes general > "$KR/lib/fx/episodic/2026-10-01-fx-notes.md"
 git -C "$KR/lib/fx" add -A && git -C "$KR/lib/fx" -c user.email=t@t -c user.name=t commit -qm init
@@ -4183,7 +4196,7 @@ case_run "origins: another host is another origin" 1 "" -- same_origin https://g
 
 LT="$TMP/lt"; mkdir -p "$LT"
 lt_link() { printf '\n## Gadgets\n\nSee [[%s:gadgets]].\n\nSource: manual\nVerified: 2026-09-22 · by: agent · method: manual\n' "$2" >> "$1/widgets.md"; }
-lt_declare() { sed -i "s|^last_swept: never\$|&\nlinks_to:\n  $2: $3|" "$1/INDEX.md"; }
+lt_declare() { patch "$1/INDEX.md" "s|^last_swept: never\$|&\nlinks_to:\n  $2: $3|"; }
 build_clean "$LT/undeclared"; lt_link "$LT/undeclared" ltb
 case_run "links_to: from 2.6, a link into a library links_to does not name fails" 1 "links_to" -- "$ENGINE/scripts/check-kb" "$LT/undeclared"
 build_clean "$LT/declared"; lt_link "$LT/declared" ltb; lt_declare "$LT/declared" ltb https://github.com/acme/ltb.git
@@ -4244,7 +4257,7 @@ case_run "kb-library add: a newcomer whose dependency here is from elsewhere war
 # served must be named, never dropped: a silent gap reads as "fact not found".
 CH="$TMP/cathome"; CD="$TMP/cat"; mkdir -p "$CH" "$CD"
 build_clean "$CD/alpha"; build_clean "$CD/beta" "product:acme"; build_clean "$CD/gamma"
-sed -i 's/^description: a test fixture\.$/description: Router for alpha widget facts./' "$CD/alpha/INDEX.md"
+patch "$CD/alpha/INDEX.md" 's/^description: a test fixture\.$/description: Router for alpha widget facts./'
 printf '\nNot covered here: widget pricing — held by [[beta:widgets]]\n' >> "$CD/alpha/INDEX.md"
 for l in alpha beta gamma; do HOME="$CH" "$ENGINE/scripts/kb-library" add "$CD/$l" >/dev/null; done
 mv "$CD/gamma" "$CD/gamma-moved"
@@ -4264,7 +4277,7 @@ case_run "kb-catalog: it takes no arguments" 2 "usage" -- kbcat --all
 # #203: a trailing comment is no part of a value, quoted or not. The catalog showed `general  # note`
 # as the scope and left the quotes and comment on a quoted description.
 CH2="$TMP/cathome2"; mkdir -p "$CH2"; build_clean "$CD/delta"
-sed -i 's/^scope: general$/scope: general  # the tie-breaker says general/; s/^description: a test fixture\.$/description: "Router for delta"  # note/' "$CD/delta/INDEX.md"
+patch "$CD/delta/INDEX.md" 's/^scope: general$/scope: general  # the tie-breaker says general/; s/^description: a test fixture\.$/description: "Router for delta"  # note/'
 HOME="$CH2" "$ENGINE/scripts/kb-library" add "$CD/delta" >/dev/null
 case_run "kb-catalog: a trailing comment is not part of the scope (#203)" 0 "delta  [general]  " -- \
   env HOME="$CH2" "$ENGINE/scripts/kb-catalog"
@@ -4334,8 +4347,8 @@ case_run "kb-due --nudge counts the unreadable record beside the open one" 0 "1 
   "$ENGINE/scripts/kb-due" "$QG" --nudge
 case_run "kb-due --summary shows it in the line the person sees" 0 "unreadable queue: " -- \
   "$ENGINE/scripts/kb-due" "$QG" --nudge --summary
-sed -i '/^```yaml$/{N;s/^```yaml\nid: aaaaaaaa$/```yaml\n- id: aaaaaaaa/}' "$QG/needs-attention.md"
-sed -i 's/^\(category\|status\|file\): /  \1: /' "$QG/needs-attention.md"
+patch "$QG/needs-attention.md" '/^```yaml$/{N;s/^```yaml\nid: aaaaaaaa$/```yaml\n- id: aaaaaaaa/}'
+patch "$QG/needs-attention.md" 's/^\(category\|status\|file\): /  \1: /'
 case_run "check-kb: a queue in the list shape draws no warning" 0 "" -- \
   bash -c '! "$1" "$2" | grep -q "cannot read"' _ "$ENGINE/scripts/check-kb" "$QG"
 case_run "kb-due --nudge: ...and both records count as open" 0 "2 open queue items" -- "$ENGINE/scripts/kb-due" "$QG" --nudge
@@ -4366,7 +4379,7 @@ case_run "check-kb: ...one warning for the id, not one per copy" 0 "" -- \
 case_run "kb-due --nudge counts the duplicated record once" 0 "2 open queue items" -- "$ENGINE/scripts/kb-due" "$QD" --nudge
 case_run "kb-report lists the duplicated record once" 0 "" -- \
   bash -c 'out=$(HOME="$4-home" "$1" "$2" --out "$3" 2>&1; cat "$3"/*.md); [ "$(printf "%s" "$out" | grep -c "Queue item cccccccc")" = 1 ] && printf "%s" "$out" | grep -q "Queue item dddddddd"' _ "$ENGINE/scripts/kb-report" "$QD" "$QD-out" "$QD"
-sed -i '0,/^- id: cccccccc$/!{s/^- id: cccccccc$/- id: eeeeeeee/}' "$QD/needs-attention.md"
+patch "$QD/needs-attention.md" '0,/^- id: cccccccc$/!{s/^- id: cccccccc$/- id: eeeeeeee/}'
 case_run "check-kb: a queue whose ids are all distinct draws no duplicate warning" 0 "" -- \
   bash -c '! "$1" "$2" | grep -q "appears at lines"' _ "$ENGINE/scripts/check-kb" "$QD"
 case_run "kb-due --nudge: ...and counts all three" 0 "3 open queue items" -- "$ENGINE/scripts/kb-due" "$QD" --nudge
