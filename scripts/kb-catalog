@@ -23,21 +23,12 @@ when it is asked for, so it cannot go stale.
 Usage: kb-catalog
 Exit 0, or 2 on a usage error or an unreadable registry.
 """
-import importlib.machinery, importlib.util, pathlib, re, sys
+import pathlib, re, sys
 
-from kbengine import library
+from kbengine import library, registry
 
-SCRIPTS = pathlib.Path(__file__).resolve().parent
 NOT_COVERED = "Not covered here:"
 ROUTER_LINE = re.compile(r"^- \[([^\]]+)\]\(([^)]+)\)")
-
-
-def load(name, filename):
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader(name, str(SCRIPTS / filename))
-    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
-    loader.exec_module(mod)
-    return mod
 
 
 def describe(index: pathlib.Path):
@@ -74,7 +65,7 @@ def main(argv) -> int:
         print("usage: kb-catalog   (takes no arguments)", file=sys.stderr)
         return 2
     try:
-        libs = load("kb_libraries", "kb-libraries").entries()
+        libs = registry.entries()
     except RuntimeError as e:
         print(f"kb-catalog: {e}", file=sys.stderr)
         return 2

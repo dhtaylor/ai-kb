@@ -34,6 +34,8 @@ Exit 0 if every record passes, 1 otherwise, 2 on a usage error.
 """
 import functools, importlib.machinery, importlib.util, json, pathlib, re, sys
 
+from kbengine import registry
+
 
 def load_golden(lib: pathlib.Path):
     gs = sorted(lib.glob("*-golden.md"))
@@ -67,14 +69,8 @@ def check_golden():
 @functools.lru_cache(maxsize=None)
 def installed():
     """{name: root} of the libraries registered on this machine (ADR-0014), read through
-    kb-libraries, the registry's one reader."""
-    path = pathlib.Path(__file__).resolve().parent / "kb-libraries"
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader("kb_libraries", str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod.installed(), mod.declared_name
+    kbengine.registry, the registry's one reader."""
+    return registry.installed(), registry.declared_name
 
 
 def library_root(lib: pathlib.Path, name: str):
