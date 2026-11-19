@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The unit tests run on the suite's frozen clock too (#217): `tests/test_attention.py` dates its
+  fixtures from `clock.today()` rather than the real date, so they pass whatever `KB_TODAY` says, and
+  `run-checks` no longer unsets `KB_TODAY` for them. No change to `scripts/`.
 - `tests/run-checks` runs on a frozen clock (#205): it exports `KB_TODAY=2026-10-10` and builds every
   fixture date from it, where it used the real date, so no case changes result as the calendar moves.
   Cases that check what the real clock does (the weekly nudge's weekday, `kb-report`'s ISO-week
