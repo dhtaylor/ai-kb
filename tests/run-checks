@@ -1645,6 +1645,19 @@ case_run "nudge: a stale fact with Recheck is reported due" 0 "1 fact due for re
 case_run "nudge: names the exact kb-verify command, by path" 0 "kb-verify $NFX/kb/recheck-due --yes" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 case_run "nudge: the Recheck assertion itself is never run" 1 "" -- test -e "$NUDGE_SENTINEL"
+# #211: the count is the whole backlog, not the budget's worth; ", N a run" says how many one run
+# takes, and only when the backlog is more than that. Two stale Rechecks, verifier_budget 1.
+cp -r "$NFX/kb/recheck-due" "$TMP/overbudget"
+sed -i "s/^verifier_budget: 5\$/verifier_budget: 1/" "$TMP/overbudget/INDEX.md"
+sed "s/^## Port\$/## Host/; s/^Recheck: .*\$/Recheck: true/" "$TMP/overbudget/stale-recheck.md" > "$TMP/overbudget/stale-recheck-2.md"
+printf -- '- [stale-recheck-2](stale-recheck-2.md) — a second stale fact with a Recheck\n' >> "$TMP/overbudget/INDEX.md"
+case_run "nudge: past the budget, the count is every due recheck and says how many a run takes (#211)" 0 \
+  "2 facts due for recheck, 1 a run (kb-verify $TMP/overbudget --yes)" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/overbudget" --nudge
+case_run "nudge: ...and the summary line counts every due recheck (#211)" 0 "to recheck: overbudget 2" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/overbudget" --nudge --summary
+case_run "nudge: within the budget, no per-run count is added (#211)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -qF " a run "' _ "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due"
 # Issue #16: the printed command must actually run when pasted, from any cwd.
 NUDGE_CMD=$("$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge \
   | sed -n 's/.*(\(kb-verify [^)]*\)).*/\1/p' | head -1)
