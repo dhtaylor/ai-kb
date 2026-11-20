@@ -1,0 +1,80 @@
+v0.4.0|kb-due --nudge --summary|.225360460
+main|kb-due --nudge --summary|.115116634
+v0.4.0|kb-due --nudge --summary|.223449266
+main|kb-due --nudge --summary|.113255449
+v0.4.0|kb-due --nudge --summary|.223841107
+main|kb-due --nudge --summary|.122452469
+v0.4.0|kb-due --nudge --summary|.236790882
+main|kb-due --nudge --summary|.112715939
+v0.4.0|kb-due --nudge --summary|.223354558
+main|kb-due --nudge --summary|.113761347
+v0.4.0|kb-due --nudge --summary|.229708629
+main|kb-due --nudge --summary|.114270453
+v0.4.0|kb-due --nudge --summary|.226393492
+main|kb-due --nudge --summary|.112773583
+v0.4.0|kb-due --nudge --summary|.222283930
+main|kb-due --nudge --summary|.113102308
+v0.4.0|kb-due --nudge --summary|.227003641
+main|kb-due --nudge --summary|.125105050
+v0.4.0|kb-due --nudge --summary|.235016718
+main|kb-due --nudge --summary|.113624781
+v0.4.0|kb-session-start|.403316632
+main|kb-session-start|.281972517
+v0.4.0|kb-session-start|.417564605
+main|kb-session-start|.274728901
+v0.4.0|kb-session-start|.407737055
+main|kb-session-start|.272505356
+v0.4.0|kb-session-start|.406881361
+main|kb-session-start|.278039745
+v0.4.0|kb-session-start|.401733276
+main|kb-session-start|.269793990
+v0.4.0|kb-session-start|.412772205
+main|kb-session-start|.273440184
+v0.4.0|kb-session-start|.400277653
+main|kb-session-start|.275316703
+v0.4.0|kb-session-start|.405190563
+main|kb-session-start|.275427837
+v0.4.0|kb-session-start|.402205797
+main|kb-session-start|.272463280
+v0.4.0|kb-session-start|.400090624
+main|kb-session-start|.272194922
+v0.4.0|kb-catalog|.067612370
+main|kb-catalog|.054446440
+v0.4.0|kb-catalog|.070459183
+main|kb-catalog|.055458230
+v0.4.0|kb-catalog|.069069972
+main|kb-catalog|.053999126
+v0.4.0|kb-catalog|.068778643
+main|kb-catalog|.054335465
+v0.4.0|kb-catalog|.071283317
+main|kb-catalog|.053893883
+v0.4.0|kb-catalog|.069930989
+main|kb-catalog|.053754837
+v0.4.0|kb-catalog|.068445835
+main|kb-catalog|.055603082
+v0.4.0|kb-catalog|.068887203
+main|kb-catalog|.055502757
+v0.4.0|kb-catalog|.067966021
+main|kb-catalog|.054986117
+v0.4.0|kb-catalog|.072016753
+main|kb-catalog|.055709456
+v0.4.0|kb-report --out /dev/shm/kbr|.473884502
+main|kb-report --out /dev/shm/kbr|.127608438
+v0.4.0|kb-report --out /dev/shm/kbr|.474799141
+main|kb-report --out /dev/shm/kbr|.124207397
+v0.4.0|kb-report --out /dev/shm/kbr|.483241123
+main|kb-report --out /dev/shm/kbr|.164500347
+v0.4.0|kb-report --out /dev/shm/kbr|.533888844
+main|kb-report --out /dev/shm/kbr|.131307446
+v0.4.0|kb-report --out /dev/shm/kbr|.562041444
+main|kb-report --out /dev/shm/kbr|.151283764
+v0.4.0|kb-report --out /dev/shm/kbr|.553445162
+main|kb-report --out /dev/shm/kbr|.153237740
+v0.4.0|kb-report --out /dev/shm/kbr|.534623543
+main|kb-report --out /dev/shm/kbr|.143737758
+v0.4.0|kb-report --out /dev/shm/kbr|.515697529
+main|kb-report --out /dev/shm/kbr|.136659787
+v0.4.0|kb-report --out /dev/shm/kbr|.503052232
+main|kb-report --out /dev/shm/kbr|.142074039
+v0.4.0|kb-report --out /dev/shm/kbr|.512794728
+main|kb-report --out /dev/shm/kbr|.135228015
