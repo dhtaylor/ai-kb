@@ -86,6 +86,12 @@ runs, so failing the build would not have stopped it, only hidden that it happen
 This is the same asymmetry ADR-0002 already names for every other check in this workflow, not a new
 one introduced here.
 
+**A local-only library has none of this.** A library with no remote (CONVENTIONS §2) has no pull
+request and no CI, so neither `check-blast` nor `library-guardrails.yml` runs for it: its only gate is
+the commit hook, and a `--no-verify` commit is unguarded. The compensating check is to run the hook
+by hand afterwards (`<engine>/library-hooks/pre-commit` from the library root); a high-blast change
+(above) is then the curator's own judgement, with nothing to require a label.
+
 **The 2-reviewer + 24h rule is dormant, not built.** The plan's paired bullet for high-blast-radius
 facts — two reviewers and a 24-hour window — is recorded here as an explicit non-goal for this pass,
 for the same reason ADR-0002 gives for deferring CODEOWNERS review generally: a single contributor

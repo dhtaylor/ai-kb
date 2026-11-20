@@ -21,6 +21,11 @@ name: guardrails
 # WHAT IT IS NOT: detection, not prevention — the push lands and then the run
 # fails. A real leak still needs rotation AND a history rewrite (both facts are
 # in knowledge-architecture/secret-governance.md, with re-check assertions).
+#
+# A LOCAL-ONLY LIBRARY (no remote, never pushed; CONVENTIONS §2) never runs
+# this: its commit hook is its only gate, and a --no-verify commit is unchecked.
+# Run the hook by hand after one: <engine>/library-hooks/pre-commit, from the
+# library root.
 
 on:
   push:

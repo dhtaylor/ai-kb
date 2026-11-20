@@ -4231,6 +4231,16 @@ case_run "check-xlinks: a library with no recorded origin resolves as before" 1 
   env HOME="$LT/x-noorigin/home" "$ENGINE/scripts/check-xlinks" --installed
 case_run "check-xlinks: ...with a note that its origin can't be confirmed" 1 "can't be confirmed" -- \
   env HOME="$LT/x-noorigin/home" "$ENGINE/scripts/check-xlinks" --installed
+# #212: a local-only library (no remote) is linked by its path. The path is never compared while
+# the library has no recorded origin; once it has one, a path is another origin.
+build_clean "$LT/pathdecl"; lt_link "$LT/pathdecl" ltb; lt_declare "$LT/pathdecl" ltb "$LT/somewhere/ltb"
+case_run "links_to: a path is an origin: a local-only library declared by its path passes (#212)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$LT/pathdecl"
+ltx localpath none "$LT/x-localpath/ltb"
+case_run "check-xlinks: a local-only library declared by its path resolves as any other: a missing slug is dead (#212)" 1 "has no slug 'gadgets'" -- \
+  env HOME="$LT/x-localpath/home" "$ENGINE/scripts/check-xlinks" --installed
+ltx pathvsurl https://github.com/acme/ltb.git "$LT/x-pathvsurl/ltb"
+case_run "check-xlinks: once that library has a remote, a path in links_to is a dependency mismatch (#212)" 0 "dependency mismatch" -- \
+  env HOME="$LT/x-pathvsurl/home" "$ENGINE/scripts/check-xlinks" --installed
 ltx unregistered unregistered https://github.com/acme/ltb.git
 case_run "check-xlinks: an unregistered dependency warns, naming the origin to add" 0 "kb-library add https://github.com/acme/ltb.git" -- \
   env HOME="$LT/x-unregistered/home" "$ENGINE/scripts/check-xlinks" --installed
