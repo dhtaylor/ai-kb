@@ -179,6 +179,15 @@ single-canonical-home rule (§4) spans the KB boundary.
   clones into the **library home** (`$KB_LIBRARY_HOME`, else the home `kb-bootstrap` recorded, else
   `<engine>/kb/`), which is only where new clones go; nothing is found by being there.
   `kb-library export` and `import` carry a machine's set of libraries, by name and origin, to another.
+- **A library may be local-only**: a git repository with no remote, never pushed. Nothing in the
+  engine needs a library to have one, and nothing prompts a push. Three things differ. It has no
+  origin, so `kb-library export` lists it as a comment and it cannot be reproduced on another
+  machine; another library links to it by its path (§5). Its only gate is the commit hook, because
+  there is no server to run `library-guardrails.yml` or `check-blast`'s `owner-approved` label, so a
+  `--no-verify` commit is unchecked: run the hook by hand afterwards (`<engine>/library-hooks/pre-commit`
+  from the library root, which checks the tree as committed when it is clean). And a remote added
+  later is recorded only by registering it again (`kb-library remove <name>`, then `kb-library add
+  <path>`), since `kb-library add` reads the remote only when it registers a library.
 - Content lives in **single-topic files** sized as described in §4.
 - When a domain's topic files exceed **~15**, group the overflow into a sub-folder with its own
   sub-index. Below that threshold, stay **flat** — every sub-folder adds a routing hop.
@@ -222,8 +231,9 @@ last_swept: YYYY-MM-DD        # written by kb-audit at the end of a sweep, `neve
                               # It lives here, not in needs-attention.md, because a CLEAN sweep
                               # writes no queue file and would erase the evidence that it ran.
 links_to:                     # every library a [[library:slug]] link names, and the origin (git
-  <library>: <origin>         # remote) it was linked against (§5, contract 2.6). Required by a
-                              # tree that links across libraries; check-kb fails one missing.
+  <library>: <origin>         # remote, or the absolute path of a local-only library) it was linked
+                              # against (§5, contract 2.6). Required by a tree that links across
+                              # libraries; check-kb fails one missing.
 ```
 
 A library's root `INDEX.md` may also carry one body line saying what the library does **not** hold,
@@ -319,6 +329,12 @@ for them.
   host and path, so `https://` and `git@` forms of one repository are the same. A different origin
   is a **dependency mismatch**: the links are not resolved, and it warns, naming both origins and the
   slugs, because whoever sees it cannot fix the library that links (ADR-0020).
+- **A local-only library's origin is its path.** A library with no remote (§2) is listed under
+  `links_to:` by its absolute path, as `kb-libraries` prints it, not a `~` form. The registry records
+  no origin for it, so `check-xlinks` compares nothing and resolves the links as for any library: a
+  path is a record of what was linked against, not a check, and it names a folder on one machine
+  only. Once the library has a remote and is registered with it, the path is another origin than the
+  URL, and the links are a dependency mismatch until `links_to:` is changed to the URL.
 - **Graceful absence is a distinction, not a leniency.** A link into a library that is **not installed**
   is a *soft dependency*: it warns, and agents continue. A link into a library that **is** installed but
   lacks the slug is **dead** and fails. Collapsing the two would punish portability — a machine need not
@@ -873,5 +889,6 @@ dependency mismatch instead of a dead link. `check-kb` fails a link whose librar
 from this version, and warns about an entry no link uses.
 
 Migrating from 2.5: run `check-kb`, which warns about each unlisted library below 2.6. Add each one
-under `links_to:` with the git remote you cloned it from. Then declare `kb_contract: "2.6"`. A
+under `links_to:` with the git remote you cloned it from, or its absolute path if it is local-only
+(§5). Then declare `kb_contract: "2.6"`. A
 library with no cross-library links changes only the declaration.

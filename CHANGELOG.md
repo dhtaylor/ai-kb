@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A library may be local-only: a git repository with no remote, never pushed (#212). CONVENTIONS
+  §2 names it as a supported mode and what differs (no origin to export, the commit hook as its only
+  gate, a remote added later recorded by registering again); §5 makes its absolute path its
+  `links_to:` origin, which `check-xlinks` resolves as before and reports as a dependency mismatch
+  once the library is registered with a remote. `library-guardrails.yml` and `state-change-gates.md`
+  say that `--no-verify` is unguarded there, and to run the library hook by hand. No change to
+  `scripts/` or to the contract version.
 - `kb-due --nudge` counts every recheck that is due, not the `verifier_budget`'s worth (#211). It
   said "5 facts due for recheck" for a library with 35 due; it now says "35 facts due for recheck,
   5 a run (kb-verify … --yes)", and the summary line's "to recheck" counts all 35. Within the budget
