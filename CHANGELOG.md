@@ -4,6 +4,15 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
+## Unreleased
+
+- `kb-bootstrap --check` exits 1 when `kb-libraries` fails, instead of 0 (#229). With
+  `scripts/kbengine/` missing, as in a partial copy of the engine, `kb-libraries` failed at import and
+  `--check` printed the traceback and exited 0, which reads as no drift. It now reports
+  `FAILED kb-libraries`, does not print `(none registered)`, and says that `--apply` cannot fix it:
+  restore the engine, then run it again. The library list is read before its loop rather than through
+  `< <(...)`, whose exit status bash discards.
+
 ## v0.5.0 — 2026-11-23
 
 Changes since v0.4.0. A minor release: CONVENTIONS §2 and §5 change for local-only libraries (#212),

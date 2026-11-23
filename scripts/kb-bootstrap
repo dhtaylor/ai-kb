@@ -66,7 +66,7 @@ market="$engine/.claude-plugin/marketplace.json"
   exit 2
 }
 
-drift=0
+drift=0; helper_failed=""   # helper_failed: a script this one runs crashed (#229)
 report() { # status item detail
   printf '  %-8s %-34s %s\n' "$1" "$2" "${3:-}"
   case "$1" in ok) ;; *) drift=1 ;; esac
@@ -75,7 +75,8 @@ verb() { [ "$mode" = apply ] && echo "$1" || echo "$2"; }
 backups="$HOME/.local/state/ai-kb/backups"
 linknote() { # target: say so when it is reached through a link (kb-libraries owns the rule)
   local real
-  real=$("$engine/scripts/kb-libraries" --linked "$1" | cut -f2)
+  real=$("$engine/scripts/kb-libraries" --linked "$1" | cut -f2) || {
+    report FAILED kb-libraries "--linked $1 exited non-zero (see its error above)"; helper_failed=yes; return 0; }
   [ -n "$real" ] && printf '  note     %s is a link to %s. What is written there is this machine'"'"'s, so if that file is shared with other machines, as a dotfiles repository is, it carries this machine'"'"'s paths to them.\n' "$1" "$real"
   return 0
 }
@@ -239,6 +240,11 @@ if [ "$(git config --file "$registry" --get kb.migrated 2>/dev/null)" != true ];
     mkdir -p "$(dirname "$registry")" && git config --file "$registry" kb.migrated true
   fi
 fi
+# The list is read before the loop, not through `< <(...)`, whose exit status bash discards: a
+# kb-libraries that crashes (kbengine/ missing from a partial copy) would read as no drift (#229).
+if ! libs=$("$engine/scripts/kb-libraries"); then
+  report FAILED kb-libraries "exited $? listing the registered libraries (see its error above)"; helper_failed=yes
+fi
 n=0
 while IFS=$'\t' read -r state name path; do
   [ -n "$state" ] || continue
@@ -251,11 +257,12 @@ while IFS=$'\t' read -r state name path; do
     [ "$mode" = apply ] && git -C "$path" config core.hooksPath "$hooks"
     report "$(verb set would-set)" "$name" "core.hooksPath $hooks"
   fi
-done < <("$engine/scripts/kb-libraries")
-[ "$n" -eq 0 ] && echo "  (none registered)"
+done <<< "$libs"
+[ "$n" -eq 0 ] && [ -z "$helper_failed" ] && echo "  (none registered)"
 
 # 5. Report ----------------------------------------------------------------------
 echo
+[ -n "$helper_failed" ] && echo "note: a helper in $engine/scripts failed, so this report is incomplete. --apply cannot fix that: restore the engine (a partial copy is missing files), then run this again."
 [ "$old_hook" = yes ] && echo "note: the old hook script $cfg/hooks/kb-root.sh is no longer referenced — safe to delete."
 if [ "$mode" = check ]; then
   [ "$drift" -eq 0 ] && echo "Everything is configured." || echo "Run kb-bootstrap --apply to apply the changes above."
