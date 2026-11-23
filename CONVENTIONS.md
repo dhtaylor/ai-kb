@@ -659,6 +659,7 @@ set: never opened, and excluded from every search. Each record carries:
   expected_file: <the file that must answer it; a cross-root case may write <library>:<path>>
   expected_excerpt: <text that must appear, grep-verifiable against expected_file>
   alt_excerpt: <optional, repeatable: another sentence in expected_file stating the same fact>
+  expected_evidence: <optional, positive cases only: check | word>
 ```
 
 `case:` is required — a minimum of "≥2 negative cases" is unenforceable if nothing marks a case as
@@ -679,6 +680,13 @@ carrying the marker, so the case tests the claim that is marked and not a sound 
 `grade-eval` requires the excerpt in the answer, the file among its citations, and the answer to begin
 `uncorroborated — single source`. **It is required wherever the library holds such a section**, and
 not otherwise: `check-golden` fails a library holding the marker with no such case.
+
+**`expected_evidence` tests how retrieval states what backs a fact** (ADR-0022). `check` means the
+section holding the excerpt carries a `Recheck:`, and the answer must say it "carries a check";
+`word` means it carries none, and the answer must say "someone's word" before it gives the fact.
+`check-golden` fails a record whose value disagrees with the file. Retrieval cannot run the
+weak-assertion lint, so it says "carries a check", never "asserted". The field is optional and
+positive cases only. A fact without a check is still served: only a `CONFLICTED` fact is refused.
 
 A **`cross-root` case names the file in the other library that answers it**, written
 `<library>:<path>`, for example `agile-requirements:elicitation-techniques.md`, and its excerpt is

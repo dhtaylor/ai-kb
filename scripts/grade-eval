@@ -14,6 +14,9 @@ would forgive it; grep does not.
 An uncorroborated case also requires the answer to BEGIN "uncorroborated — single source": a
 one-source fact is served caveat first (CONVENTIONS §8), and a caveat after the value is read past.
 
+A record with `expected_evidence: check` requires the answer to say "carries a check"; `word`
+requires "someone's word", ahead of the quoted fact (ADR-0022).
+
 Answers file: one record per line,  Q<n>|<cited-files, comma-separated>|<answer text>
 A cited file may be library-relative (x.md), library-prefixed (<lib>/x.md) or
 kb-rooted (kb/<lib>/x.md); it is resolved to a file, not matched as text.
@@ -142,6 +145,8 @@ def read_mapping(mapping: pathlib.Path, ncases: int) -> dict:
     return graded
 
 
+EVIDENCE_PHRASE = {"check": "carries a check", "word": "someone's word"}   # expected_evidence values
+
 SOURCES = re.compile(r"^\s*Sources:\s*(.*?)\s*$", re.M)
 
 
@@ -239,11 +244,24 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
             in_file = target is not None and target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
 
         led = case != "uncorroborated" or leads(ans)
-        ok = in_answer and file_ok and in_file and led
+        # A cited fact states what backs it in plain words, and a fact resting on someone's word is
+        # flagged before the answer (ADR-0022). Retrieval cannot run the lint, so "carries a check",
+        # never "asserted".
+        ev = r.get("expected_evidence")
+        evidenced = True
+        if ev:
+            phrase = norm(EVIDENCE_PHRASE[ev])
+            at = norm(ans).find(phrase)
+            first = min((norm(ans).find(norm(e).rstrip('.!?;:,"')) for e in excerpts
+                         if norm(e).rstrip('.!?;:,"') in norm(ans)), default=-1)
+            evidenced = at >= 0 and (ev == "check" or first < 0 or at < first)
+        ok = in_answer and file_ok and in_file and led and evidenced
         npass += ok
         why = []
         if not in_answer: why.append("excerpt not in answer")
         if not led:       why.append(f"does not lead with {LEAD!r}")
+        if not evidenced: why.append(f"does not state its evidence as {EVIDENCE_PHRASE[ev]!r}"
+                                     + (" before the answer" if ev == "word" else ""))
         if not file_ok:   why.append(f"cited {cited or '(none)'!r}, expected {ef or '(none)'!r}")
         if not in_file:   why.append("excerpt not in the expected file — ORACLE ROT")
         rows.append((q, case, "yes" if in_answer else "no", "yes" if file_ok else "no",

@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Retrieval states what backs each cited fact, not who stamped it (#237, ADR-0022). `kb-retrieve`
+  says "carries a check, last passed <date>" for a section with a `Recheck:` and "someone's word,
+  <date>" for one without, and flags the latter before the answer. It never says "asserted", because
+  it cannot run the lint. Nothing is refused for lacking a check; a disputed fact is still refused.
+  The `by:` stamp is no longer reported, and the answer's `Verified:` line becomes `Evidence:`. Golden
+  records take an optional `expected_evidence: check|word`, graded by `grade-eval` and checked against
+  the file by `check-golden`.
 - Contract 2.7: `unasserted_ttl:` replaces `agent_ttl:` (#236, ADR-0022). A library declaring
   `kb_contract: "2.7"` names the short lease of an unasserted stamp `unasserted_ttl:`, still a tenth of
   the horizon by default and at least one day, and `check-kb` still fails one not shorter than the

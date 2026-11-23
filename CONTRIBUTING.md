@@ -190,6 +190,9 @@ Two record rules catch people out (the full set is in [CONVENTIONS.md](CONVENTIO
 - **`alt_excerpt:`** (optional, repeatable, positive and cross-root cases only) names a second
   sentence in the same file stating the same fact, so an agent quoting either one is grounded. One
   added after seeing results is an amendment: record it beside the record.
+- **`expected_evidence:`** (optional, positive cases only; `check` or `word`) tests that the answer
+  states what backs the fact: "carries a check" where the section has a `Recheck:`, "someone's word"
+  ahead of the fact where it has none. `check-golden` fails a value the file contradicts.
 
 ---
 

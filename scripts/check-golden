@@ -42,7 +42,20 @@ def load_script(name):
     return mod
 
 
-FIELD = re.compile(r"^(question|expected_file|expected_excerpt|alt_excerpt):\s*(.*?)\s*$")
+FIELD = re.compile(r"^(question|expected_file|expected_excerpt|alt_excerpt|expected_evidence):\s*(.*?)\s*$")
+EVIDENCE = {"check", "word"}   # expected_evidence: the section carries a Recheck:, or it does not (ADR-0022)
+
+
+def carries_check(body: str, excerpt: str):
+    """True if the section holding `excerpt` carries a `Recheck:` under a stamp, False if it holds
+    the excerpt without one, None if no section holds it. Retrieval can see this and cannot run the
+    check, so it is all an evidence case can ask of the file."""
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))   # grade-eval imports this module
+    from kbengine import factfiles
+    for s in factfiles.sections(body):
+        if ws(excerpt) in ws(s.text):
+            return any(st.recheck for st in s.stamps)
+    return None
 
 
 def unquote(v: str) -> str:
@@ -169,6 +182,15 @@ def main(root: pathlib.Path) -> int:
             if re.sub(r"\s+", " ", alt) not in re.sub(r"\s+", " ", target.read_text()):
                 defects.append(f"{where} [{case}]: alt_excerpt not found in {ef} — "
                                f"the oracle tests nothing: {alt[:60]!r}")
+        ev = r.get("expected_evidence")
+        if ev:
+            if ev not in EVIDENCE:
+                defects.append(f"{where} [{case}]: expected_evidence '{ev}' is not one of {sorted(EVIDENCE)}")
+            elif case != "positive":
+                defects.append(f"{where} [{case}]: expected_evidence is for a positive case only")
+            elif carries_check(target.read_text(), exc) != (ev == "check"):
+                defects.append(f"{where} [{case}]: expected_evidence '{ev}' but the section holding the "
+                               f"excerpt in {ef} {'has no Recheck:' if ev == 'check' else 'carries a Recheck:'}")
         if case == "uncorroborated":
             # The case tests the caveat a marked claim is served with, so its excerpt must be
             # the marked claim, not a sound neighbour in the same file.

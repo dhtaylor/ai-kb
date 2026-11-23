@@ -513,6 +513,50 @@ gu "uncorroborated: the value served without the caveat first fails" 1 "does not
   'Q2|widgets.md|"A widget is calibrated to 3 mm." (uncorroborated — single source)'
 gu "uncorroborated: the caveat without the value fails" 1 "excerpt not in answer" \
   'Q2|widgets.md|uncorroborated — single source: it is about 3 millimetres.'
+
+# Evidence in plain words (#237, ADR-0022). A cited fact states what backs it: "carries a check"
+# for a section with a Recheck:, "someone's word" for one without, flagged BEFORE the answer.
+# Retrieval cannot run the lint, so it never says "asserted". Nothing is refused for lacking a
+# check; a disputed fact is still refused (the unresolved cases above). The golden record says
+# which it expects as `expected_evidence: check|word`.
+build_evid() { # build_evid <dir> <evidence of the 5 bar fact> <evidence of the 12 things fact>
+  build_clean "$1"
+  printf '\n## Pressure\n\nA widget is rated to 5 bar.\n\nSource: manual\nVerified: 2026-11-20 · by: agent · method: query\nRecheck: grep -q "5 bar" widgets.md\n' >> "$1/widgets.md"
+  python3 - "$1/fx-golden.md" "$2" "$3" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); t = p.read_text()
+rec = ("- case: positive\n  question: What is a widget rated to?\n  expected_file: widgets.md\n"
+       "  expected_excerpt: \"A widget is rated to 5 bar.\"\n  expected_evidence: " + sys.argv[2] + "\n\n"
+       "- case: positive\n  question: How many things does a widget hold?\n  expected_file: widgets.md\n"
+       "  expected_excerpt: \"A widget holds up to 12 things.\"\n  expected_evidence: " + sys.argv[3] + "\n\n")
+i = t.index("- case: positive")
+j = t.index("- case: negative")
+p.write_text(t[:i] + rec + t[j:])
+PY
+}
+build_evid "$TMP/gev" check word
+case_run "evidence case: expected_evidence matching the section's Recheck: passes check-golden" 0 "clean" -- "$ENGINE/scripts/check-golden" "$TMP/gev"
+build_evid "$TMP/gev2" word word
+case_run "evidence case: 'word' on a section that carries a Recheck: fails check-golden" 1 "carries a Recheck:" -- "$ENGINE/scripts/check-golden" "$TMP/gev2"
+build_evid "$TMP/gev3" check check
+case_run "evidence case: 'check' on a section with no Recheck: fails check-golden" 1 "has no Recheck:" -- "$ENGINE/scripts/check-golden" "$TMP/gev3"
+build_evid "$TMP/gev4" asserted word
+case_run "evidence case: an unknown expected_evidence fails check-golden" 1 "is not one of" -- "$ENGINE/scripts/check-golden" "$TMP/gev4"
+ge_ev() { # ge_ev <name> <want-exit> <want-text> <Q1 record> <Q2 record>
+  printf '%s\n%s\nQ3||fact not found — check KB\nQ4||fact not found — check KB\n' "$4" "$5" > "$TMP/gev/answers"
+  case_run "grade-eval: $1" "$2" "$3" -- "$ENGINE/scripts/grade-eval" "$TMP/gev" "$TMP/gev/answers"
+}
+CHK='Q1|widgets.md|"A widget is rated to 5 bar." This fact carries a check, last passed 2026-11-20.'
+WRD="Q2|widgets.md|This rests on someone's word, 2026-09-22, with no check behind it: \"A widget holds up to 12 things.\""
+ge_ev "a checked fact says it carries a check; an unchecked one flags someone's word first" 0 "4/4 passed" "$CHK" "$WRD"
+ge_ev "a checked fact that states no evidence fails" 1 "does not state its evidence as 'carries a check'" \
+  'Q1|widgets.md|"A widget is rated to 5 bar." Verified 2026-11-20 by an agent.' "$WRD"
+ge_ev "a checked fact described as asserted is not 'carries a check'" 1 "does not state its evidence as 'carries a check'" \
+  'Q1|widgets.md|"A widget is rated to 5 bar." This fact is asserted.' "$WRD"
+ge_ev "an unchecked fact served with no flag fails (it is served, not refused, but flagged)" 1 "before the answer" \
+  "$CHK" 'Q2|widgets.md|"A widget holds up to 12 things." Verified 2026-09-22.'
+ge_ev "an unchecked fact flagged only after the answer fails" 1 "before the answer" \
+  "$CHK" "Q2|widgets.md|\"A widget holds up to 12 things.\" That is someone's word, 2026-09-22."
 mk_ur() { # mk_ur <out.jsonl> <file read>...  — reads only, the shape grade-routing grades
   python3 - "$@" <<'PY'
 import json, sys
