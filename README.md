@@ -87,7 +87,6 @@ at commit time, and CI runs them again where a hook can't be skipped:
 - credential-shaped strings, across full history (`check-secrets`)
 - facts pasted into agent prompts instead of retrieved (`check-embedded-facts`, engine only)
 - a declared tool tier for every agent, skill and command (`check-tool-scope`, engine only)
-- verification stamps that claim more than the commit supports (`check-stamps`, CI only)
 - a pull request that deletes a fact file, drops a `CONFLICTED` or `UNCORROBORATED` marker or
   widens a scope, or that changes the contract or an ADR in this repository, fails unless it carries
   the `owner-approved` label (`check-blast`, CI only)
