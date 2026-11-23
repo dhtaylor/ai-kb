@@ -111,9 +111,17 @@ class Rechecks(Fixture):
         self.assertEqual([s["heading"] for s in r.capped], ["Old", "Att"])
         self.assertEqual([s["heading"] for s in r.attended], ["Att"])
 
-    def test_an_agent_stamp_falls_due_before_a_human_one(self):
-        self.make(section("A", 20, recheck="true") + section("H", 20, by="human", recheck="true"))
-        self.assertEqual([s["heading"] for s in self.att().rechecks.due], ["A"])
+    def test_an_asserted_stamp_stays_fresh_for_the_horizon_whoever_wrote_it(self):
+        # ADR-0022: the evidence sets the lease, not by:. 20d is past the short lease (9d of 90d).
+        self.make(section("A", 20, recheck="true") + section("H", 20, by="human", recheck="true")
+                  + section("Past", 100, recheck="true"))
+        self.assertEqual([s["heading"] for s in self.att().rechecks.due], ["Past"])
+
+    def test_an_assertion_the_lint_flags_is_on_the_short_lease_and_says_why(self):
+        self.make(section("Weak", 20, recheck="curl -fsSL https://example.com/a | grep -qF 'Widgets'")
+                  + section("Att", 20, recheck="true", attended=True))
+        due = self.att().rechecks.due
+        self.assertEqual([(s["heading"], s["lint"]) for s in due], [("Weak", ["short-fragment"])])
 
     def test_without_a_horizon_nothing_is_due_and_nothing_failed(self):
         self.make(section("Old", 200, recheck="true"), horizon="")
@@ -142,6 +150,11 @@ class Stale(Fixture):
     def test_stamped_past_the_horizon_with_no_recheck(self):
         self.make(section("NoCmd", 200) + section("Cmd", 200, recheck="true") + section("Fresh", 1))
         self.assertEqual([s["heading"] for s in self.att().stale], ["NoCmd"])
+
+    def test_a_human_stamp_buys_no_longer_lease(self):
+        # ADR-0022: someone's word is on the short lease (9d of 90d), whoever gave it.
+        self.make(section("H", 20, by="human") + section("A", 20) + section("Fresh", 5, by="human"))
+        self.assertEqual([s["heading"] for s in self.att().stale], ["H", "A"])
 
 
 class Queue(Fixture):
