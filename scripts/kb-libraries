@@ -52,7 +52,8 @@ REGISTRY = env.registry_path()
 
 def declared_terms(lib: pathlib.Path) -> set:
     """The `keywords:` and `tags:` of a library's root INDEX.md frontmatter, normalized: lowercase,
-    runs of space, `_` and `-` read as one `-`, a trailing plural `s` dropped. Empty if there is
+    runs of space, `_` and `-` read as one `-`, and a trailing `s` dropped from a term longer than 3
+    characters that does not end in `ss` (`library.normalize_term`). Empty if there is
     none."""
     return set(library.library(lib).terms)
 
