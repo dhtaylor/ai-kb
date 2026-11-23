@@ -253,15 +253,14 @@ def library(root) -> Library:
             pass
     except (OSError, RuntimeError):
         pass
-    _unasserted_ttl(lib, fm, problems)
+    _unasserted_ttl(lib, fm, problems)    # last: which field it reads depends on lib.contract
     return lib
 
 
 def _unasserted_ttl(lib: Library, fm: Frontmatter, problems: list):
     """The short lease: unasserted_ttl: at contract 2.7 and later, where agent_ttl: is rejected;
     agent_ttl: below it, where a declared unasserted_ttl: is read too (check-kb warns, §14)."""
-    state, version = (lib.contract[0], lib.contract[1]) if lib.contract else (None, (2, 0))
-    rules = lib.contract[2] if lib.contract and state in ("ahead", "unsupported", "malformed") else version
+    rules = contract.rules_version(lib.contract) if lib.contract else (2, 0)
     if "agent_ttl" in fm and rules >= (2, 7):
         problems.append(Problem("unasserted_ttl", f"agent_ttl: is not read at contract 2.7 and later "
                                                   f"(this library declares {contract.fmt(rules)}): "

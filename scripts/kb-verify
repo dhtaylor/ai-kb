@@ -418,7 +418,8 @@ def main(argv) -> int:
     budget = budget_override or lib.budget
     ttl = lib.unasserted_ttl
     if ttl is None:
-        print(f"kb-verify: {root}/INDEX.md: {lib.problem('unasserted_ttl')}", file=sys.stderr); return 2
+        print(f"kb-verify: {root}/INDEX.md: {lib.problem('unasserted_ttl')}", file=sys.stderr)
+        return 2
 
     due, found, with_cmd = due_sections(root, horizon, ttl, "--all" in flags)
     skipped_attended = [s for s in due if s["attended"]] if unattended else []

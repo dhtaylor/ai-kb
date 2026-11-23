@@ -214,7 +214,8 @@ class Attention:
             return None                  # not computable: neither due nor stale, and no failure
         if lib.unasserted_ttl is None:
             raise ValueError(lib.problem("unasserted_ttl"))
-        due, found, _with_cmd = script("kb-verify").due_sections(self.root, lib.horizon, lib.unasserted_ttl)
+        due, found, _with_cmd = script("kb-verify").due_sections(
+            self.root, lib.horizon, lib.unasserted_ttl)
         return due, found
 
     @cached_property
@@ -234,7 +235,9 @@ class Attention:
         if got is None:
             return []
         is_due = script("kb-verify").is_due
-        return _try(lambda: [s for s in got[1] if not s["cmd"] and is_due(s, self.lib.horizon, self.lib.unasserted_ttl)])
+        lib = self.lib
+        return _try(lambda: [s for s in got[1]
+                             if not s["cmd"] and is_due(s, lib.horizon, lib.unasserted_ttl)])
 
     # -- needs-attention.md, read once --
     @cached_property

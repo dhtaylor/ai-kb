@@ -178,7 +178,7 @@ def main(root: pathlib.Path) -> int:
     if lib.contract is None:
         contract.known_contracts()    # this engine cannot read its own §14: raises, as it always did
     state, version, newest, newer = lib.contract
-    rules = newest if state in ("ahead", "unsupported", "malformed") else version
+    rules = contract.rules_version(lib.contract)
     if state == "behind":
         notes.append(f"{index}: built to contract {contract.fmt(version)}; this engine knows "
                      f"{contract.fmt(newest)}. Raise kb_contract to adopt what is newer — "
@@ -264,7 +264,11 @@ def main(root: pathlib.Path) -> int:
 
         if f == root / "INDEX.md" and lib.problem("unasserted_ttl"):
             defects.append(f"{f}: {lib.problem('unasserted_ttl')}")
-        if f == root / "INDEX.md" and lib.ttl_field == "unasserted_ttl" and rules < (2, 7):
+        if f == root / "INDEX.md" and rules < (2, 7) \
+                and "unasserted_ttl" in fm and "agent_ttl" in fm:
+            warnings.append(f"{f}: declares both agent_ttl: and unasserted_ttl:; below contract 2.7 "
+                            f"agent_ttl: is used and unasserted_ttl: is never checked (§14)")
+        elif f == root / "INDEX.md" and lib.ttl_field == "unasserted_ttl" and rules < (2, 7):
             rule((2, 7), f"{f}: unasserted_ttl: is the short lease from contract 2.7; this library "
                          f"reads agent_ttl: (§3)")
 

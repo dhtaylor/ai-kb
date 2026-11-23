@@ -1100,6 +1100,9 @@ case_run "unasserted_ttl: below 2.7 it is a warning, not a failure (§14)" 0 "fa
   "$ENGINE/scripts/check-kb" "$TMP/ttl-early"
 case_run "unasserted_ttl: below 2.7 it is still used" 0 "short lease 30d" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-early"
+ttl_lib "$TMP/ttl-both" "agent_ttl: 30d" '"2.6"'; patch "$TMP/ttl-both/INDEX.md" 's/^agent_ttl: 30d$/&\nunasserted_ttl: 90d/'
+case_run "unasserted_ttl: below 2.7 with both declared, check-kb warns which one is used" 0 "agent_ttl: is used" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ttl-both"
 # A short lease as long as the horizon erases the difference between asserted and unasserted stamps.
 ttl_lib "$TMP/ttl-eq" "unasserted_ttl: 90d"
 case_run "unasserted_ttl: not shorter than the horizon fails check-kb" 1 "unasserted_ttl" -- \
