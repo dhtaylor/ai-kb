@@ -145,8 +145,6 @@ def read_mapping(mapping: pathlib.Path, ncases: int) -> dict:
     return graded
 
 
-EVIDENCE_PHRASE = {"check": "carries a check", "word": "someone's word"}   # expected_evidence values
-
 SOURCES = re.compile(r"^\s*Sources:\s*(.*?)\s*$", re.M)
 
 
@@ -208,6 +206,18 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
     # this phrase. Leading markup (bold, a heading, a quote mark) is presentation, not order.
     LEAD = "uncorroborated — single source"
     leads = lambda a: re.sub(r'^[\s*_#>"]+', "", norm(a)).startswith(LEAD)
+    # A cited fact states what backs it in plain words (ADR-0022): `check` needs "carries a check",
+    # `word` needs "someone's word" ahead of the fact, so a reader who stops there knows. Retrieval
+    # cannot run the lint, so "carries a check", never "asserted". The phrases are check-golden's.
+    def evidence_ok(ev, ans, excerpts):
+        a, phrase = norm(ans), norm(check_golden().EVIDENCE[ev])
+        at = a.find(phrase)
+        if at < 0:
+            return False
+        # `first` is where the fact is quoted, -1 when it is not quoted at all; that case is already
+        # failed by the excerpt check, so the flag cannot be late and is not failed twice.
+        first = min((a.find(x) for x in (norm(e).rstrip('.!?;:,"') for e in excerpts) if x in a), default=-1)
+        return ev == "check" or first < 0 or at < first
     rows, npass, ngraded = [], 0, 0
     for i, r in enumerate(recs, 1):
         q = f"Q{i}"
@@ -244,23 +254,14 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
             in_file = target is not None and target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
 
         led = case != "uncorroborated" or leads(ans)
-        # A cited fact states what backs it in plain words, and a fact resting on someone's word is
-        # flagged before the answer (ADR-0022). Retrieval cannot run the lint, so "carries a check",
-        # never "asserted".
         ev = r.get("expected_evidence")
-        evidenced = True
-        if ev:
-            phrase = norm(EVIDENCE_PHRASE[ev])
-            at = norm(ans).find(phrase)
-            first = min((norm(ans).find(norm(e).rstrip('.!?;:,"')) for e in excerpts
-                         if norm(e).rstrip('.!?;:,"') in norm(ans)), default=-1)
-            evidenced = at >= 0 and (ev == "check" or first < 0 or at < first)
+        evidenced = not ev or evidence_ok(ev, ans, excerpts)
         ok = in_answer and file_ok and in_file and led and evidenced
         npass += ok
         why = []
         if not in_answer: why.append("excerpt not in answer")
         if not led:       why.append(f"does not lead with {LEAD!r}")
-        if not evidenced: why.append(f"does not state its evidence as {EVIDENCE_PHRASE[ev]!r}"
+        if not evidenced: why.append(f"does not state its evidence as {check_golden().EVIDENCE[ev]!r}"
                                      + (" before the answer" if ev == "word" else ""))
         if not file_ok:   why.append(f"cited {cited or '(none)'!r}, expected {ef or '(none)'!r}")
         if not in_file:   why.append("excerpt not in the expected file — ORACLE ROT")

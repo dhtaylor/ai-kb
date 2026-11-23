@@ -182,7 +182,7 @@ goes for eval evidence kept under a library's `documents/eval-<date>/`, which re
 to the same questions. Repair the golden set in the same change that invalidates it, or it quietly
 stops testing anything.
 
-Two record rules catch people out (the full set is in [CONVENTIONS.md](CONVENTIONS.md) §10):
+Three record rules catch people out (the full set is in [CONVENTIONS.md](CONVENTIONS.md) §10):
 
 - **An `unresolved` case** exists only where the domain really holds a `CONFLICTED` section. Its
   `expected_file` is that file, and its `expected_excerpt` is exactly `disputed — not served`, the
@@ -205,7 +205,7 @@ meaning:
 |---|---|
 | `check-kb` | missing frontmatter, `name` that disagrees with the filename, dead links, slug collisions, **orphans** — any file no router reaches |
 | `check-scope` | a scope value that disagrees with its library, a project tree holding general facts, a relative link climbing out of a library |
-| `check-golden` | a golden record whose file is missing, no router reaches, or whose excerpt (or `alt_excerpt`) is not in that file, too few negative cases, an `unresolved` case without the exact refusal phrase or pointing at a file with no `CONFLICTED` section |
+| `check-golden` | a golden record whose file is missing, no router reaches, or whose excerpt (or `alt_excerpt`) is not in that file, too few negative cases, an `unresolved` case without the exact refusal phrase or pointing at a file with no `CONFLICTED` section, an `expected_evidence` the file contradicts (including `word` on an unstamped section, which retrieval reports as unstamped) |
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits` | committed credentials, scripts git records non-executable |
 | `check-embedded-facts`, `check-tool-scope` (the engine's own hook and CI only) | facts inlined into the behaviour layer; an agent, skill or command with no declared tool tier, or a tier its tools don't fit |

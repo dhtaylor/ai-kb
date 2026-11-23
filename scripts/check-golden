@@ -43,18 +43,18 @@ def load_script(name):
 
 
 FIELD = re.compile(r"^(question|expected_file|expected_excerpt|alt_excerpt|expected_evidence):\s*(.*?)\s*$")
-EVIDENCE = {"check", "word"}   # expected_evidence: the section carries a Recheck:, or it does not (ADR-0022)
+# expected_evidence -> the words retrieval uses for it (ADR-0022). grade-eval imports this map.
+EVIDENCE = {"check": "carries a check", "word": "someone's word"}
 
 
-def carries_check(body: str, excerpt: str):
-    """True if the section holding `excerpt` carries a `Recheck:` under a stamp, False if it holds
-    the excerpt without one, None if no section holds it. Retrieval can see this and cannot run the
-    check, so it is all an evidence case can ask of the file."""
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))   # grade-eval imports this module
-    from kbengine import factfiles
-    for s in factfiles.sections(body):
+def evidence_of(ckb, body: str, excerpt: str):
+    """What backs the section holding `excerpt`, as retrieval reports it: "check" if a stamp in it
+    carries a `Recheck:`, "word" if it is stamped without one, "unstamped" if it has no stamp (retrieval
+    says so, not "someone's word"), None if no section holds the excerpt. Retrieval can see this and
+    cannot run the check, so it is all an evidence case can ask of the file. `ckb` is check-kb."""
+    for s in ckb.factfiles.sections(body):
         if ws(excerpt) in ws(s.text):
-            return any(st.recheck for st in s.stamps)
+            return "check" if any(st.recheck for st in s.stamps) else "word" if s.stamps else "unstamped"
     return None
 
 
@@ -188,9 +188,13 @@ def main(root: pathlib.Path) -> int:
                 defects.append(f"{where} [{case}]: expected_evidence '{ev}' is not one of {sorted(EVIDENCE)}")
             elif case != "positive":
                 defects.append(f"{where} [{case}]: expected_evidence is for a positive case only")
-            elif carries_check(target.read_text(), exc) != (ev == "check"):
-                defects.append(f"{where} [{case}]: expected_evidence '{ev}' but the section holding the "
-                               f"excerpt in {ef} {'has no Recheck:' if ev == 'check' else 'carries a Recheck:'}")
+            elif (found := evidence_of(ckb, target.read_text(), exc)) != ev:
+                why = {"check": "carries a Recheck:", "word": "has no Recheck:",
+                       "unstamped": "has no Verified: stamp, so retrieval reports it unstamped, not as "
+                                    "someone's word"}.get(found)
+                if why:
+                    defects.append(f"{where} [{case}]: expected_evidence '{ev}' but the section holding "
+                                   f"the excerpt in {ef} {why}")
         if case == "uncorroborated":
             # The case tests the caveat a marked claim is served with, so its excerpt must be
             # the marked claim, not a sound neighbour in the same file.

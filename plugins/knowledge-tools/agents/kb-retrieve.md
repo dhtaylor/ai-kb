@@ -231,13 +231,14 @@ Answer first, in plain prose. Then:
 
 ```
 Sources: <path>, <path>
-Evidence: <carries a check, last passed <date> | someone's word, <date> | unstamped>     (one per fact cited)
+Evidence: <carries a check, last passed <date> | someone's word, <date> | unstamped>
+          (one line per fact cited)
 ```
 
 Put a flag line before the answer for any fact that is someone's word or unstamped (rule 6). The
-`Evidence:` line repeats each fact's evidence beside its source, one per fact when there are several;
-it never reports `by:`. The `Sources:` line holds paths and nothing else. A note on it, such as how you reached the file,
-belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
+`Evidence:` line repeats each fact's evidence beside its source, one per fact when there are
+several; it never reports `by:`. The `Sources:` line holds paths and nothing else. A note on it,
+such as how you reached the file, belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
 
 If you refused — not found, conflicted, or a secret — say which, and why.
 

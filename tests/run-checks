@@ -540,6 +540,10 @@ build_evid "$TMP/gev2" word word
 case_run "evidence case: 'word' on a section that carries a Recheck: fails check-golden" 1 "carries a Recheck:" -- "$ENGINE/scripts/check-golden" "$TMP/gev2"
 build_evid "$TMP/gev3" check check
 case_run "evidence case: 'check' on a section with no Recheck: fails check-golden" 1 "has no Recheck:" -- "$ENGINE/scripts/check-golden" "$TMP/gev3"
+build_evid "$TMP/gev5" check word
+printf '\n## Colour\n\nA widget is blue.\n' >> "$TMP/gev5/widgets.md"
+sed -i 's/expected_excerpt: "A widget holds up to 12 things."/expected_excerpt: "A widget is blue."/' "$TMP/gev5/fx-golden.md"
+case_run "evidence case: 'word' on an unstamped section fails check-golden (it is reported unstamped)" 1 "has no Verified: stamp" -- "$ENGINE/scripts/check-golden" "$TMP/gev5"
 build_evid "$TMP/gev4" asserted word
 case_run "evidence case: an unknown expected_evidence fails check-golden" 1 "is not one of" -- "$ENGINE/scripts/check-golden" "$TMP/gev4"
 ge_ev() { # ge_ev <name> <want-exit> <want-text> <Q1 record> <Q2 record>
@@ -555,6 +559,10 @@ ge_ev "a checked fact described as asserted is not 'carries a check'" 1 "does no
   'Q1|widgets.md|"A widget is rated to 5 bar." This fact is asserted.' "$WRD"
 ge_ev "an unchecked fact served with no flag fails (it is served, not refused, but flagged)" 1 "before the answer" \
   "$CHK" 'Q2|widgets.md|"A widget holds up to 12 things." Verified 2026-09-22.'
+ge_ev "an unchecked fact refused for lacking a check fails (nothing is refused for that)" 1 "does not state its evidence as \"someone's word\"" \
+  "$CHK" 'Q2||fact not found — check KB'
+ge_ev "an unchecked fact refused as disputed fails the same way" 1 "does not state its evidence as \"someone's word\"" \
+  "$CHK" 'Q2||disputed — not served'
 ge_ev "an unchecked fact flagged only after the answer fails" 1 "before the answer" \
   "$CHK" "Q2|widgets.md|\"A widget holds up to 12 things.\" That is someone's word, 2026-09-22."
 mk_ur() { # mk_ur <out.jsonl> <file read>...  — reads only, the shape grade-routing grades
