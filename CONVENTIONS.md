@@ -453,11 +453,10 @@ Verified: 2026-09-19 · by: agent · method: query
 - **`by:` is a claim, and only partly checkable.** The original rule here said it was derived from the
   git committer identity and that CI rejected `by: human` from an agent identity. That is
   unimplementable, and the reason is worth stating rather than hiding: **an agent commits under the
-  human's own git identity**, so there are not two identities to tell apart. What `check-stamps` does
-  enforce is narrower and real — a commit that announces agent co-authorship in its message may not
-  also add a `by: human` stamp. It catches the accident, not the determined author, and nothing here
-  can catch the latter. The stakes are why it is worth having: a human stamp suppresses re-checking
-  for **ten times** as long as an agent one.
+  human's own git identity**, so there are not two identities to tell apart. `check-stamps`, which
+  refused a commit announcing agent co-authorship that also added a `by: human` stamp, is retired
+  ([ADR-0022](documents/decisions/0022-evidence-not-identity-sets-the-lease.md)): the lease follows
+  the stamp's evidence, not its `by:`, so a false `by: human` buys nothing.
 - **A section may carry a re-check assertion**, directly beneath its stamp:
 
   ```
@@ -797,7 +796,6 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | re-check assertions | a stale section's `Recheck:` still exits 0; failures reported, never applied | **built** — `kb-verify` |
 | assertions that cannot fail | a fetched fragment of ≤4 words, or one (url, fragment) backing >2 sections or several files; reported every run, never a failure (§7) | **built** — `kb-verify` |
 | ownership resolution | who a finding belongs to, by CODEOWNERS' last-match-wins rule | **built** — `kb-owner` |
-| stamp honesty | a commit claiming agent co-authorship does not also add a `by: human` stamp | **built** — `check-stamps` |
 | high-blast gate | a diff that deletes a knowledge file, drops a `status: CONFLICTED` or `status: UNCORROBORATED` marker, or promotes a fact's scope toward `general` is flagged, for CI to hold until an owner labels it; detection only | **built** — `check-blast` |
 | tool-scope declaration | each agent, skill and command declares a tool tier and is consistent with it; proves the declaration, not that a skill cannot use an undeclared tool | **built** — `check-tool-scope` |
 | sweep and re-check due | which trees are due for a sweep, and how many facts, open queue items and episodic notes await a librarian; a reminder, exit 0 always | **built** — `kb-due` |

@@ -206,8 +206,9 @@ meaning:
 | `check-xlinks` | a `[[library:slug]]` into an installed library that does not have that slug — from a library or from a project tree |
 | `check-secrets`, `check-exec-bits` | committed credentials, scripts git records non-executable |
 | `check-embedded-facts`, `check-tool-scope` (the engine's own hook and CI only) | facts inlined into the behaviour layer; an agent, skill or command with no declared tool tier, or a tier its tools don't fit |
-| `check-stamps` (CI only — the engine's and every library's; it reads commit messages, which a pre-commit hook never sees) | a commit that announces agent co-authorship and also stamps a fact `by: human` — which would buy ten times the re-check interval |
 | `check-blast` (CI only, on a pull request) | a pull request that deletes a fact file, drops a `CONFLICTED` or `UNCORROBORATED` marker or widens a fact's scope, unless it carries the `owner-approved` label. In the engine, the same for a change to `CONVENTIONS.md` or an ADR. A direct push only warns |
+
+`check-stamps` is retired ([ADR-0022](documents/decisions/0022-evidence-not-identity-sets-the-lease.md)): the lease follows a stamp's evidence, not its `by:`, so there is nothing for it to refuse.
 
 `grade-routing` is **not** in the hooks either: it grades a subagent transcript a person ran, to check an agent routed to the expected file ([ADR-0013](documents/decisions/0013-steady-state-surfaced-not-scheduled.md)).
 
@@ -361,7 +362,7 @@ git config core.hooksPath .githooks
 It runs `check-exec-bits`, `check-secrets`, `check-embedded-facts` and `check-tool-scope`, then
 `check-xlinks --installed` and `check-scope` over the libraries registered on your machine, and
 `tests/run-checks` whenever the commit touches `scripts/` or `tests/`. CI runs `check-exec-bits`,
-`check-secrets --all`, `check-embedded-facts`, `check-tool-scope`, `check-stamps`, `check-blast` and
+`check-secrets --all`, `check-embedded-facts`, `check-tool-scope`, `check-blast` and
 `tests/run-checks`.
 
 - **A check or a contract rule changes with a case.** `tests/run-checks [-v]` takes about a minute and

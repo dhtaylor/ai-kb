@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `check-stamps` is retired (#240, ADR-0022). It refused an agent-co-authored commit that added a
+  `by: human` stamp, to stop a false claim buying a tenfold lease. The lease now follows the
+  stamp's evidence, so a false `by: human` buys nothing. The script, the engine's guardrails
+  step, the library guardrails template's "Stamp honesty" step and their cases in `run-checks` are
+  removed. A library that copied the template can delete its "Stamp honesty" step: it fails once
+  `scripts/check-stamps` is gone from the engine release it pins.
 - A stamp's lease follows its evidence, not its `by:` (#238, ADR-0022). An asserted stamp (a
   `Recheck:` the assertion lint does not flag, attended or not) stays fresh for the full
   `freshness_horizon`. Every unasserted stamp, `by: human` included, falls due after the short
