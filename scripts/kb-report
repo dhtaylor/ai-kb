@@ -19,6 +19,10 @@ listing per library only what a person has to decide:
   topic named in the root `Not covered here:` line makes the next such question far cheaper. The
   report gives the count and cost; `kb-telemetry --not-found` lists the questions.
 
+The report opens with assertion coverage per library (#239, ADR-0022): the asserted sections over the
+sourced ones, "0 of N" when none is asserted. It is a measure, not a decision, so it is listed for
+every library, those with nothing to decide too, and never counts toward the decisions waiting.
+
 A library declaring `archived:` that is not registered is left out, as `kb-due` leaves it out (#141).
 A library with nothing to decide gets no section. When no library has anything, the report says so
 in one line. Either way the file is written, so a quiet week can be told from a week the job did not
@@ -103,6 +107,16 @@ def computed(value, what: str, out: list):
         out.append(f"Could not compute {what} ({value.kind}). Run check-kb on the library to see why.")
         return None
     return value
+
+
+def coverage_for(att) -> str:
+    """One library's assertion coverage line, or why it could not be worked out (#239, ADR-0022)."""
+    cov = att.coverage
+    if isinstance(cov, Failed):
+        return f"{attention.label(att.tree)}: assertion coverage could not be worked out ({cov.reason})."
+    n = cov.sourced
+    return (f"{attention.label(att.tree)}: assertion coverage {cov.asserted} of "
+            f"{n} sourced section{'' if n == 1 else 's'}")
 
 
 def decisions_for(att, names: dict, gaps=None) -> list:
@@ -201,7 +215,7 @@ def main(argv) -> int:
             print(f"kb-report: the report must be kept outside every library, not in {dest_dir}", file=sys.stderr)
             return 2
 
-    sections, total, gaps = [], 0, not_found_week(mods)
+    sections, total, gaps, coverage = [], 0, not_found_week(mods), []
     for t in trees:
         if not (t / "INDEX.md").is_file():
             continue
@@ -209,6 +223,7 @@ def main(argv) -> int:
             att = attention.attention(t, packets, consumed)
             if attention.shelved(att, registered):   # a read-only archive cannot act on a decision (#141)
                 continue
+            coverage.append(coverage_for(att))
             items = decisions_for(att, names, gaps)
         except Exception as e:
             items = [f"Could not compute what needs a decision here ({type(e).__name__}). "
@@ -224,9 +239,12 @@ def main(argv) -> int:
             f"decisions: {total}\n---\n\n# Knowledge base decisions, {name}\n\n")
     if total:
         text += (f"{total} decision(s) waiting across {len(sections)} library(ies). Paths, counts and "
-                 f"headings only: open the file or packet named to see the text.\n\n" + "\n".join(sections))
+                 f"headings only: open the file or packet named to see the text.\n\n")
     else:
-        text += "Nothing needs a decision this week.\n"
+        text += "Nothing needs a decision this week.\n\n"
+    if coverage:   # where trust is thin comes before what is due (#239, ADR-0022)
+        text += "## Assertion coverage\n\n" + "\n".join(f"- {c}" for c in coverage) + "\n\n"
+    text += "\n".join(sections)
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / f"{name}.md"
     tmp = dest.with_name(f".{dest.name}.tmp")

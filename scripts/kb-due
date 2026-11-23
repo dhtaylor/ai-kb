@@ -25,6 +25,11 @@ when due, never run unattended" — one nudge, not two. --quiet's sweep-only rep
 exactly as it was (every current caller of --quiet is unaffected); --nudge is additive and
 reports, per tree, everything a librarian should act on:
 
+Each tree's line leads with its assertion coverage (#239, ADR-0022): "assertion coverage 2 of 5 sourced
+sections", asserted sections over sourced ones, a lint-flagged assertion counted as unasserted. Zero
+is stated as 0 of N, never a warning. Coverage is a measure, not something due, so a tree with
+nothing due still prints nothing.
+
   1. sweep due            — --quiet's own check, unchanged. Left out of the nudge while a pending kb-audit
                              packet covers it (the packet is already named), and the notes in 4 while a
                              pending kb-distill packet does (#204), as kb-report does.
@@ -121,6 +126,11 @@ def summary_line(counts: list) -> str:
             more = f", +{len(items) - 3} more" if len(items) > 3 else ""
             out.append(f"{heading}: {', '.join(items[:3])}{more}")
     return "KB due — " + " · ".join(out) if out else ""
+
+
+def coverage_text(cov) -> str:
+    """Assertion coverage in words: zero is stated like any other number, never a warning (#239)."""
+    return f"assertion coverage {cov.asserted} of {plural(cov.sourced, 'sourced section')}"
 
 
 def nudge_for(att, retire=None):
@@ -221,6 +231,11 @@ def nudge_for(att, retire=None):
     if retire:   # a registered library is served whatever it declares (#141)
         parts.append(f"declares archived: {att.archived}, but is registered and still served "
                      f"(kb-library remove {retire} to retire it)")
+    cov = att.coverage   # ADR-0022: where trust is thin leads the line, before what is due (#239)
+    if isinstance(cov, Failed):
+        warnings.append(f"{lbl}: could not work out assertion coverage ({cov.reason}) — skipped")
+    elif parts:   # a library with nothing due still prints nothing: silence is the point
+        parts.insert(0, coverage_text(cov))
     line = f"{lbl}: " + "; ".join(parts) if parts else None
     return line, warnings, counts
 
