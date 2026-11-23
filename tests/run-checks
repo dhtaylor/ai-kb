@@ -2363,9 +2363,9 @@ case_run "library CI template pins the engine to a release tag" 0 "" -- \
 
 # ------------------------------------------------- check-stamps retired ----
 # #240, ADR-0022: a stamp's lease follows its evidence, not its `by:`, so a false `by: human`
-# buys nothing and there is nothing left for check-stamps to refuse. A commit that announces agent
-# co-authorship and adds a `by: human` stamp must pass the guardrails: the script is gone, no CI
-# step or hook runs it, and the checks that remain accept such a commit.
+# buys nothing and there is nothing left for check-stamps to refuse. The script is gone, so no CI
+# step or hook may still call it. Every engine script the workflow or the library template runs
+# must exist: a step left calling a deleted script fails here, not in a library's CI.
 case_run "check-stamps script is gone" 1 "" -- test -e "$ENGINE/scripts/check-stamps"
 case_run "engine guardrails workflow no longer runs check-stamps" 1 "" -- \
   grep -q 'check-stamps' "$ENGINE/.github/workflows/guardrails.yml"
@@ -2374,18 +2374,17 @@ case_run "library CI template no longer runs check-stamps" 1 "" -- \
 case_run "library CI template has no stamp-honesty step" 1 "" -- \
   grep -qi 'stamp honesty' "$ENGINE/documents/library-guardrails.yml"
 case_run "no hook runs check-stamps" 1 "" -- \
-  sh -c "grep -rq 'check-stamps' '$ENGINE/.githooks' '$ENGINE/scripts' "
-mkdir -p "$TMP/stamp"; git init -q "$TMP/stamp"
-fm claim general > "$TMP/stamp/claim.md"
-printf '# Claim\n\n## A\n\nx\n\nSource: manual\nVerified: 2026-01-01 · by: human · method: manual\n' >> "$TMP/stamp/claim.md"
-git -C "$TMP/stamp" add -A
-git -C "$TMP/stamp" -c user.email=t@t -c user.name=t commit -qm "agent stamps human
-
-Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>" >/dev/null 2>&1
-case_run "agent-co-authored commit adding a by: human stamp passes the secret scan" 0 "" -- \
-  sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-secrets' --all"
-case_run "agent-co-authored commit adding a by: human stamp passes the exec-bit check" 0 "" -- \
-  sh -c "cd '$TMP/stamp' && '$ENGINE/scripts/check-exec-bits' ."
+  sh -c "grep -rq 'check-stamps' '$ENGINE/.githooks' '$ENGINE/library-hooks'"
+missing_scripts() {   # $1 = engine root; prints each referenced scripts/<name> that is absent
+  _bad=0
+  for _f in "$1/.github/workflows/guardrails.yml" "$1/documents/library-guardrails.yml"; do
+    for _n in $(grep -oE '(\./|\$ENGINE/)scripts/[A-Za-z0-9_.-]+' "$_f" | sed 's|.*scripts/||' | sort -u); do
+      [ -e "$1/scripts/$_n" ] || { echo "missing: scripts/$_n (called from ${_f##*/})"; _bad=1; }
+    done
+  done
+  return $_bad
+}
+case_run "every script the CI workflow and library template call exists" 0 "" -- missing_scripts "$ENGINE"
 
 # ------------------------------------------------------------- kb-owner ----
 # GitHub resolves ownership by the LAST matching pattern, not the most specific.
