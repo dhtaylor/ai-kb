@@ -4,7 +4,23 @@ What changed in each release of the engine. What a version number means, and how
 engine, is [ADR-0015](documents/decisions/0015-releases-and-pinning.md). A domain library records the
 engine release it was last verified against in its own release notes.
 
-## Unreleased
+## v0.5.0 — 2026-11-23
+
+Changes since v0.4.0. A minor release: CONVENTIONS §2 and §5 change for local-only libraries (#212),
+with no change to the contract version (ADR-0015). This engine still serves libraries that declare
+`kb_contract` 2.0 to 2.6 (ADR-0016); a library that declares none is read as 2.0.
+
+**Before you upgrade:**
+- **If you had `XDG_STATE_HOME` or `XDG_CONFIG_HOME` set**, the engine no longer reads the old folders
+  (ADR-0021, entry below). Move your packets, reports, log and backups from `$XDG_STATE_HOME/ai-kb/`
+  to `~/.local/state/ai-kb/`, and run `kb-schedule install` again. After reinstalling, the old
+  `ai-kb/schedule.conf` and `systemd/user/ai-kb-schedule.{service,timer}` under `$XDG_CONFIG_HOME` may
+  be deleted, after `systemctl --user daemon-reload` (#227). The reinstall writes the same units under
+  `~/.config`, so the leftovers do no harm, but `kb-schedule status` does not mention them.
+- **Keep `scripts/kbengine/` beside the scripts** (#226). Most engine scripts now import the
+  `kbengine` package from the folder beside them. Run in place or through a symlink, they work; a
+  script copied on its own fails at import (`ModuleNotFoundError: No module named 'kbengine'`). In
+  v0.4.0, `kb-due` copied on its own still ran. A normal install is not affected.
 
 - A library may be local-only: a git repository with no remote, never pushed (#212). CONVENTIONS
   §2 names it as a supported mode and what differs (no origin to export, the commit hook as its only
