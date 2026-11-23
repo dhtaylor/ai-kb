@@ -285,7 +285,9 @@ def weak_rechecks(root: pathlib.Path, sections: list) -> list:
 
 
 def _weak(root: pathlib.Path, sections: list) -> list:
-    """(flagged sections, kind, message) per finding. Doc-review assertions that cannot fail (§7, issues #34 and #41): a page fetched and
+    """(flagged sections, kind, message) per finding.
+
+    Doc-review assertions that cannot fail (§7, issues #34 and #41): a page fetched and
     grepped for a fragment of a few words (its title, its subject, an identifier), or one
     (url, fragment) pair backing many sections or sections in several files. Either passes
     for as long as the page exists, which says nothing about the claim. Static — nothing is
@@ -328,7 +330,9 @@ def outside_rechecks(root: pathlib.Path, sections: list) -> list:
 
 
 def _outside(root: pathlib.Path, sections: list) -> list:
-    """(flagged sections, kind, message) per finding. Assertions whose relative path climbs above the library root (issue #60). Static, a
+    """(flagged sections, kind, message) per finding.
+
+    Assertions whose relative path climbs above the library root (issue #60). Static, a
     warning: the path resolves only in one layout, and elsewhere the fact reads as stale."""
     out = []
     for s in sections:

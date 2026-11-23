@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `kb-verify`'s assertion lint reports which sections each finding covers (#235): `lint_findings`
+  returns them by section, as `short-fragment`, `reused-fragment` or `outside`, for the
+  evidence-based lease and assertion coverage to come (ADR-0022). The printed warnings are
+  unchanged.
 - The `kb-libraries` docstring for `declared_terms` states the plural rule the code applies (#230): a
   trailing `s` is dropped only from a term longer than 3 characters that does not end in `ss`, so
   `bus`, `gas` and `process` keep theirs. It said "a trailing plural `s` dropped". Behavior is
