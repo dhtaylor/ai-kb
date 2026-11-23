@@ -48,9 +48,12 @@ whether or not they are due: a page grepped for a few words (its title or subjec
 (url, fragment) pair backing more than two sections or sections in several files. Each passes
 while the page exists and tests nothing about its own claim. A warning, not a failure.
 
-Selection is by staleness, per §7: a section is due when its stamp is older than the
-domain's freshness_horizon, or, for an agent stamp, older than its agent_ttl (a TENTH of
-the horizon unless the domain declares one). The domain's verifier_budget caps how many run per sweep, oldest first.
+Selection is by staleness, per §7 and ADR-0022: the evidence sets the lease, not by:. An
+asserted stamp (its Recheck is one the lint above does not flag) is due once older than the
+domain's freshness_horizon; any other is due once older than its agent_ttl, the short lease
+(a TENTH of the horizon unless the domain declares one). Each command names its lease, and
+the lint finding behind a short one. The domain's verifier_budget caps how many run per
+sweep, oldest first.
 
 THE QUEUE (Phase 5, plan §6 exit: "stale or drifted facts surface as a queue rather
 than rotting silently"): on every FAILED assertion run under --yes, kb-verify appends
@@ -142,14 +145,21 @@ def failure_detail(result):
     return "stale-recheck", f"exit {result.returncode}"
 
 
+def asserted(s: dict) -> bool:
+    """An asserted stamp: a Recheck: backs it and the assertion lint flags none (ADR-0022).
+    Who wrote it does not count. due_sections records the lint's findings on each section."""
+    return bool(s["cmd"]) and not s.get("lint")
+
+
 def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
-    """A stamped section is due for recheck once its age exceeds its trust tier's TTL —
-    the domain's agent TTL for an agent stamp, the full horizon for a human one (§7).
+    """A stamped section is due for recheck once its age exceeds its lease — the full horizon
+    for an asserted stamp, the short lease (agent_ttl) for every other, whatever its by:
+    says (ADR-0022).
     Top-level (not nested in main()) so kb-due can import and call it: the two scripts must
     judge staleness identically, and a condition copied into a second file is a condition
     that can drift out from under the first."""
     age = (clock.today() - s["date"]).days
-    return age > (agent_ttl if s["by"] == "agent" else horizon)
+    return age > (horizon if asserted(s) else agent_ttl)
 
 
 def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=False):
@@ -162,6 +172,9 @@ def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=
         if kind == "fact":       # a Recheck in a note, a stub or a router is an example, not an assertion
             found += sections(f)
     with_cmd = [s for s in found if s["cmd"]]
+    lint = lint_findings(root, with_cmd)
+    for s in with_cmd:
+        s["lint"] = lint.get((s["file"], s["line"]), [])
     due = [s for s in with_cmd if all_sections or is_due(s, horizon, agent_ttl)]
     due.sort(key=lambda s: s["date"])
     return due, found, with_cmd
@@ -441,7 +454,7 @@ def main(argv) -> int:
         print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
         for s in unverifiable:
             print(f"    {s['file'].relative_to(root)} § {s['heading']}"
-                  f"  ({(clock.today() - s['date']).days}d, by: {s['by']})")
+                  f"  ({(clock.today() - s['date']).days}d, short lease: no Recheck)")
 
     if not selected:
         print("\nNothing to run.")
@@ -449,7 +462,8 @@ def main(argv) -> int:
 
     print(f"\n  Commands{'' if '--yes' in flags else ' (NOT run — pass --yes to run them)'}:")
     for s in selected:
-        print(f"    {s['file'].relative_to(root)} § {s['heading']}  ({(clock.today() - s['date']).days}d)")
+        lease = "full horizon" if asserted(s) else "short lease: " + ", ".join(s["lint"])
+        print(f"    {s['file'].relative_to(root)} § {s['heading']}  ({(clock.today() - s['date']).days}d, {lease})")
         print(f"      $ {s['cmd']}")
     if "--yes" not in flags:
         print("\nRead them before you do. A library's assertions run as you, with your privileges.")

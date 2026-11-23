@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A stamp's lease follows its evidence, not its `by:` (#238, ADR-0022). An asserted stamp (a
+  `Recheck:` the assertion lint does not flag, attended or not) stays fresh for the full
+  `freshness_horizon`. Every unasserted stamp, `by: human` included, falls due after the short
+  lease (`agent_ttl`, a tenth of the horizon by default), as does a lint-flagged assertion.
+  `kb-verify` names the lease of each due command and each stale fact, and the finding behind a
+  short one. On upgrade, expect far fewer facts due for recheck: asserted stamps that were on the
+  short lease only because they were `by: agent` are no longer due. A `by: human` stamp with no
+  `Recheck:` now goes stale after the short lease instead of the full horizon.
 - `kb-verify`'s assertion lint reports which sections each finding covers (#235): `lint_findings`
   returns them by section, as `short-fragment`, `reused-fragment` or `outside`, for the
   evidence-based lease and assertion coverage to come (ADR-0022). The printed warnings are

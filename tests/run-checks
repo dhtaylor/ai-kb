@@ -881,13 +881,23 @@ printf '\n## Writing an assertion\n\nSource: manual\n\n```\nVerified: 2026-01-01
 case_run "a fenced example Recheck is not an assertion, and is never run (#199)" 0 "0 with a Recheck assertion" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vfence" --all --yes
 
-# #201: a stamp that names no by: or method: is still a stamp, and a missing by: reads as an agent's
-# (the shorter TTL). The default 2026-09-22 stamp is 9d past an agent's TTL and inside a human's.
+# #201: a stamp that names no by: or method: is still a stamp. Its lease follows its evidence, as
+# any stamp's does (ADR-0022): asserted, the default 2026-09-22 stamp (18d) is inside the 90d horizon.
 build_clean "$TMP/vnoby"
 patch "$TMP/vnoby/widgets.md" 's/^Verified: .*$/Verified: 2026-09-22/'
 printf 'Recheck: true\n' >> "$TMP/vnoby/widgets.md"
-case_run "a stamp with no by: or method: is seen, and due as an agent's (#201)" 0 "1 with a Recheck assertion, 1 due to run" -- \
+case_run "a stamp with no by: or method: is seen, and judged by its evidence (#201)" 0 "1 with a Recheck assertion, 0 due to run" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vnoby"
+# ADR-0022 (#238): the lease follows the evidence. A lint-flagged assertion is on the short lease (9d of
+# 90d), and the report says so and why; a sound one is on the full horizon.
+build_clean "$TMP/vlease" --stamp "$(date -d "$KB_TODAY -20 days" +%F)"
+printf "Recheck: curl -fsSL https://example.com/a | grep -qF 'Widgets'\n" >> "$TMP/vlease/widgets.md"
+printf '\n## Old\n\nA widget weighs 2 kg.\n\nSource: manual\nVerified: %s · by: human · method: manual\nRecheck: true\n' \
+  "$(date -d "$KB_TODAY -100 days" +%F)" >> "$TMP/vlease/widgets.md"
+case_run "lease: a lint-flagged assertion is due on the short lease, and the report names the finding" 0 \
+  "widgets.md § Limits  (20d, short lease: short-fragment)" -- "$ENGINE/scripts/kb-verify" "$TMP/vlease"
+case_run "lease: a sound assertion past the horizon is due on the full horizon" 0 \
+  "widgets.md § Old  (100d, full horizon)" -- "$ENGINE/scripts/kb-verify" "$TMP/vlease"
 # #201: only fact files hold assertions. A Recheck in an episodic note, a source stub or a router
 # is an example or a record, and was run.
 build_clean "$TMP/vnonfact"
@@ -1046,23 +1056,26 @@ case_run "stale section with no assertion is named, not skipped" 0 "no assertion
 # agent_ttl (issue #30): a domain may declare how long an agent stamp stays fresh. Derived as a
 # tenth of the horizon, a vendor-product library's agent stamps (90–180d band: 9–18d) expired
 # before every monthly sweep, and the only lever was the horizon, which also sets the human
-# TTL. The fixture's horizon is 90d (default agent TTL 9d); its agent stamp is 20 days old.
+# TTL. The fixture's horizon is 90d (default agent TTL 9d); its stamp is 20 days old. Since ADR-0022
+# agent_ttl is the short lease of an unasserted stamp, so the fixture's stamp carries no Recheck:
+# an asserted one is on the full horizon, and would pass these cases whatever agent_ttl said.
 ttl_lib() { # ttl_lib <dir> [agent_ttl line]
   build_clean "$1" --stamp "$(date -d "$KB_TODAY -20 days" +%F)"
-  printf 'Recheck: true\n' >> "$1/widgets.md"
   [ -n "${2:-}" ] && patch "$1/INDEX.md" "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/"
   return 0
 }
 ttl_lib "$TMP/ttl-default"
 case_run "agent_ttl: undeclared, it is a tenth of the horizon" 0 "agent TTL 9d" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
-case_run "agent_ttl: undeclared, a 20-day agent stamp is due" 0 "1 fact due for recheck" -- \
+case_run "agent_ttl: undeclared, a 20-day unasserted stamp is stale" 0 "1 stale fact with no assertion" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ttl-default" --nudge
+case_run "agent_ttl: the stale list names the short lease, not by: (#238)" 0 "widgets.md § Limits  (20d, short lease: no Recheck)" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
 ttl_lib "$TMP/ttl-30" "agent_ttl: 30d   # outlasts the monthly sweep"
 case_run "agent_ttl: a declared value is used" 0 "agent TTL 30d" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-30"
-case_run "agent_ttl: within it, a 20-day agent stamp is not due" 0 "" -- \
-  bash -c '! "$1" "$2" --nudge | grep -q "due for recheck"' _ "$ENGINE/scripts/kb-due" "$TMP/ttl-30"
+case_run "agent_ttl: within it, a 20-day unasserted stamp is not stale" 0 "" -- \
+  bash -c '! "$1" "$2" --nudge | grep -qE "[0-9]+ stale facts? with no assertion"' _ "$ENGINE/scripts/kb-due" "$TMP/ttl-30"
 case_run "agent_ttl: a declared value passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-30"
 # An agent TTL as long as the horizon erases the trust tier between agent and human stamps.
 ttl_lib "$TMP/ttl-eq" "agent_ttl: 90d"
