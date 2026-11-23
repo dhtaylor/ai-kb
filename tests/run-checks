@@ -830,6 +830,17 @@ case_run "bootstrap: --apply registers it" 0 "$BFX/kb/mig" -- git config --file 
 case_run "bootstrap: --apply wires it to the engine's library hook" 0 "$BFX/library-hooks" -- \
   git -C "$BFX/kb/mig" config --get core.hooksPath
 case_run "bootstrap: --check afterwards reports nothing to do" 0 "Everything is configured." -- bstrap --check
+# #229: a helper that crashes is not "no drift". With kbengine/ missing, as in a partial copy of the
+# engine, kb-libraries fails at import; --check must exit non-zero and say so, not exit 0 after a traceback.
+mv "$BFX/scripts/kbengine" "$BFX/scripts/kbengine.away"
+case_run "bootstrap: --check exits non-zero when kb-libraries fails" 1 "FAILED   kb-libraries" -- bstrap --check
+case_run "bootstrap: ...and does not say everything is configured" 1 "" -- \
+  bash -c 'env -i HOME="$1" PATH="$PATH" "$2" --check 2>&1 | grep -qF "Everything is configured."' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
+case_run "bootstrap: ...and says --apply cannot fix it" 1 "--apply cannot fix that: restore the engine" -- bstrap --check
+case_run "bootstrap: ...and does not claim none are registered" 1 "" -- \
+  bash -c 'env -i HOME="$1" PATH="$PATH" "$2" --check 2>&1 | grep -qF "(none registered)"' _ "$BHOME" "$BFX/scripts/kb-bootstrap"
+mv "$BFX/scripts/kbengine.away" "$BFX/scripts/kbengine"
+case_run "bootstrap: with kbengine/ back, --check is clean again" 0 "Everything is configured." -- bstrap --check
 git -C "$BFX/kb/mig" config core.hooksPath .githooks
 case_run "bootstrap: a clone wired elsewhere is drift" 1 "would-set" -- bstrap --check
 bstrap --apply >/dev/null 2>&1
