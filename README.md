@@ -24,7 +24,7 @@ facts**:
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | The working guide: setting up a machine, the daily loop, curating, the weekly job, and working on the engine itself. |
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills, the `kb-retrieve` agent, the `kb-ask` triage skill, and the `/kb-capture` and `/kb-init` commands. |
 | `plugins/analysis-tools/` | A second plugin: a skill that reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft. It reads its tradecraft from a library and holds none. |
-| `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`), the upkeep commands (`kb-verify`, `kb-sources`, `kb-watch`, `kb-due`), the opt-in weekly job (`kb-schedule`, with `kb-prepare`, `kb-apply` and `kb-report`), `kb-backup`, the retrieval-cost tools (`kb-telemetry`, `kb-eval-sample`), and the checks that guard the contract. |
+| `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`), the upkeep commands (`kb-verify`, `kb-sources`, `kb-watch`, `kb-due`), the opt-in weekly job (`kb-schedule`, with `kb-prepare`, `kb-apply` and `kb-report`), `kb-backup`, the retrieval-cost tools (`kb-telemetry`, `kb-eval-sample`), and the checks that guard the contract. Run them from the engine tree or through a symlink: most import the `kbengine` package in `scripts/kbengine/`, so a script copied on its own fails at import. |
 | `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0021). Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
@@ -107,7 +107,7 @@ library's keywords overlap a registered one's enough to blur routing.
 
 ## Status
 
-This is early, working software, version 0.4.0, with one author so far. Releases are tagged and
+This is early, working software, version 0.5.0, with one author so far. Releases are tagged and
 described in [CHANGELOG.md](CHANGELOG.md); what a version number means is
 [ADR-0015](documents/decisions/0015-releases-and-pinning.md), and how a library states which version of
 the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-library-contract.md).
