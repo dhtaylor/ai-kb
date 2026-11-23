@@ -280,7 +280,12 @@ def text_runs(pattern: str, mode: str) -> list:
     return out
 
 def weak_rechecks(root: pathlib.Path, sections: list) -> list:
-    """Doc-review assertions that cannot fail (§7, issues #34 and #41): a page fetched and
+    """The printed WEAK warnings, one per finding of _weak (below)."""
+    return [msg for _, _, msg in _weak(root, sections)]
+
+
+def _weak(root: pathlib.Path, sections: list) -> list:
+    """(flagged sections, kind, message) per finding. Doc-review assertions that cannot fail (§7, issues #34 and #41): a page fetched and
     grepped for a fragment of a few words (its title, its subject, an identifier), or one
     (url, fragment) pair backing many sections or sections in several files. Either passes
     for as long as the page exists, which says nothing about the claim. Static — nothing is
@@ -302,29 +307,48 @@ def weak_rechecks(root: pathlib.Path, sections: list) -> list:
         words = len(frag.split())
         bound = all(len(runs) > 1 for runs in text_runs(frag, grep_mode(last_grep(s["cmd"])[0])))
         if words <= SHORT_FRAGMENT and not bound:
-            out.append(f"WEAK {where}: greps {words} word{'s' if words != 1 else ''} ('{frag[:60]}') — "
-                       f"a title or identifier passes while the page exists")
-        pairs.setdefault((url.group(0), frag), []).append((s["file"], where))
+            out.append(([s], "short-fragment",
+                        f"WEAK {where}: greps {words} word{'s' if words != 1 else ''} ('{frag[:60]}') — "
+                        f"a title or identifier passes while the page exists"))
+        pairs.setdefault((url.group(0), frag), []).append((s, where))
     for (url, frag), backs in pairs.items():
-        files = {f for f, _ in backs}
+        files = {s["file"] for s, _ in backs}
         if len(backs) > REUSE_LIMIT or len(files) > 1:
-            out.append(f"WEAK one fragment backs {len(backs)} sections in {len(files)} "
-                       f"file{'s' if len(files) != 1 else ''} ('{frag[:60]}' at {url}): "
-                       + "; ".join(w for _, w in backs)
-                       + " — it cannot test each section's own claim")
+            out.append(([s for s, _ in backs], "reused-fragment",
+                        f"WEAK one fragment backs {len(backs)} sections in {len(files)} "
+                        f"file{'s' if len(files) != 1 else ''} ('{frag[:60]}' at {url}): "
+                        + "; ".join(w for _, w in backs)
+                        + " — it cannot test each section's own claim"))
     return out
 
 
 def outside_rechecks(root: pathlib.Path, sections: list) -> list:
-    """Assertions whose relative path climbs above the library root (issue #60). Static, a
+    """The printed OUTSIDE warnings, one per finding of _outside (below)."""
+    return [msg for _, _, msg in _outside(root, sections)]
+
+
+def _outside(root: pathlib.Path, sections: list) -> list:
+    """(flagged sections, kind, message) per finding. Assertions whose relative path climbs above the library root (issue #60). Static, a
     warning: the path resolves only in one layout, and elsewhere the fact reads as stale."""
     out = []
     for s in sections:
         depth = len(s["file"].parent.relative_to(root).parts)
         if any(m.group(1).count("..") > depth for m in CLIMB.finditer(s["cmd"] or "")):
-            out.append(f"OUTSIDE {s['file'].relative_to(root)} § {s['heading']}: a relative path climbs "
-                       f"out of the library — name the engine as \"$KB_ENGINE_ROOT/scripts/...\"")
+            out.append(([s], "outside",
+                        f"OUTSIDE {s['file'].relative_to(root)} § {s['heading']}: a relative path climbs "
+                        f"out of the library — name the engine as \"$KB_ENGINE_ROOT/scripts/...\""))
     return out
+
+
+def lint_findings(root: pathlib.Path, sections: list) -> dict:
+    """{(file, stamp line): [kind, ...]} for every section the assertion lint flags, kind one of
+    short-fragment, reused-fragment, outside (#235). The same findings the printed warnings
+    report, keyed so the lease and assertion coverage (ADR-0022) can tell which sections they cover."""
+    got = {}
+    for flagged, kind, _ in _weak(root, sections) + _outside(root, sections):
+        for s in flagged:
+            got.setdefault((s["file"], s["line"]), []).append(kind)
+    return got
 
 
 PROXY_VARS = ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")
