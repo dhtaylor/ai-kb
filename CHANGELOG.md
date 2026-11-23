@@ -6,6 +6,10 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The `kb-libraries` docstring for `declared_terms` states the plural rule the code applies (#230): a
+  trailing `s` is dropped only from a term longer than 3 characters that does not end in `ss`, so
+  `bus`, `gas` and `process` keep theirs. It said "a trailing plural `s` dropped". Behavior is
+  unchanged.
 - `kb-bootstrap --check` exits 1 when `kb-libraries` fails, instead of 0 (#229). With
   `scripts/kbengine/` missing, as in a partial copy of the engine, `kb-libraries` failed at import and
   `--check` printed the traceback and exited 0, which reads as no drift. It now reports
