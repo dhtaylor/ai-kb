@@ -148,10 +148,12 @@ class Library:
 
     name, scope, description  the text of `domain:`, `scope:`, `description:`.
     horizon        freshness_horizon, in days (§7).
-    agent_ttl      days an agent stamp stays fresh: agent_ttl:, else a tenth of the horizon, at least
-                   1. None without a horizon, or when the declared one is not <N>d and shorter than
-                   the horizon (an agent TTL as long as the horizon erases the trust tier between
-                   agent and human stamps).
+    unasserted_ttl days an unasserted stamp stays fresh (the short lease, ADR-0022): unasserted_ttl:
+                   from contract 2.7, agent_ttl: below it, else a tenth of the horizon, at least 1.
+                   None without a horizon, when the declared one is not <N>d and shorter than the
+                   horizon (a short lease as long as the horizon erases the difference between an
+                   asserted stamp and an unasserted one), or when agent_ttl: is declared at 2.7+.
+    ttl_field      the field that supplied it, "unasserted_ttl" or "agent_ttl"; None when derived.
     budget         verifier_budget: how many assertions one kb-verify run executes, 5 by default.
     sweep_interval days a kb-audit sweep stays good for, 30 by default.
     last_swept     the date of the last sweep; None for never or unreadable.
@@ -168,7 +170,8 @@ class Library:
     scope: object = None
     description: object = None
     horizon: object = None
-    agent_ttl: object = None
+    unasserted_ttl: object = None
+    ttl_field: object = None
     budget: int = DEFAULT_BUDGET
     sweep_interval: int = DEFAULT_INTERVAL
     last_swept: object = None
@@ -211,7 +214,6 @@ def library(root) -> Library:
         if not m:
             problems.append(Problem("freshness_horizon",
                                     f"freshness_horizon: {fm.get('freshness_horizon')!r} is not <N>d"))
-    _agent_ttl(lib, fm, problems)
     if fm.get("verifier_budget") is not None:
         m = re.match(r"\d+", fm.get("verifier_budget"))
         lib.budget = int(m.group()) or DEFAULT_BUDGET if m else DEFAULT_BUDGET
@@ -251,19 +253,31 @@ def library(root) -> Library:
             pass
     except (OSError, RuntimeError):
         pass
+    _unasserted_ttl(lib, fm, problems)
     return lib
 
 
-def _agent_ttl(lib: Library, fm: Frontmatter, problems: list):
-    declared = fm.get("agent_ttl")
-    if declared is None:
-        lib.agent_ttl = max(1, lib.horizon // 10) if lib.horizon is not None else None
+def _unasserted_ttl(lib: Library, fm: Frontmatter, problems: list):
+    """The short lease: unasserted_ttl: at contract 2.7 and later, where agent_ttl: is rejected;
+    agent_ttl: below it, where a declared unasserted_ttl: is read too (check-kb warns, §14)."""
+    state, version = (lib.contract[0], lib.contract[1]) if lib.contract else (None, (2, 0))
+    rules = lib.contract[2] if lib.contract and state in ("ahead", "unsupported", "malformed") else version
+    if "agent_ttl" in fm and rules >= (2, 7):
+        problems.append(Problem("unasserted_ttl", f"agent_ttl: is not read at contract 2.7 and later "
+                                                  f"(this library declares {contract.fmt(rules)}): "
+                                                  f"rename it unasserted_ttl: (§3, §14)"))
         return
+    field_name = "agent_ttl" if "agent_ttl" in fm else "unasserted_ttl"
+    declared = fm.get(field_name)
+    if declared is None:
+        lib.unasserted_ttl = max(1, lib.horizon // 10) if lib.horizon is not None else None
+        return
+    lib.ttl_field = field_name
     horizon = lib.horizon or 0
     m = re.fullmatch(r"(\d+)d", declared)
     if not m or not 0 < int(m.group(1)) < horizon:
-        problems.append(Problem("agent_ttl", f"agent_ttl: {declared!r} must be <N>d and shorter than "
-                                             f"freshness_horizon ({horizon}d), or an agent stamp is "
-                                             f"trusted as long as a human one"))
+        problems.append(Problem("unasserted_ttl", f"{field_name}: {declared!r} must be <N>d and shorter "
+                                                  f"than freshness_horizon ({horizon}d), or an "
+                                                  f"unasserted stamp is trusted as long as an asserted one"))
         return
-    lib.agent_ttl = int(m.group(1))
+    lib.unasserted_ttl = int(m.group(1))

@@ -108,12 +108,12 @@ class Descriptor(unittest.TestCase):
     def test_a_full_index_reads_every_field(self):
         newest = max(contract.known_contracts())
         lib = self.lib("name: fx-index\ndescription: \"Router for fx\"  # note\ndomain: fx\nscope: product:fx\n"
-                       f"freshness_horizon: 90d\nagent_ttl: 30d\nverifier_budget: 7\nsweep_interval: 14d\n"
+                       f"freshness_horizon: 90d\nunasserted_ttl: 30d\nverifier_budget: 7\nsweep_interval: 14d\n"
                        f"kb_contract: \"{contract.fmt(newest)}\"\nlast_swept: 2026-10-16\narchived: moved to fy\n"
                        "links_to:\n  other: https://x/o.git\n"
                        "tags: [Widgets, data_model]\nkeywords:\n  - Fixtures # why\n  - fx")
         self.assertEqual((lib.name, lib.scope, lib.description), ("fx", "product:fx", "Router for fx"))
-        self.assertEqual((lib.horizon, lib.agent_ttl, lib.budget, lib.sweep_interval), (90, 30, 7, 14))
+        self.assertEqual((lib.horizon, lib.unasserted_ttl, lib.budget, lib.sweep_interval), (90, 30, 7, 14))
         self.assertEqual(lib.last_swept, datetime.date(2026, 10, 16))
         self.assertEqual((lib.archived, lib.links_to), ("moved to fy", {"other": "https://x/o.git"}))
         self.assertEqual(lib.terms, {"widget", "data-model", "fixture", "fx"})
@@ -122,27 +122,45 @@ class Descriptor(unittest.TestCase):
 
     def test_defaults_when_nothing_is_declared(self):
         lib = self.lib("domain: fx")
-        self.assertEqual((lib.horizon, lib.agent_ttl, lib.budget, lib.sweep_interval, lib.last_swept),
+        self.assertEqual((lib.horizon, lib.unasserted_ttl, lib.budget, lib.sweep_interval, lib.last_swept),
                          (None, None, library.DEFAULT_BUDGET, library.DEFAULT_INTERVAL, None))
         self.assertEqual((lib.scope, lib.archived, lib.links_to, lib.terms), (None, None, {}, frozenset()))
         self.assertEqual(lib.contract[:2], ("behind", (2, 0)))      # absent reads as 2.0
         self.assertEqual(lib.problems, [])
 
-    def test_the_agent_ttl_is_a_tenth_of_the_horizon_and_at_least_a_day(self):
-        self.assertEqual(self.lib("freshness_horizon: 90d").agent_ttl, 9)
-        self.assertEqual(self.lib("freshness_horizon: 5d").agent_ttl, 1)
+    def test_the_short_lease_is_a_tenth_of_the_horizon_and_at_least_a_day(self):
+        self.assertEqual(self.lib("freshness_horizon: 90d").unasserted_ttl, 9)
+        self.assertEqual(self.lib("freshness_horizon: 5d").unasserted_ttl, 1)
 
-    def test_a_declared_agent_ttl_is_checked_against_the_horizon(self):
-        for ttl in ("90d", "100d", "0d", "30", "soon", '""', ""):
-            with self.subTest(ttl):
-                lib = self.lib(f"freshness_horizon: 90d\nagent_ttl: {ttl}")
-                self.assertIsNone(lib.agent_ttl)
-                self.assertIn("must be <N>d and shorter than freshness_horizon (90d)", lib.problem("agent_ttl"))
-        self.assertEqual(self.lib('freshness_horizon: 90d\nagent_ttl: "30d" # why').agent_ttl, 30)
+    def test_a_declared_short_lease_is_checked_against_the_horizon(self):
+        for field, version in (("unasserted_ttl", "2.7"), ("agent_ttl", "2.6")):
+            for ttl in ("90d", "100d", "0d", "30", "soon", '""', ""):
+                with self.subTest(field=field, ttl=ttl):
+                    lib = self.lib(f'freshness_horizon: 90d\nkb_contract: "{version}"\n{field}: {ttl}')
+                    self.assertIsNone(lib.unasserted_ttl)
+                    self.assertIn(f"{field}: ", lib.problem("unasserted_ttl"))
+                    self.assertIn("must be <N>d and shorter than freshness_horizon (90d)", lib.problem("unasserted_ttl"))
+            lib = self.lib(f'freshness_horizon: 90d\nkb_contract: "{version}"\n{field}: "30d" # why')
+            self.assertEqual((lib.unasserted_ttl, lib.ttl_field), (30, field))
 
-    def test_an_agent_ttl_with_no_usable_horizon_is_judged_against_zero(self):
-        self.assertIn("(0d)", self.lib("agent_ttl: 30d").problem("agent_ttl"))
-        self.assertIn("(0d)", self.lib("freshness_horizon: soon\nagent_ttl: 30d").problem("agent_ttl"))
+    def test_a_short_lease_with_no_usable_horizon_is_judged_against_zero(self):
+        self.assertIn("(0d)", self.lib("unasserted_ttl: 30d").problem("unasserted_ttl"))
+        self.assertIn("(0d)", self.lib("freshness_horizon: soon\nunasserted_ttl: 30d").problem("unasserted_ttl"))
+
+    def test_agent_ttl_is_read_below_2_7_and_rejected_from_it(self):
+        for declared in ("", 'kb_contract: "2.6"\n'):
+            with self.subTest(declared):
+                lib = self.lib(f"freshness_horizon: 90d\n{declared}agent_ttl: 30d")
+                self.assertEqual((lib.unasserted_ttl, lib.ttl_field, lib.problems), (30, "agent_ttl", []))
+        for version in ("2.7", "2.99"):
+            with self.subTest(version):
+                lib = self.lib(f'freshness_horizon: 90d\nkb_contract: "{version}"\nagent_ttl: 30d')
+                self.assertIsNone(lib.unasserted_ttl)
+                self.assertIn("unasserted_ttl:", lib.problem("unasserted_ttl"))
+
+    def test_unasserted_ttl_below_2_7_is_still_read(self):
+        lib = self.lib('freshness_horizon: 90d\nkb_contract: "2.6"\nunasserted_ttl: 30d')
+        self.assertEqual((lib.unasserted_ttl, lib.ttl_field, lib.problems), (30, "unasserted_ttl", []))
 
     def test_an_unusable_horizon_is_none_with_a_problem(self):
         lib = self.lib("freshness_horizon: soon")

@@ -53,7 +53,7 @@ reports, per tree, everything a librarian should act on:
      unsourced sections   — sections with content and no Source: line, in fact files, read with
                              check-kb's own reader (§6, issue #154). Shown beside unstamped sources:
                              nothing was cited, so there is nothing to recheck.
-  6. stale, no assertion   — stamped sections past the horizon or agent TTL that carry no
+  6. stale, no assertion   — stamped sections past the horizon or short lease that carry no
                              Recheck:, by kb-verify's own is_due(). kb-verify cannot settle them,
                              so they are told apart from category 2, and the budget does not cap
                              them (issue #63).

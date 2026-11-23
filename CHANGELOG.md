@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Contract 2.7: `unasserted_ttl:` replaces `agent_ttl:` (#236, ADR-0022). A library declaring
+  `kb_contract: "2.7"` names the short lease of an unasserted stamp `unasserted_ttl:`, still a tenth of
+  the horizon by default and at least one day, and `check-kb` still fails one not shorter than the
+  horizon. `check-kb` fails `agent_ttl:` from 2.7, and the message names the new field; below 2.7
+  `agent_ttl:` is read as before and a declared `unasserted_ttl:` is a warning. The library model
+  exposes one value, `unasserted_ttl`, whichever field supplied it, and `kb-verify`'s header now
+  reads `short lease Nd` where it read `agent TTL Nd`. To adopt it, rename the field and declare
+  2.7 (CONVENTIONS §14); `kb-init` now writes 2.7.
 - `check-stamps` is retired (#240, ADR-0022). It refused an agent-co-authored commit that added a
   `by: human` stamp, to stop a false claim buying a tenfold lease. The lease now follows the
   stamp's evidence, so a false `by: human` buys nothing. The script, the engine's guardrails

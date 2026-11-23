@@ -50,7 +50,7 @@ while the page exists and tests nothing about its own claim. A warning, not a fa
 
 Selection is by staleness, per §7 and ADR-0022: the evidence sets the lease, not by:. An
 asserted stamp (its Recheck is one the lint above does not flag) is due once older than the
-domain's freshness_horizon; any other is due once older than its agent_ttl, the short lease
+domain's freshness_horizon; any other is due once older than the short lease (unasserted_ttl)
 (a TENTH of the horizon unless the domain declares one). Each command names its lease, and
 the lint finding behind a short one. The domain's verifier_budget caps how many run per
 sweep, oldest first.
@@ -151,18 +151,18 @@ def asserted(s: dict) -> bool:
     return bool(s["cmd"]) and not s.get("lint")
 
 
-def is_due(s: dict, horizon: int, agent_ttl: int) -> bool:
+def is_due(s: dict, horizon: int, unasserted_ttl: int) -> bool:
     """A stamped section is due for recheck once its age exceeds its lease — the full horizon
-    for an asserted stamp, the short lease (agent_ttl) for every other, whatever its by:
+    for an asserted stamp, the short lease (unasserted_ttl) for every other, whatever its by:
     says (ADR-0022).
     Top-level (not nested in main()) so kb-due can import and call it: the two scripts must
     judge staleness identically, and a condition copied into a second file is a condition
     that can drift out from under the first."""
     age = (clock.today() - s["date"]).days
-    return age > (horizon if asserted(s) else agent_ttl)
+    return age > (horizon if asserted(s) else unasserted_ttl)
 
 
-def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=False):
+def due_sections(root: pathlib.Path, horizon: int, unasserted_ttl: int, all_sections=False):
     """(due_sorted, found, with_cmd): every stamped section in the tree (`found`), the ones
     that carry a Recheck: assertion (`with_cmd`), and the due subset — oldest stamp first,
     NOT yet capped to a budget (`due_sorted`). Exposed so kb-due's nudge can report the same
@@ -175,7 +175,7 @@ def due_sections(root: pathlib.Path, horizon: int, agent_ttl: int, all_sections=
     lint = lint_findings(root, with_cmd)
     for s in with_cmd:
         s["lint"] = lint.get((s["file"], s["line"]), [])
-    due = [s for s in with_cmd if all_sections or is_due(s, horizon, agent_ttl)]
+    due = [s for s in with_cmd if all_sections or is_due(s, horizon, unasserted_ttl)]
     due.sort(key=lambda s: s["date"])
     return due, found, with_cmd
 
@@ -416,9 +416,9 @@ def main(argv) -> int:
               file=sys.stderr)
         return 2
     budget = budget_override or lib.budget
-    ttl = lib.agent_ttl
+    ttl = lib.unasserted_ttl
     if ttl is None:
-        print(f"kb-verify: {root}/INDEX.md: {lib.problem('agent_ttl')}", file=sys.stderr); return 2
+        print(f"kb-verify: {root}/INDEX.md: {lib.problem('unasserted_ttl')}", file=sys.stderr); return 2
 
     due, found, with_cmd = due_sections(root, horizon, ttl, "--all" in flags)
     skipped_attended = [s for s in due if s["attended"]] if unattended else []
@@ -427,7 +427,7 @@ def main(argv) -> int:
     over_budget = max(0, len(due) - budget)
     selected = due[:budget]
 
-    print(f"kb-verify: {root}  (horizon {horizon}d, agent TTL {ttl}d, budget {budget})")
+    print(f"kb-verify: {root}  (horizon {horizon}d, short lease {ttl}d, budget {budget})")
     print(f"  {stamped} stamped section(s), {len(with_cmd)} with a Recheck assertion, "
           f"{len(selected)} due to run"
           + (f", {over_budget} more past the budget" if over_budget else ""))

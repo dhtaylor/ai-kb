@@ -14,8 +14,10 @@ Covers, within a single root:
                         fails from contract 2.5, warns below
   * links_to          — every library a [[library:slug]] link names is listed, with its origin,
                         under links_to: in the root INDEX.md (§3, ADR-0020); fails from 2.6
-  * agent_ttl         — if the root INDEX.md declares one, it is <N>d and shorter than
-                        freshness_horizon (§7)
+  * unasserted_ttl    — if the root INDEX.md declares the short lease, it is <N>d and shorter than
+                        freshness_horizon (§7). From contract 2.7 the field is unasserted_ttl: and
+                        agent_ttl: fails; below 2.7 it is agent_ttl:, and unasserted_ttl: warns
+                        (§14, ADR-0022)
   * kb_contract       — if the root INDEX.md declares one, it is a quoted MAJOR.MINOR (§3, ADR-0016)
   * contract gating   — rules apply by the declared contract version (§14): a rule newer than it
                         is a WARN, not a failure; a library behind the newest version gets a NOTE
@@ -260,8 +262,11 @@ def main(root: pathlib.Path) -> int:
                     found.append((st.line, f"{f}:{st.line}: stamp dated in the future ({st.date})"))
         defects += [d for _, d in sorted(found, key=lambda x: x[0])]
 
-        if f == root / "INDEX.md" and lib.problem("agent_ttl"):
-            defects.append(f"{f}: {lib.problem('agent_ttl')}")
+        if f == root / "INDEX.md" and lib.problem("unasserted_ttl"):
+            defects.append(f"{f}: {lib.problem('unasserted_ttl')}")
+        if f == root / "INDEX.md" and lib.ttl_field == "unasserted_ttl" and rules < (2, 7):
+            rule((2, 7), f"{f}: unasserted_ttl: is the short lease from contract 2.7; this library "
+                         f"reads agent_ttl: (§3)")
 
         if f == root / "INDEX.md":
             # "Not covered here:" (§3, contract 2.3) is optional; when present it must say something.

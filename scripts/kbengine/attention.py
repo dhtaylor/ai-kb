@@ -23,7 +23,7 @@ does not ask.
     rechecks         Rechecks(due, budget): every section with a Recheck: that is due, oldest stamp first,
                      each marked "attended" when only a person can run it, and the library's
                      verifier_budget. Empty without a freshness_horizon.
-    stale            [section]: stamped sections past their horizon or agent TTL with no Recheck:.
+    stale            [section]: stamped sections past their horizon or short lease with no Recheck:.
     queue            [record]: the open records in needs-attention.md, one per id.
     queue_unreadable [(line number, line)]: what the queue reader skips.
     episodic         the number of episodic notes not yet distilled.
@@ -212,9 +212,9 @@ class Attention:
         lib = self.lib
         if lib.horizon is None:
             return None                  # not computable: neither due nor stale, and no failure
-        if lib.agent_ttl is None:
-            raise ValueError(lib.problem("agent_ttl"))
-        due, found, _with_cmd = script("kb-verify").due_sections(self.root, lib.horizon, lib.agent_ttl)
+        if lib.unasserted_ttl is None:
+            raise ValueError(lib.problem("unasserted_ttl"))
+        due, found, _with_cmd = script("kb-verify").due_sections(self.root, lib.horizon, lib.unasserted_ttl)
         return due, found
 
     @cached_property
@@ -226,7 +226,7 @@ class Attention:
 
     @cached_property
     def stale(self):
-        """Stamped sections past their horizon or agent TTL that carry no Recheck: (issue #63), by
+        """Stamped sections past their horizon or short lease that carry no Recheck: (issue #63), by
         kb-verify's own is_due(). Not capped by the budget: nothing runs these."""
         got = self._due
         if isinstance(got, Failed):
@@ -234,7 +234,7 @@ class Attention:
         if got is None:
             return []
         is_due = script("kb-verify").is_due
-        return _try(lambda: [s for s in got[1] if not s["cmd"] and is_due(s, self.lib.horizon, self.lib.agent_ttl)])
+        return _try(lambda: [s for s in got[1] if not s["cmd"] and is_due(s, self.lib.horizon, self.lib.unasserted_ttl)])
 
     # -- needs-attention.md, read once --
     @cached_property

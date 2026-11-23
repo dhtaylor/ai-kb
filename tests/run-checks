@@ -49,8 +49,8 @@ SUITE_CLEARED_VARS="$(PYTHONPATH="$ENGINE/scripts" python3 -m kbengine.env --nam
 unset $SUITE_CLEARED_VARS
 # The suite's clock is frozen (#205): every date a fixture is built from, and the day the engine
 # judges it on, is this one, so a case's result does not change as the real calendar moves. It is
-# 2026-10-10 so build_clean's stamp (2026-09-22) is 18 days old: 9d past the default agent TTL
-# (9d) and inside a human's (90d), which is what the cases that lean on it say. Set after the
+# 2026-10-10 so build_clean's stamp (2026-09-22) is 18 days old: 9d past the default short lease
+# (9d) and inside an asserted stamp's (90d), which is what the cases that lean on it say. Set after the
 # clearing above, which unsets KB_TODAY. A case that runs the engine under `env -i` passes
 # KB_TODAY on, or it would judge the fixtures by the real calendar. The few cases that mirror the
 # real clock (a UTC timestamp, the ISO week, the weekday) say so and run with it unset.
@@ -81,7 +81,7 @@ patch() {
 # quoted, --contract banana is a bare word. Each value is written verbatim, so a trailing
 # comment is part of it.
 build_clean() {
-  local d="$1" scope=general swept=never contract='"2.6"' budget=5 stamp=2026-09-22 horizon=90d
+  local d="$1" scope=general swept=never contract='"2.7"' budget=5 stamp=2026-09-22 horizon=90d
   shift
   case "${1:-}" in --*) ;; *) scope="${1:-general}"; shift 2>/dev/null ;; esac
   while [ $# -gt 0 ]; do
@@ -1053,40 +1053,66 @@ build_clean "$TMP/vnone" --stamp 2026-01-01
 case_run "stale section with no assertion is named, not skipped" 0 "no assertion" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/vnone" --all
 
-# agent_ttl (issue #30): a domain may declare how long an agent stamp stays fresh. Derived as a
-# tenth of the horizon, a vendor-product library's agent stamps (90–180d band: 9–18d) expired
-# before every monthly sweep, and the only lever was the horizon, which also sets the human
-# TTL. The fixture's horizon is 90d (default agent TTL 9d); its stamp is 20 days old. Since ADR-0022
-# agent_ttl is the short lease of an unasserted stamp, so the fixture's stamp carries no Recheck:
-# an asserted one is on the full horizon, and would pass these cases whatever agent_ttl said.
-ttl_lib() { # ttl_lib <dir> [agent_ttl line]
-  build_clean "$1" --stamp "$(date -d "$KB_TODAY -20 days" +%F)"
+# unasserted_ttl (issue #30, renamed from agent_ttl at contract 2.7, ADR-0022): a library may declare
+# how long an unasserted stamp stays fresh. Derived as a tenth of the horizon, a vendor-product
+# library's short-leased stamps (90-180d band: 9-18d) expired before every monthly sweep, and the
+# only lever was the horizon, which also sets the asserted lease. The fixture's horizon is 90d
+# (default short lease 9d); its stamp is 20 days old and carries no Recheck:, so it is unasserted:
+# an asserted one is on the full horizon, and would pass these cases whatever the field said.
+# ttl_lib builds at the newest contract (2.7) unless told one; agent_ttl is the field below 2.7.
+ttl_lib() { # ttl_lib <dir> [ttl line] [contract]
+  build_clean "$1" --stamp "$(date -d "$KB_TODAY -20 days" +%F)" ${3:+--contract "$3"}
   [ -n "${2:-}" ] && patch "$1/INDEX.md" "s/^verifier_budget: 5\$/verifier_budget: 5\n$2/"
   return 0
 }
 ttl_lib "$TMP/ttl-default"
-case_run "agent_ttl: undeclared, it is a tenth of the horizon" 0 "agent TTL 9d" -- \
+case_run "unasserted_ttl: undeclared, it is a tenth of the horizon" 0 "short lease 9d" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
-case_run "agent_ttl: undeclared, a 20-day unasserted stamp is stale" 0 "1 stale fact with no assertion" -- \
+ttl_lib "$TMP/ttl-min" "" '"2.7"'; patch "$TMP/ttl-min/INDEX.md" 's/^freshness_horizon: 90d$/freshness_horizon: 5d/'
+case_run "unasserted_ttl: undeclared, the tenth of a short horizon is at least a day" 0 "short lease 1d" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-min"
+case_run "unasserted_ttl: undeclared, a 20-day unasserted stamp is stale" 0 "1 stale fact with no assertion" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ttl-default" --nudge
-case_run "agent_ttl: the stale list names the short lease, not by: (#238)" 0 "widgets.md § Limits  (20d, short lease: no Recheck)" -- \
+case_run "unasserted_ttl: the stale list names the short lease, not by: (#238)" 0 "widgets.md § Limits  (20d, short lease: no Recheck)" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
-ttl_lib "$TMP/ttl-30" "agent_ttl: 30d   # outlasts the monthly sweep"
-case_run "agent_ttl: a declared value is used" 0 "agent TTL 30d" -- \
+ttl_lib "$TMP/ttl-30" "unasserted_ttl: 30d   # outlasts the monthly sweep"
+case_run "unasserted_ttl: a declared value is used at 2.7" 0 "short lease 30d" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-30"
-case_run "agent_ttl: within it, a 20-day unasserted stamp is not stale" 0 "" -- \
+case_run "unasserted_ttl: within it, a 20-day unasserted stamp is not stale" 0 "" -- \
   bash -c '! "$1" "$2" --nudge | grep -qE "[0-9]+ stale facts? with no assertion"' _ "$ENGINE/scripts/kb-due" "$TMP/ttl-30"
-case_run "agent_ttl: a declared value passes check-kb" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-30"
-# An agent TTL as long as the horizon erases the trust tier between agent and human stamps.
-ttl_lib "$TMP/ttl-eq" "agent_ttl: 90d"
-case_run "agent_ttl: not shorter than the horizon fails check-kb" 1 "agent_ttl" -- \
+case_run "unasserted_ttl: a declared value passes check-kb at 2.7" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-30"
+# agent_ttl is the same lease under its old name, read below 2.7 and rejected from 2.7 (§14).
+ttl_lib "$TMP/ttl-old" "agent_ttl: 30d   # outlasts the monthly sweep" '"2.6"'
+case_run "agent_ttl: below 2.7 a declared value is still used" 0 "short lease 30d" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-old"
+case_run "agent_ttl: below 2.7 it passes check-kb" 0 "" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-old"
+case_run "agent_ttl: below 2.7 it raises no warning (the behind-version note is not one)" 0 "" -- \
+  bash -c '! "$1" "$2" 2>&1 | grep -q "fails from contract 2.7"' _ "$ENGINE/scripts/check-kb" "$TMP/ttl-old"
+ttl_lib "$TMP/ttl-new-old" "agent_ttl: 30d" '"2.7"'
+case_run "agent_ttl: at 2.7 check-kb rejects it and names unasserted_ttl:" 1 "unasserted_ttl:" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ttl-new-old"
+case_run "agent_ttl: at 2.7 kb-verify refuses it and names unasserted_ttl:" 2 "unasserted_ttl:" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-new-old"
+case_run "agent_ttl: at 2.7 kb-due warns, never crashes" 0 "unasserted_ttl:" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/ttl-new-old" --nudge
+ttl_lib "$TMP/ttl-early" "unasserted_ttl: 30d" '"2.6"'
+case_run "unasserted_ttl: below 2.7 it is a warning, not a failure (§14)" 0 "fails from contract 2.7" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ttl-early"
+case_run "unasserted_ttl: below 2.7 it is still used" 0 "short lease 30d" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-early"
+# A short lease as long as the horizon erases the difference between asserted and unasserted stamps.
+ttl_lib "$TMP/ttl-eq" "unasserted_ttl: 90d"
+case_run "unasserted_ttl: not shorter than the horizon fails check-kb" 1 "unasserted_ttl" -- \
   "$ENGINE/scripts/check-kb" "$TMP/ttl-eq"
-case_run "agent_ttl: not shorter than the horizon is refused by kb-verify" 2 "agent_ttl" -- \
+case_run "unasserted_ttl: not shorter than the horizon is refused by kb-verify" 2 "unasserted_ttl" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-eq"
-case_run "agent_ttl: an invalid one is a kb-due warning, never a crash" 0 "agent_ttl" -- \
+case_run "unasserted_ttl: an invalid one is a kb-due warning, never a crash" 0 "unasserted_ttl" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ttl-eq" --nudge
-ttl_lib "$TMP/ttl-bad" "agent_ttl: a month"
-case_run "agent_ttl: not <N>d fails check-kb" 1 "agent_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
+ttl_lib "$TMP/ttl-eq-old" "agent_ttl: 90d" '"2.6"'
+case_run "agent_ttl: below 2.7, not shorter than the horizon still fails check-kb" 1 "agent_ttl" -- \
+  "$ENGINE/scripts/check-kb" "$TMP/ttl-eq-old"
+ttl_lib "$TMP/ttl-bad" "unasserted_ttl: a month"
+case_run "unasserted_ttl: not <N>d fails check-kb" 1 "unasserted_ttl" -- "$ENGINE/scripts/check-kb" "$TMP/ttl-bad"
 # #203: a field is read from the frontmatter. A freshness_horizon: line in the body is prose, and
 # read as the horizon it let kb-verify judge staleness by a number the library never declared.
 build_clean "$TMP/vbody"; patch "$TMP/vbody/INDEX.md" '/^freshness_horizon:/d'
@@ -1659,7 +1685,7 @@ NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
 # 1. Nothing due anywhere: fresh sweep, a fresh agent-stamped fact with no Recheck, no
 #    queue, no episodic/. --nudge must print nothing at all.
 build_clean "$NFX/kb/nothing-due" --swept "$KB_TODAY" --stamp "$KB_TODAY"
-# The fact must really be fresh: build_clean's literal 2026-09-22 stamp ages past the 9d agent TTL,
+# The fact must really be fresh: build_clean's literal 2026-09-22 stamp ages past the 9d short lease,
 # and this case passed only because the nudge ignored stale facts with no Recheck (issue #63).
 HOME="$TMP/nfxhome" "$ENGINE/scripts/kb-library" add "$NFX/kb/nothing-due" >/dev/null   # installed = registered
 case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
@@ -1894,7 +1920,7 @@ case_run "nudge: a stale fact WITH a Recheck is not also counted as having none"
   "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
 # Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
 # count (issue #30). One warning; the rest intact. The recheck count no longer needs check-kb: its
-# horizon and agent TTL are read through kbengine (#203).
+# horizon and short lease are read through kbengine (#203).
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
 cp -r "$ENGINE/scripts/kbengine" "$TMP/due-nockb/kbengine"   # kb-verify imports it; check-kb is what is left out
@@ -2344,7 +2370,7 @@ KIHOME="$TMP/kihome"; mkdir -p "$KIHOME"
 mkdir -p "$TMP/kiproj"; git init -q "$TMP/kiproj"
 env -i HOME="$KIHOME" PATH="$PATH" KB_ENGINE_ROOT="$ENGINE" sh -c "cd '$TMP/kiproj' && '$ENGINE/scripts/kb-init'" >/dev/null 2>&1
 case_run "kb-init's router declares the contract version it was built to" 0 "" -- \
-  grep -qxF 'kb_contract: "2.6"' "$TMP/kiproj/knowledge/INDEX.md"
+  grep -qxF 'kb_contract: "2.7"' "$TMP/kiproj/knowledge/INDEX.md"
 case_run "kb-init's project hook includes the secret scan" 0 "" -- \
   grep -q 'scripts/check-secrets' "$TMP/kiproj/.githooks/pre-commit"
 case_run "kb-init's project hook resolves links against the registered libraries" 0 "" -- \
@@ -3927,9 +3953,9 @@ case_run "kb-report: a library on a contract newer than the engine is listed (#2
   kbr "$RAH" "$RR/ahead-out" "$RB"
 
 # Issue #204 (d): a library kb-report cannot read is an item under its name; the others are still
-# reported and the exit is 1 (decisions waiting), not 2. agent_ttl as long as the horizon is unusable.
+# reported and the exit is 1 (decisions waiting), not 2. unasserted_ttl as long as the horizon is unusable.
 RD="$RR/cantread"; build_clean "$RD/bad"
-patch "$RD/bad/INDEX.md" 's/^verifier_budget: 5$/&\nagent_ttl: 90d/'
+patch "$RD/bad/INDEX.md" 's/^verifier_budget: 5$/&\nunasserted_ttl: 90d/'
 case_run "kb-report: a library that cannot be read does not stop the report, exit 1 (#204)" 1 "report written" -- \
   env HOME="$RAH" "$ENGINE/scripts/kb-report" "$RD/bad" "$RL" "$RC" --out "$RD/out"
 case_run "kb-report: ...it is an item under that library (#204)" 0 "" -- \
