@@ -52,7 +52,8 @@ Selection is by staleness, per §7 and ADR-0022: the evidence sets the lease, no
 asserted stamp (its Recheck is one the lint above does not flag) is due once older than the
 domain's freshness_horizon; any other is due once older than its agent_ttl, the short lease
 (a TENTH of the horizon unless the domain declares one). Each command names its lease, and
-the lint finding behind a short one. The domain's verifier_budget caps how many run per sweep, oldest first.
+the lint finding behind a short one. The domain's verifier_budget caps how many run per
+sweep, oldest first.
 
 THE QUEUE (Phase 5, plan §6 exit: "stale or drifted facts surface as a queue rather
 than rotting silently"): on every FAILED assertion run under --yes, kb-verify appends
@@ -453,7 +454,7 @@ def main(argv) -> int:
         print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
         for s in unverifiable:
             print(f"    {s['file'].relative_to(root)} § {s['heading']}"
-                  f"  ({(clock.today() - s['date']).days}d, by: {s['by']})")
+                  f"  ({(clock.today() - s['date']).days}d, short lease: no Recheck)")
 
     if not selected:
         print("\nNothing to run.")

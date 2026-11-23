@@ -123,6 +123,11 @@ class Rechecks(Fixture):
         due = self.att().rechecks.due
         self.assertEqual([(s["heading"], s["lint"]) for s in due], [("Weak", ["short-fragment"])])
 
+    def test_a_declared_agent_ttl_is_the_short_lease_of_a_flagged_assertion(self):
+        weak = "curl -fsSL https://example.com/a | grep -qF 'Widgets'"
+        self.make(section("Within", 20, recheck=weak) + section("Past", 40, recheck=weak), extra="agent_ttl: 30d\n")
+        self.assertEqual([s["heading"] for s in self.att().rechecks.due], ["Past"])
+
     def test_without_a_horizon_nothing_is_due_and_nothing_failed(self):
         self.make(section("Old", 200, recheck="true"), horizon="")
         a = self.att()
@@ -155,6 +160,10 @@ class Stale(Fixture):
         # ADR-0022: someone's word is on the short lease (9d of 90d), whoever gave it.
         self.make(section("H", 20, by="human") + section("A", 20) + section("Fresh", 5, by="human"))
         self.assertEqual([s["heading"] for s in self.att().stale], ["H", "A"])
+
+    def test_a_stamp_with_no_by_is_on_the_short_lease_without_an_assertion(self):
+        self.make(section("NoBy", 20).replace(" · by: agent · method: manual", ""))
+        self.assertEqual([s["heading"] for s in self.att().stale], ["NoBy"])
 
 
 class Queue(Fixture):

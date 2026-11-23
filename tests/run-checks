@@ -1069,6 +1069,8 @@ case_run "agent_ttl: undeclared, it is a tenth of the horizon" 0 "agent TTL 9d" 
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
 case_run "agent_ttl: undeclared, a 20-day unasserted stamp is stale" 0 "1 stale fact with no assertion" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ttl-default" --nudge
+case_run "agent_ttl: the stale list names the short lease, not by: (#238)" 0 "widgets.md § Limits  (20d, short lease: no Recheck)" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/ttl-default"
 ttl_lib "$TMP/ttl-30" "agent_ttl: 30d   # outlasts the monthly sweep"
 case_run "agent_ttl: a declared value is used" 0 "agent TTL 30d" -- \
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-30"
