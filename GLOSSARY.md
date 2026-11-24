@@ -16,6 +16,10 @@ _Avoid_: trust tier, human tier, agent tier
 A stamp backed by a passing check that anyone can rerun, kept beside the claim it defends. Every other stamp is an **unasserted stamp**: someone's word, whoever gave it.
 _Avoid_: verified stamp, human stamp
 
+**Sourced section**:
+A section a library serves that cites its source; the unit assertion coverage counts.
+_Avoid_: cited section, sourced fact
+
 **Assertion coverage**:
 The share of a library's sourced sections that carry asserted stamps; the measure of how far that library can be trusted by a stranger.
 _Avoid_: freshness, verification rate
