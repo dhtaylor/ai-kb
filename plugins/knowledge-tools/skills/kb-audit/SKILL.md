@@ -206,7 +206,7 @@ Each item carries:
      An **unsourced section** belongs here too, keyed by its heading (locus is the heading text):
      it is unknown with nothing cited to recheck against. Apply the high-blast-radius test as for
      an unstamped fact;
-  5. **stale fact** — past its lease: an asserted stamp the horizon, an unasserted stamp one tenth of it (or the domain's `unasserted_ttl`);
+  5. **stale fact** — past its lease: an asserted stamp past the horizon, an unasserted stamp past one tenth of it (or the domain's `unasserted_ttl`);
   6. **orphan** — real knowledge nothing can route to;
   7. **informational contradiction, uncorroborated claim, empty routed leaf, index bloat, scope
      misfiling, transient content**. Hash a `transient content` finding with the heading text as

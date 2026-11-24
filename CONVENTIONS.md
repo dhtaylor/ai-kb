@@ -835,11 +835,11 @@ must or may hold changes; an editorial change to this file does not change it.
 
 - **Minor:** adds a field, a warning, or a rejection that applies only to a library declaring that
   version or later. A library valid under an earlier minor of the same major stays valid.
+- **Major:** changes what something a library already holds means. Each major ships with migration
+  notes from the one before it, here.
 - **Not a change:** an optional golden-set field, or a record rule that rejects only records
   carrying it, is not a contract change, because no existing library can break. `alt_excerpt`,
   `uncorroborated` and `expected_evidence` are examples (§10).
-- **Major:** changes what something a library already holds means. Each major ships with migration
-  notes from the one before it, here.
 - A library declares the version it was built to as `kb_contract:` in its root `INDEX.md` (§3).
   Absent, it is read as **2.0**. An engine supports every minor of the current major and the one
   before it.

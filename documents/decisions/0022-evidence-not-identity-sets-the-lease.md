@@ -1,11 +1,11 @@
 # ADR-0022: Evidence, not identity, sets a stamp's lease
 
-- **Status:** Accepted 2026-11-23
+- **Status:** Accepted
 - **Date:** 2026-11-23
 - **Deciders:** Dandy Taylor
 - **Amends:** [0005](0005-currency-cadence.md) (supersedes §5 "Trust tiers on the stamp" and the
   `agent_ttl` amendment; TTLs, budgets and the automation gate stand)
-- **Target:** v0.6.0. The lease change carries no contract bump; contract 2.7 carries only `unasserted_ttl:` ([0016](0016-versioned-library-contract.md))
+- **Target:** v0.6.0 ([0016](0016-versioned-library-contract.md))
 
 ## Context and problem statement
 
@@ -72,3 +72,13 @@ the engine could prove were the ones it kept asking a person to re-check.
   (3 of 15) will lead the report until their facts are asserted or accepted as someone's word.
 - **The two-lease split is a starting point.** Revisit option C if evidence shows asserted stamps differ
   materially by method.
+
+## What changed at implementation (2026-11-23)
+
+- **The lease change shipped without a contract bump.** This ADR proposed shipping it behind one.
+  [§14](../../CONVENTIONS.md) versions the contract only when what a library must or may hold changes,
+  and a stamp line holds what it always did; only the engine's reading of it changed. The lease applies
+  to every library, whatever `kb_contract:` it declares.
+- **Contract 2.7 carries only `unasserted_ttl:`** (decision 5).
+- **A parse failure is not a lint finding.** The proposal listed one under decision 2. `kb-verify`'s lint
+  has no parse kind: `check-kb` owns parsing, and an assertion that does not parse never passes.
