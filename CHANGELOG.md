@@ -24,9 +24,11 @@ engine release it was last verified against in its own release notes.
   with an open `stale-recheck` record in its library's `needs-attention.md` takes the short lease and leaves
   assertion coverage, as `kb-verify` (its lease label reads `short lease: failed-recheck`), the nudge,
   `--summary` and the weekly report all show, because `kbengine.lease` reads the queue once, in the sweep,
-  and every reader takes the demotion from its result. It returns to the full horizon once the record is no
-  longer open. A `stale-recheck-error` (a timeout, or a command that could not run) demotes nothing, nor
-  does an unreadable queue. `kb-retrieve` says a cited section's check last failed and flags the fact as
+  and every reader takes the demotion from its result. It is demoted only while the record was raised against the section's current stamp (its `stamp:` equals the
+  stamp's content after `Verified:`; a record with no `stamp:` covers a stamp dated on or before its date): a
+  passing attended `kb-verify --apply` restamps the section and it is asserted again at once, with the record
+  still open for the Arbiter. Nothing in the engine closes a record. A `stale-recheck-error` (a timeout, or a command that could not run) demotes nothing, nor
+  does an unreadable queue. `kb-retrieve` says a cited section's check last failed, by the same rule, and flags the fact as
   someone's word before the answer, and still refuses on dispute only. CONVENTIONS §7 defines "passing".
   No contract version changes: a library holds what it always did. Output is unchanged for a library
   with no open `stale-recheck` record; on one that has one, only that section's lease and the coverage

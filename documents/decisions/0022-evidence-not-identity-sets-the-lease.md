@@ -86,8 +86,11 @@ the engine could prove were the ones it kept asking a person to re-check.
   `Recheck:` makes a stamp asserted, but the lease only asked whether the lint flagged the assertion, so
   a check that had failed kept the full horizon and its place in assertion coverage. An open
   `stale-recheck` record in the library's `needs-attention.md` for the section's file and heading now
-  demotes the stamp to unasserted, reported as the lint kind `failed-recheck`, until the Arbiter settles
-  the record. A `stale-recheck-error` does not demote. `kbengine.lease` reads the queue itself, so
+  demotes the stamp to unasserted, reported as the lint kind `failed-recheck`, for as long as the record
+  was raised against the section's current stamp (its `stamp:` equals the stamp's content after
+  `Verified:`). A newer stamp, such as a passing attended `kb-verify --apply`, makes the section asserted
+  again at once, with the record still open as the Arbiter's decision; the engine closes no record. A record
+  with no `stamp:` covers a stamp dated on or before its `date:`. A `stale-recheck-error` does not demote. `kbengine.lease` reads the queue itself, so
   `kb-verify`, the nudge, the weekly report and `--summary` follow from the one sweep, and `kb-retrieve`
   says the section's check last failed and flags the fact as someone's word, without refusing it. No
   contract version changes.
