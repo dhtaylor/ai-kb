@@ -75,7 +75,7 @@ class Fixture(unittest.TestCase):
                   + section("Old", 200, recheck="true") + section("NoCmd", 200) + section("Unstamped")
                   + section("Bare", 1, source=False),
                   queue_text=record("aaaaaaaa") + "id: ffffffff\ncategory: bare\nstatus: open\n",
-                  episodic=["# a\n"], stubs={"m.md": self.STUB}, declared="2.1", extra="archived: moved\n", **kw)
+                  episodic=["# a\n"], stubs={"m.md": self.STUB}, declared="2.99", extra="archived: moved\n", **kw)
         return self.att(self.packet("kb-review"), registered={self.root.resolve()})
 
     def git_commit(self):
@@ -348,7 +348,7 @@ class Items(Fixture):
         self.assertEqual(tuple(by["coverage"]), (3, 5))
         self.assertEqual(by["sweep"], attention.Sweep(True, None, 30))
         self.assertEqual(by["manual_stubs"], ["sources/m.md"])
-        self.assertEqual(by["contract"].state, "behind")
+        self.assertEqual(by["contract"].state, "ahead")
         self.assertEqual(by["archived"], "moved")
 
     def test_coverage_leads_and_is_the_only_item_of_a_library_with_nothing_to_say(self):
@@ -377,13 +377,22 @@ class Items(Fixture):
         self.make(swept=ago(1), stubs={"m.md": self.STUB})
         self.assertEqual(self.kinds(), ["coverage"])
 
-    def test_the_contract_states_that_need_telling_are_one_item_and_current_is_none(self):
-        for declared, state in (("2.1", "behind"), ("2.99", "ahead"), ("7.0", "unsupported"), ("x.y", "malformed")):
+    def test_the_contract_states_that_need_telling_are_one_item_and_current_and_behind_are_none(self):
+        for declared, state in (("2.99", "ahead"), ("7.0", "unsupported"), ("x.y", "malformed")):
             self.make(declared=declared, swept=ago(1))
             got = [i for i in self.att().items if i.kind == "contract"]
             self.assertEqual([(i.n, i.decision, i.detail.state) for i in got], [(1, True, state)], declared)
         self.make(swept=ago(1))
         self.assertNotIn("contract", self.kinds())
+
+    def test_a_library_behind_on_a_supported_contract_is_not_an_item(self):
+        """ADR-0016 serves every minor of a supported major: behind is not a decision (#263)."""
+        for declared in ("2.1", "2.0", "2.6"):
+            self.make(declared=declared, swept=ago(1))
+            a = self.att()
+            self.assertEqual(a.contract.state, "behind", declared)       # the field still says so, for check-kb
+            self.assertNotIn("contract", [i.kind for i in a.items], declared)
+            self.assertEqual(self.kinds(), ["coverage"], declared)
 
     def test_archived_is_said_of_a_registered_library_only(self):
         self.make(swept=ago(1), extra="archived: moved\n")

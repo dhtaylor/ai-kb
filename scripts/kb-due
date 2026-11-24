@@ -151,9 +151,6 @@ FAILED = {"recheck": "could not compute facts due for recheck", "stale": "could 
 def contract_text(c) -> str:
     """The contract item in a line: what is wrong with it, the same for every state that needs telling."""
     st, v, newest, _newer = c
-    if st == "behind":
-        return (f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
-                f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
     if st == "ahead":
         return (f"declares contract {contract.fmt(v)}, newer than this engine "
                 f"({contract.fmt(newest)}) — upgrade the engine")

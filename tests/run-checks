@@ -2109,15 +2109,17 @@ case_run "kb-session-start: nudge block appears when something is due" 0 \
 case_run "kb-session-start: names the due library and its recheck count" 0 \
   "libdue: assertion coverage 1 of 2 sourced sections; 1 fact due for recheck" -- \
   sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
-# A library behind the contract is nudged; one on an unsupported major is named as not served.
+# A library behind the contract is named for its coverage but not for its contract (#263); one on an unsupported major is named as not served.
 build_clean "$SFX/kb/libold" --swept "$KB_TODAY" --stamp "$KB_TODAY"
 patch "$SFX/kb/libold/INDEX.md" '/^kb_contract:/d'
 build_clean "$SFX/kb/libfuture" --contract '"3.0"'
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libold" >/dev/null
 HOME="$SHOME" "$ENGINE/scripts/kb-library" add "$SFX/kb/libfuture" >/dev/null 2>&1
-case_run "kb-session-start: a library behind the contract is nudged" 0 \
-  "libold: assertion coverage 0 of 1 sourced section; built to contract 2.0" -- \
+case_run "kb-session-start: a library behind the contract is named for its coverage, with no contract clause (#263)" 0 \
+  "libold: assertion coverage 0 of 1 sourced section" -- \
   sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
+case_run "kb-session-start: a library behind the contract gets no contract clause (#263)" 0 "" -- \
+  sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start' | grep -F 'libold:' | grep -qF 'built to contract' && exit 1; exit 0"
 case_run "kb-session-start: an unsupported contract major is named as not served" 0 \
   "libfuture: unsupported-contract" -- \
   sh -c "cd '$TMP/session-cwd' && env -i KB_TODAY=$KB_TODAY HOME='$SHOME' PATH='$PATH' '$SFX/scripts/kb-session-start'"
@@ -3984,9 +3986,11 @@ case_run "kb-report: decisions waiting exits 1 and names the report" 1 "$RO/$WEE
   "$ENGINE/scripts/kb-report" "$RL" "$RC" --out "$RO"
 case_run "kb-report: one file, named for the ISO week" 0 "" -- test -f "$RO/$WEEK.md"
 for want in "## fx" "Review packet: kb-distill" "kb-apply" "stale-recheck" "widgets.md § Limits" \
-            "1 attended recheck" "kb-verify" "contract 2.1"; do
+            "1 attended recheck" "kb-verify"; do
   case_run "kb-report: the report holds '$want'" 0 "$want" -- cat "$RO/$WEEK.md"
 done
+# #263: fx is built to contract 2.1, behind the newest, which the engine serves: no decision, no mention.
+case_run "kb-report: a library behind on a supported contract is not a decision (#263)" 1 "" -- grep -q 'contract 2.1' "$RO/$WEEK.md"
 case_run "kb-report: a library with nothing to decide gets no section" 1 "" -- grep -q '^## calm' "$RO/$WEEK.md"
 case_run "kb-report: no fact, source or packet text, in the report or its output" 1 "" -- \
   bash -c 'grep -q SCHED-CANARY "$1" || "$2" "$3" --out "$4" 2>&1 | grep -q SCHED-CANARY' _ "$RO/$WEEK.md" "$ENGINE/scripts/kb-report" "$RL" "$RR/r2"

@@ -12,7 +12,7 @@ listing per library only what a person has to decide:
 - rechecks that are due but marked `Recheck (attended):`, which only a person can run;
 - a sweep due, or notes awaiting distillation, that no packet covers yet;
 - while a sweep is due, the source stubs marked `Liveness: manual`, which only a person can check;
-- a library behind the contract, ahead of this engine's, or on one this engine cannot serve;
+- a library ahead of this engine's contract, or on one this engine cannot serve;
 - anything about a library this could not work out, named as an item under it: a failure in one
   library never stops the report, so a person finds out instead of reading a report that left it out;
 - kb-retrieve runs in the past 7 days that answered `fact not found` (kb-telemetry, #147): an absent
@@ -120,9 +120,6 @@ def worded(item, att) -> list:
     if item.kind == "distill":
         return [f"{d} note(s) awaiting distillation and no packet drafted: run kb-distill."]
     state, v, newest, _newer = d
-    if state == "behind":
-        return [f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
-                f"Decide whether to adopt it (CONVENTIONS §14)."]
     if state == "ahead":
         return [f"Declares contract {contract.fmt(v)}, newer than this engine ({contract.fmt(newest)}). "
                 f"Upgrade the engine."]

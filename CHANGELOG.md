@@ -6,6 +6,14 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A library behind on a supported contract is no longer something that needs attention (#263). The engine
+  serves every minor of a supported major (ADR-0016), so a library built to 2.6 on an engine that knows 2.7
+  has nothing to decide, yet it counted as a decision in `kb-report` and added a clause to its line in the
+  `kb-due` nudge and `kb-due --summary`: on six registered libraries the weekly report went from 5 decisions
+  to 11. `Attention.items` yields no contract item for the `behind` state, and the wording for it is removed
+  from `kb-due` and `kb-report`. `ahead`, `unsupported` and `malformed` are unchanged, because each changes
+  what the engine serves or checks, and `check-kb` still tells a library behind what the newer versions add.
+  No contract version changes: what a library must hold is as before (CONVENTIONS §14).
 - Documentation fixes where the docs disagreed with the code, with no behaviour or contract change.
   CONVENTIONS §10 now says `expected_evidence: word` is a stamp with no `Recheck:`, and that an unstamped
   section is its own tier `check-golden` rejects `word` on; §13 counts its checks as twenty-seven, not

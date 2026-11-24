@@ -69,7 +69,7 @@ class Same(Fixture):
         for declared in ("2.1", "2.99", "7.0", "x.y", "2.7"):
             self.make(declared=declared, swept=ago(1))
             nudge, rep = self.check(self.att())
-            self.assertEqual(("contract" in nudge, "contract" in rep), (declared != "2.7",) * 2, declared)
+            self.assertEqual(("contract" in nudge, "contract" in rep), (declared not in ("2.7", "2.1"),) * 2, declared)
 
     def test_the_two_agree_when_a_field_failed(self):
         self.make(section("Old", 200, recheck="true"), swept=ago(1), extra="unasserted_ttl: 90d\n")
@@ -85,7 +85,7 @@ class Same(Fixture):
         a = self.everything()
         _line, _w, counts = due.nudge_for(a, "fx")
         self.assertEqual(counts, {"packets": 1, "sweep": " ", "recheck": 2, "stale": 1, "queue": 1, "queue_unreadable": 1,
-                                  "distill": 1, "unstamped": 1, "unsourced": 1, "contract": "2.1 (behind)"})
+                                  "distill": 1, "unstamped": 1, "unsourced": 1, "contract": "2.99 (ahead)"})
         self.assertEqual(due.summary_line([("fx", counts), ("report", {"report": 3})]).split(" · ")[0],
                          "KB due — weekly report: report 3")
 
