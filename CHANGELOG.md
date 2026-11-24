@@ -6,6 +6,11 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- `check-kb` no longer reports a `[[slug]]` inside a code fence as a dead link, nor a fenced `[[...]]`
+  naming a path-addressed file (#257, part of #254). A fence is an example. One fence definition,
+  `factfiles.FENCE`, now serves `check-kb`, `check-xlinks` and the stamp checks, and the dead-link check
+  reads links through `check-xlinks`' reader. This loosens a check and rejects nothing new, so no
+  contract version changes (CONVENTIONS §14); both checks print the same output on all six libraries.
 - The lease rule gets one module, `kbengine.lease` (#250, ADR-0022). `sweep(root, horizon=, unasserted_ttl=)`
   reads each fact file once, lints the library once and returns immutable stamps: asserted or not, their
   lease, due, stale, and the library's assertion coverage. `kb-verify` and Attention (`kb-due`, `kb-report`)

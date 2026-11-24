@@ -186,6 +186,15 @@ build_clean "$TMP/deadlink"
 printf '\nSee [[nowhere]].\n' >> "$TMP/deadlink/widgets.md"
 case_run "dead [[slug]] link" 1 "dead" -- "$ENGINE/scripts/check-kb" "$TMP/deadlink"
 
+# #257: a fence is an example, so a [[slug]] that resolves nowhere inside one is not a dead link,
+# as check-xlinks already treats it. The twin, outside a fence, is still dead.
+build_clean "$TMP/fenceddead"
+printf '\nHow a link looks:\n\n```\n[[nowhere]]\n```\n\n~~~\n[[nowhere-either]]\n~~~\n' >> "$TMP/fenceddead/widgets.md"
+case_run "a dead [[slug]] inside a code fence is an example, not a dead link (#257)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fenceddead"
+build_clean "$TMP/unfenceddead"
+printf '\nHow a link looks:\n\n```\n[[nowhere]]\n```\n\nBut [[nowhere]] after the fence.\n' >> "$TMP/unfenceddead/widgets.md"
+case_run "...and the same [[slug]] outside a fence is still dead (#257)" 1 "dead [[nowhere]]" -- "$ENGINE/scripts/check-kb" "$TMP/unfenceddead"
+
 # kb-verify parses stamps only at column 0, so an indented one certifies nothing (issue #38).
 build_clean "$TMP/indentstamp"
 printf '\n## Debate\n\n- One side.\n  Source: manual\n  Verified: 2026-09-22 · by: agent · method: manual\n  Recheck: false\n' >> "$TMP/indentstamp/widgets.md"
