@@ -2139,6 +2139,8 @@ case_run "kb-due --summary: names the library and its recheck count" 0 "to reche
   env HOME="$SHOME" "$SFX/scripts/kb-due" --nudge --summary
 case_run "kb-due --nudge without --summary prints no summary" 1 "" -- \
   bash -c 'HOME="$1" "$2" --nudge | grep -q "^KB due — "' _ "$SHOME" "$SFX/scripts/kb-due"
+case_run "kb-due --summary-out: the summary goes to the file, and the body alone to stdout (#253)" 0 "to recheck: libdue 1" -- \
+  bash -c 'f=$(mktemp); out=$(HOME="$1" "$2" --nudge --summary-out "$f"); ! grep -q "^KB due — " <<<"$out" && grep -q "^KB due — " "$f" && cat "$f"; rm -f "$f"' _ "$SHOME" "$SFX/scripts/kb-due"
 case_run "kb-session-start: the nudge reaches the user as a systemMessage" 0 "KB due — " -- \
   sjson "$SHOME" "$SFX" msg
 case_run "kb-session-start: an error message comes first, the nudge after it" 0 "" -- \
@@ -4625,17 +4627,16 @@ sy_expr() { # sy_expr <script> <ERE> [VAR=value ...]: the first quoted expressio
 sy_agree() { # sy_agree <what> <bash value> <python value>
   [ -n "$2" ] && [ "$2" = "$3" ] && echo "agree: $1" || { echo "DIVERGE $1: bash says '$2', kbengine.env says '$3'"; return 1; }
 }
-SY_REPORTS='"\$\{KB_REPORTS:-[^}]*\}"'; SY_REGISTRY='"\$HOME/\.config/ai-kb/libraries"'; SY_BACKUPS='"\$HOME/\.local/state/ai-kb/backups"'
+SY_REGISTRY='"\$HOME/\.config/ai-kb/libraries"'; SY_BACKUPS='"\$HOME/\.local/state/ai-kb/backups"'
 case_run "sync: kb-session-start's registry is kbengine.env's" 0 "agree" -- \
   sy_agree registry "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REGISTRY")" "$(sy_py registry)"
 case_run "sync: kb-bootstrap's registry is kbengine.env's" 0 "agree" -- \
   sy_agree registry "$(sy_expr "$ENGINE/scripts/kb-bootstrap" "$SY_REGISTRY")" "$(sy_py registry)"
 case_run "sync: kb-bootstrap's backup folder is under kbengine.env's state folder" 0 "agree" -- \
   sy_agree backups "$(sy_expr "$ENGINE/scripts/kb-bootstrap" "$SY_BACKUPS")" "$(sy_py state)/backups"
-case_run "sync: kb-session-start's reports folder is kbengine.env's, by default" 0 "agree" -- \
-  sy_agree reports "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REPORTS")" "$(sy_py reports)"
-case_run "sync: ...and with KB_REPORTS set" 0 "agree" -- \
-  sy_agree reports "$(sy_expr "$ENGINE/scripts/kb-session-start" "$SY_REPORTS" KB_REPORTS="$SY/mine")" "$(sy_py reports KB_REPORTS="$SY/mine")"
+# The hook no longer works out the reports folder (#253): kb-due does, through kbengine.reports, so the two
+# cases that compared its expression with kbengine.env's are gone, and the cases below, which run the hook,
+# are what says it still names the report where kb-report writes it.
 # And the running hook finds the report where kb-report writes it, the same two ways.
 sy_latest() { # sy_latest [VAR=value ...]: the "Latest kb-report" path session start names
   (cd "$SY/cwd" && env -i HOME="$SY/home" PATH="$PATH" KB_NUDGE=weekly:mon KB_TODAY=2026-11-10 KB_ENGINE_ROOT="$ENGINE" XDG_STATE_HOME="$SY/xdg" ${@+"$@"} "$ENGINE/scripts/kb-session-start") |

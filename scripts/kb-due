@@ -79,7 +79,15 @@ asserted (or none sourced) prints nothing.
 line beginning "KB due — ", for the session-start hook to show the person (a systemMessage),
 while the full nudge above it goes to the model. One run gives both, so the two cannot disagree.
 
-Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
+--SESSION (the session-start hook): decide from kb.nudge (the registry's, or $KB_NUDGE over it: always, weekly:<day>
+or off) and today whether to show the nudge, before computing anything. Stdout is then what the hook adds to the
+model's context: the setting's note or warning, and the nudge under a heading. It is the schedule's one home (#253).
+
+--SUMMARY-OUT FILE writes what the person is shown to FILE: the summary line, after the warning when the setting
+is one this does not understand. Empty when there is nothing to show. The nudge body still goes to stdout, so the
+caller needs no text matching.
+
+Usage: kb-due [tree ...] [--quiet|--nudge [--summary] [--summary-out FILE] [--session]]
   Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
   trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
@@ -87,9 +95,10 @@ Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
-import importlib.machinery, importlib.util, pathlib, shlex, sys
+import importlib.machinery, importlib.util, os, pathlib, shlex, subprocess, sys
+from typing import NamedTuple
 
-from kbengine import attention, clock, contract, registry, reports
+from kbengine import attention, clock, contract, env, registry, reports
 from kbengine.attention import Failed, describe_coverage, label
 
 
@@ -235,11 +244,92 @@ def nudge_for(att, retire=None):
     return line, warnings, summary_counts(items)
 
 
+# ------------------------------------------------------------- when the nudge is shown ----
+# The person's choice (issue #174): kb.nudge in the registry, or $KB_NUDGE over it. always (default) |
+# weekly:<day> | off. It gates only the session-start hook (--session): `kb-due --nudge` on demand,
+# kb-schedule and kb-report are unaffected, and the library-health messages the hook prints are never
+# gated, because they change what retrieval can serve. $KB_TODAY stands in for today's date.
+DAYS = {"mon": "mon", "monday": "mon", "tue": "tue", "tues": "tue", "tuesday": "tue", "wed": "wed", "wednesday": "wed",
+        "thu": "thu", "thur": "thu", "thurs": "thu", "thursday": "thu", "fri": "fri", "friday": "fri",
+        "sat": "sat", "saturday": "sat", "sun": "sun", "sunday": "sun"}
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+ON_DEMAND = "Do not start upkeep unprompted; kb-due --nudge reports what is due on demand."
+
+
+class Schedule(NamedTuple):
+    show: bool       # show the nudge this session
+    note: str        # said to the model instead of the nudge, when it is not shown
+    warning: str     # the setting is not one this understands: said to the model and the person, and the nudge is shown
+
+
+def nudge_setting() -> str:
+    """kb.nudge: $KB_NUDGE, else the registry's, lower-cased with its spaces removed; `always` when unset."""
+    raw = os.environ.get("KB_NUDGE")
+    if not raw:
+        registry_file = env.registry_path()
+        if registry_file.is_file():
+            r = subprocess.run(["git", "config", "--file", str(registry_file), "--get", "kb.nudge"], capture_output=True, text=True)
+            raw = r.stdout.strip() if r.returncode == 0 else ""
+    return "".join((raw or "").lower().split()) or "always"
+
+
+def schedule(setting: str, today, latest=None) -> Schedule:
+    """Whether to show the nudge on `today` (a date) under `setting` (nudge_setting()'s normal form).
+    `latest` is the newest report's path, named when the nudge is held back for the week."""
+    if setting == "always":
+        return Schedule(True, "", "")
+    if setting == "off":
+        return Schedule(False, f"The librarian's nudge is off on this machine (kb.nudge=off). {ON_DEMAND}", "")
+    if setting.startswith("weekly:"):
+        want = DAYS.get(setting[len("weekly:"):])
+        if want is None:
+            return Schedule(True, "", f"kb.nudge '{setting}' is not a weekday (use weekly:mon .. weekly:sun) — showing the nudge every session.")
+        if WEEKDAYS[today.weekday()] != want:
+            return Schedule(False, f"The librarian's nudge is weekly (kb.nudge=weekly:{want}) and is not shown today. {ON_DEMAND}"
+                                   + (f" Latest kb-report: {latest}" if latest else ""), "")
+        return Schedule(True, "", "")
+    return Schedule(True, "", f"kb.nudge '{setting}' is not one of always, weekly:<day>, off — showing the nudge every session.")
+
+
+def newest_report():
+    try:
+        got = reports.latest()
+        return got.path if got else None
+    except Exception:
+        return None
+
+
+HEADER = "Due for a librarian's attention — nothing printed here means nothing is due and every sourced section is asserted:"
+
+
+def session_block(sched: Schedule, body) -> str:
+    """What the session-start hook adds to the model's context: the setting's note or warning, then the nudge."""
+    out = f"\nWARNING: {sched.warning}" if sched.warning else (f"\n{sched.note}" if sched.note else "")
+    return out + (f"\n{HEADER}\n{body}" if sched.show and body else "")
+
+
 def main(argv) -> int:
     nudge = "--nudge" in argv
     quiet = "--quiet" in argv
     summary = "--summary" in argv
-    args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary")]
+    session = "--session" in argv
+    summary_out = None
+    if "--summary-out" in argv:
+        i = argv.index("--summary-out")
+        if i + 1 >= len(argv):
+            print("kb-due: --summary-out needs a file", file=sys.stderr); return 2
+        summary_out = pathlib.Path(argv[i + 1])
+        argv = argv[:i] + argv[i + 2:]
+    args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary", "--session")]
+
+    sched = Schedule(True, "", "")
+    if session:   # the session-start hook: the person's kb.nudge decides, before anything is computed
+        sched = schedule(nudge_setting(), clock.today(), newest_report())
+        if not sched.show:
+            if summary_out:
+                summary_out.write_text("")
+            print(session_block(sched, None))
+            return 0
 
     trees, registered, consumed = [], {}, set()
     try:   # the registry's one reader; an unreadable registry must not crash a session
@@ -283,13 +373,21 @@ def main(argv) -> int:
             counts.append(("report", {"report": rep.decisions}))
         for w in warnings:
             print(f"kb-due: {w}", file=sys.stderr)
+        body = None
         if lines:
-            print("\n".join(lines))
-            print("Commands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
-                  "the rechecks above; kb-distill for the episodic notes above; kb-audit "
-                  "<library> queues unstamped sources and stale facts with no assertion.")
+            body = ("\n".join(lines) + "\nCommands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
+                    "the rechecks above; kb-distill for the episodic notes above; kb-audit "
+                    "<library> queues unstamped sources and stale facts with no assertion.")
+        line = summary_line(counts) if lines else ""
+        if summary_out:   # what the person is shown: the setting's warning, then the summary
+            summary_out.write_text(" · ".join(x for x in (sched.warning, line) if x))
+        if session:
+            if sched.warning or body:
+                print(session_block(sched, body))
+        elif body:
+            print(body)
             if summary:
-                print(summary_line(counts))
+                print(line)
         return 0
 
     if quiet:
