@@ -7,7 +7,7 @@ state_dir() packets_dir() reports_dir() config_dir() registry_path() claude_proj
             the engine's files, from HOME at the time of the call. They are fixed paths: no XDG_*
             variable moves them, because one set only in a terminal splits a hook, cron and a session
             (ADR-0008, ADR-0021). KB_PACKETS and KB_REPORTS are the explicit overrides.
-library_home_override(), claude_binary(), systemctl_binary(), crontab_binary()
+nudge_override(), library_home_override(), claude_binary(), systemctl_binary(), crontab_binary()
             the remaining variables, read in one place.
 
 `python3 -m kbengine.env` prints the table; `--path NAME` prints one resolved location, which the
@@ -25,9 +25,9 @@ class Variable(NamedTuple):
 
 VARIABLES = (
     Variable("KB_PACKETS", "~/.local/state/ai-kb/packets", "where kb-prepare writes review packets and kb-apply reads them"),
-    Variable("KB_REPORTS", "~/.local/state/ai-kb/reports", "where kb-report writes the weekly report, and session start looks for it"),
+    Variable("KB_REPORTS", "~/.local/state/ai-kb/reports", "where kb-report writes the weekly report, and kb-due looks for it"),
     Variable("KB_LIBRARY_HOME", "kb.libraryHome in the registry, else <engine>/kb", "where kb-library add and import clone new libraries"),
-    Variable("KB_NUDGE", "kb.nudge in the registry, else always", "when session start shows the due-work nudge: always, weekly:<day>, off"),
+    Variable("KB_NUDGE", "kb.nudge in the registry, else always", "when kb-due --session (the session-start hook) shows the due-work nudge: always, weekly:<day>, off"),
     Variable("KB_TODAY", "the real date", "the date staleness and sweep logic treat as today (YYYY-MM-DD); timestamps stay real"),
     Variable("KB_ENGINE_ROOT", "git config --global kb.engineRoot", "the engine a hook, a recheck or a scaffolded library runs"),
     Variable("KB_CLAUDE", "claude on PATH", "the claude binary kb-prepare and kb-schedule run"),
@@ -59,6 +59,11 @@ def reports_dir() -> pathlib.Path:
     if os.environ.get("KB_REPORTS"):
         return pathlib.Path(os.environ["KB_REPORTS"])
     return state_dir() / "reports"
+
+
+def nudge_override():
+    """$KB_NUDGE, or None when unset or empty: it wins over kb.nudge in the registry."""
+    return os.environ.get("KB_NUDGE") or None
 
 
 def config_dir() -> pathlib.Path:

@@ -99,13 +99,20 @@ fi
 # condensed for the person (issue #79: additionalContext reaches only the model). When the nudge is shown is
 # the person's choice (kb.nudge, issue #174): kb-due --session decides it and says what to tell the model
 # otherwise, so this hook only prints the result. The library-health messages above and below are never
-# gated, because they change what retrieval can serve. A kb-due that fails gives nothing: a partial nudge
-# is worse than none, and the session must still start.
+# gated, because they change what retrieval can serve. A kb-due that fails gives no nudge, never a partial
+# one, and the session still starts: it says that kb-due failed, so a silent nudge is not read as nothing due.
 nudge=""; summary=""
 if [ "$event" = SessionStart ]; then
   sumfile=$(mktemp 2>/dev/null) || sumfile=""
-  if [ -n "$sumfile" ] && out=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge --session --summary-out "$sumfile" 2>/dev/null); then
-    nudge="$out"; summary=$(cat "$sumfile" 2>/dev/null)
+  if [ -n "$sumfile" ]; then
+    out=$("$engine/scripts/kb-due" ${proj:+"$proj"} --nudge --session --summary-out "$sumfile" 2>/dev/null); rc=$?
+    if [ "$rc" -eq 0 ]; then
+      nudge="$out"; summary=$(cat "$sumfile" 2>/dev/null)
+    else
+      summary="kb-due failed (exit $rc), so the knowledge-base nudge is unavailable this session."
+      nudge="
+$summary"
+    fi
   fi
   [ -n "$sumfile" ] && rm -f "$sumfile"
 fi

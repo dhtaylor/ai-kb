@@ -61,6 +61,14 @@ class Reports(unittest.TestCase):
         self.assertEqual(reports.latest(self.dir).decisions, 0)      # no decisions: line reads as none
         self.assertIsNone(reports.current(self.dir))
 
+    def test_newest_is_any_md_file_by_name_and_not_the_latest_report(self):
+        self.assertIsNone(reports.newest(self.dir / "absent"))
+        self.assertIsNone(reports.newest(self.dir))
+        self.write("2026-W45.md", 3)
+        stray = self.write("notes.md", 0)               # sorts after the week's report, and is no report
+        self.assertEqual(reports.newest(self.dir), stray)
+        self.assertEqual(reports.latest(self.dir).path.name, "2026-W45.md")
+
     def test_only_the_newest_report_is_judged(self):
         self.write("2026-W45.md", 9, days_old=1)
         self.write("2026-W46.md", 0, days_old=1)

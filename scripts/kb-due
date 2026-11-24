@@ -95,7 +95,7 @@ Usage: kb-due [tree ...] [--quiet|--nudge [--summary] [--summary-out FILE] [--se
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
-import importlib.machinery, importlib.util, os, pathlib, shlex, subprocess, sys
+import importlib.machinery, importlib.util, pathlib, shlex, subprocess, sys
 from typing import NamedTuple
 
 from kbengine import attention, clock, contract, env, registry, reports
@@ -223,19 +223,16 @@ def nudge_for(att, retire=None):
     docstring: a malformed or uncomputable category is reported once and skipped."""
     lbl = label(att.tree)
     items = att.items
-    parts, warnings, coverage = [], [], None
+    warnings, coverage = [], next(i for i in items if i.kind == "coverage")
     for item in items:
-        if item.kind == "coverage":
-            coverage = item   # leads the line, but is judged last
-            continue
+        if item is coverage:
+            continue   # leads the line, but is judged last
         if item.failed:
             if item.kind in FAILED:
                 warnings.append(f"{lbl}: {FAILED[item.kind]} ({item.detail.reason}) — skipped")
-            continue
-        if item.kind == "unstamped" and item.detail.git_error is not None:
+        elif item.kind == "unstamped" and item.detail.git_error is not None:
             warnings.append(f"{lbl}: could not read the last sweep from git ({item.detail.git_error}) — full count shown")
-        if item.says and item.kind not in attention.REPORT_ONLY:
-            parts.append(word(item, att, retire))
+    parts = [word(item, att, retire) for item in attention.nudgeable(items)]
     if coverage.failed:   # ADR-0022: where trust is thin leads the line, before what is due (#239)
         warnings.append(f"{lbl}: {FAILED['coverage']} ({coverage.detail.reason}) — skipped")
     elif attention.worth_a_line(items):   # below full coverage is named even when nothing is due
@@ -264,7 +261,7 @@ class Schedule(NamedTuple):
 
 def nudge_setting() -> str:
     """kb.nudge: $KB_NUDGE, else the registry's, lower-cased with its spaces removed; `always` when unset."""
-    raw = os.environ.get("KB_NUDGE")
+    raw = env.nudge_override()
     if not raw:
         registry_file = env.registry_path()
         if registry_file.is_file():
@@ -289,14 +286,6 @@ def schedule(setting: str, today, latest=None) -> Schedule:
                                    + (f" Latest kb-report: {latest}" if latest else ""), "")
         return Schedule(True, "", "")
     return Schedule(True, "", f"kb.nudge '{setting}' is not one of always, weekly:<day>, off — showing the nudge every session.")
-
-
-def newest_report():
-    try:
-        got = reports.latest()
-        return got.path if got else None
-    except Exception:
-        return None
 
 
 HEADER = "Due for a librarian's attention — nothing printed here means nothing is due and every sourced section is asserted:"
@@ -324,7 +313,7 @@ def main(argv) -> int:
 
     sched = Schedule(True, "", "")
     if session:   # the session-start hook: the person's kb.nudge decides, before anything is computed
-        sched = schedule(nudge_setting(), clock.today(), newest_report())
+        sched = schedule(nudge_setting(), clock.today(), reports.newest())
         if not sched.show:
             if summary_out:
                 summary_out.write_text("")

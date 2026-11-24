@@ -447,20 +447,22 @@ class Shelving(Fixture):
         a = self.att()
         self.assertEqual(a.archived, "moved to fy")
         self.assertFalse(a.read_only)
-        self.assertTrue(attention.shelved(a, set()))                      # archived, not registered
-        self.assertFalse(attention.shelved(a, {self.root.resolve()}))     # registered: served whatever it declares
+        self.assertTrue(attention.shelved(a))                                       # archived, not registered
+        self.assertFalse(attention.shelved(self.att(registered={self.root.resolve()})))   # registered: served whatever it declares
         self.make()
-        a = self.att(consumed={self.root.resolve()})
-        self.assertTrue(a.read_only and attention.shelved(a, {self.root.resolve()}))
+        a = self.att(consumed={self.root.resolve()}, registered={self.root.resolve()})
+        self.assertTrue(a.read_only and attention.shelved(a))
         self.assertIsNone(a.archived)
-        self.assertFalse(attention.shelved(self.att(), set()))
+        self.assertFalse(attention.shelved(self.att()))
 
-    def test_shelved_defaults_to_the_registration_the_attention_was_given(self):
-        self.make(extra="archived: moved to fy\n")
-        root = self.root.resolve()
-        self.assertTrue(attention.shelved(attention.attention(self.root, [], set(), set())))
-        self.assertFalse(attention.shelved(attention.attention(self.root, [], set(), {root})))
-        self.assertTrue(attention.shelved(attention.attention(self.root, [], {root}, {root})))
+    def test_a_library_is_shelved_without_reading_the_date(self):
+        # kb-report shelves a read-only library before anything else about it is worked out
+        self.make(swept=ago(3))
+        with mock.patch.dict(os.environ, {"KB_TODAY": "tomorrow"}):
+            a = self.att(consumed={self.root.resolve()})
+            self.assertTrue(attention.shelved(a))
+            with self.assertRaises(clock.BadToday):
+                a.sweep
 
 
 class ReadOnce(Fixture):

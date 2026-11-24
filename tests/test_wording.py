@@ -48,6 +48,12 @@ class Same(Fixture):
         self.assertEqual(nudge, set(NUDGE))
         self.assertEqual(rep, {"packets", "queue", "queue_unreadable", "recheck", "sweep", "manual_stubs", "contract"} | {"distill"})
 
+    def test_the_report_lists_every_decision_kind_items_can_produce(self):
+        decisions = {i.kind for i in self.everything().items if i.decision}
+        self.assertEqual(decisions, set(report.ORDER))
+        # ...and says why when one could not be worked out
+        self.assertTrue({k for k in report.FAILED} <= decisions)
+
     def test_the_two_agree_on_what_a_packet_suppresses(self):
         self.everything()
         for kinds in ((), ("kb-audit",), ("kb-distill",), ("kb-audit", "kb-distill")):

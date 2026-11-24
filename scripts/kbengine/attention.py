@@ -4,7 +4,8 @@ what is "due" is one judgment, and a category added or changed here reaches all 
 
 attention(tree, packets, consumed)   an Attention for the library at `tree`.
 label(tree)                          the name to show for a tree.
-shelved(att, registered)             whether a nudge or report leaves the library out.
+shelved(att)                         whether a nudge or report leaves the library out.
+nudgeable(items)                     the items the nudge words: what it says, less REPORT_ONLY.
 worth_a_line(items)                  whether the nudge has a line for a library with these items.
 
 The caller reads the review packets once (kb-apply's pending()) and the read-only set once (the
@@ -249,10 +250,18 @@ class Attention:
         covered = {h.get("packet") for _, h in self.packets}
         self.sweep_covered = "kb-audit" in covered
         self.distill_covered = "kb-distill" in covered
+        try:
+            self._today = clock.today()
+        except clock.BadToday as e:   # said when the sweep is read, so a library the caller shelves is never judged by it
+            self._today = e
+
+    @cached_property
+    def sweep(self):
+        if isinstance(self._today, Exception):
+            raise self._today
         lib = self.lib
-        today = clock.today()
-        age = (today - lib.last_swept).days if lib.last_swept is not None else None
-        self.sweep = Sweep(age is None or age > lib.sweep_interval, age, lib.sweep_interval)
+        age = (self._today - lib.last_swept).days if lib.last_swept is not None else None
+        return Sweep(age is None or age > lib.sweep_interval, age, lib.sweep_interval)
 
     # -- the lease of every stamp: one sweep serves rechecks, stale and coverage --
     @cached_property
@@ -360,6 +369,7 @@ class Attention:
     def items(self) -> tuple:
         """What this library needs said, in order (module docstring). Reads every field it needs."""
         out = []
+        sw = self.sweep   # first: a clock that cannot be read stops everything, as it did when the date was read on construction
 
         def say(kind, got, n, decision=True):
             if isinstance(got, Failed):
@@ -372,7 +382,6 @@ class Attention:
 
         out.append(Item("coverage", 0, False, self.coverage))
         say("packets", self.packets, len(self.packets))
-        sw = self.sweep
         say("sweep", sw, int(sw.due and not self.sweep_covered))   # a kb-audit packet is already the sweep (#204)
         if sw.due:
             stubs = self.manual_stubs
@@ -427,24 +436,23 @@ def attention(tree, packets, consumed, registered=()) -> Attention:
     return Attention(tree, packets, consumed, registered)
 
 
+def nudgeable(items) -> list:
+    """The items the nudge words: those with something to say, without coverage (which leads the line
+    on its own terms) and without the ones only the weekly report says."""
+    return [i for i in items if i.kind != "coverage" and i.says and i.kind not in REPORT_ONLY]
+
+
 def worth_a_line(items) -> bool:
-    """Whether the nudge has a line for a library with these items: something is said besides coverage,
-    or coverage is below full. Coverage is a measure, not something due, but a library below full coverage
-    is named even when nothing is due (#239, ADR-0022)."""
-    for item in items:
-        if item.kind == "coverage":
-            if not item.failed and item.detail.asserted < item.detail.sourced:
-                return True
-        elif item.says and item.kind not in REPORT_ONLY:
-            return True
-    return False
+    """Whether the nudge has a line for a library with these items: something is nudgeable, or coverage
+    is below full. Coverage is a measure, not something due, but a library below full coverage is named
+    even when nothing is due (#239, ADR-0022)."""
+    cov = next(i for i in items if i.kind == "coverage")
+    return bool(nudgeable(items)) or (not cov.failed and cov.detail.asserted < cov.detail.sourced)
 
 
-def shelved(att: Attention, registered=None) -> bool:
+def shelved(att: Attention) -> bool:
     """Whether a nudge or report leaves the library out: an archived library that is not registered
     (#141: a read-only archive cannot act on it; a registered one is served whatever it declares),
     or one registered read-only, a consumer's copy curated by its publisher (ADR-0020).
-    `registered` holds the resolved paths of the registered libraries; by default, the ones the
-    Attention was given."""
-    registered = att.registered if registered is None else att.root in registered
-    return bool((att.archived and not registered) or att.read_only)
+    Whether it is registered is what the Attention was given."""
+    return bool((att.archived and not att.registered) or att.read_only)

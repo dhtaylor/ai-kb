@@ -4,6 +4,8 @@ Stdlib only.
 
 directory(out)   the reports folder: `out` when given, else kbengine.env's (KB_REPORTS, or the state folder).
 latest(out)      the newest report as Report(path, decisions, age), or None when there is none.
+newest(out)      the path of the newest file of any name ending .md, or None: what a person is pointed at when
+                 the nudge is held back for the week, whatever it says. Not the same as `latest`.
 current(out)     the latest report when it is worth naming, else None: under CURRENT_DAYS old and listing
                  at least one decision. A report that says nothing is waiting is never named.
 
@@ -42,6 +44,12 @@ def latest(out=None):
     m = DECISIONS.search(path.read_text(errors="replace"))
     age = (datetime.datetime.now().timestamp() - path.stat().st_mtime) / 86400
     return Report(path, int(m.group(1)) if m else 0, age)
+
+
+def newest(out=None):
+    root = directory(out)
+    found = sorted(root.glob("*.md")) if root.is_dir() else []
+    return found[-1] if found else None
 
 
 def current(out=None):
