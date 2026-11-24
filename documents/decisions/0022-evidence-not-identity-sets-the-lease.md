@@ -1,11 +1,11 @@
 # ADR-0022: Evidence, not identity, sets a stamp's lease
 
-- **Status:** Proposed
+- **Status:** Accepted 2026-11-23
 - **Date:** 2026-11-23
 - **Deciders:** Dandy Taylor
 - **Amends:** [0005](0005-currency-cadence.md) (supersedes §5 "Trust tiers on the stamp" and the
   `agent_ttl` amendment; TTLs, budgets and the automation gate stand)
-- **Target:** v0.6.0, behind a library contract version bump ([0016](0016-versioned-library-contract.md))
+- **Target:** v0.6.0. The lease change carries no contract bump; contract 2.7 carries only `unasserted_ttl:` ([0016](0016-versioned-library-contract.md))
 
 ## Context and problem statement
 
@@ -40,29 +40,32 @@ the engine could prove were the ones it kept asking a person to re-check.
    without an assertion, or an assertion `kb-verify` flags) and gets the short lease, a tenth of the horizon
    by default. `by:` and `method:` stay on the stamp as a record for the reader and no longer feed the lease.
 2. **Lint costs tier.** The assertion-quality findings `kb-verify` already reports (a fetched fragment of four
-   words or fewer, one (url, fragment) pair backing several sections, a parse failure) demote the stamp to
+   words or fewer, one (url, fragment) pair backing several sections, a path outside the library) demote the stamp to
    unasserted, rather than only being reported. Defense against toothless assertions is mechanical and in the
-   diff, not a signature.
+   diff, not a signature. Parsing is not part of the lint: `check-kb` owns it, and an assertion that does not
+   parse never passes, so it never earns the full horizon.
 3. **The Arbiter reviews checks, not facts.** A person's work is writing and approving assertions, deciding
    failed checks and contradictions (§8), and owning attended decisions ([0017](0017-unattended-preparation-attended-decisions.md)).
    A person's stamp buys no longer lease than an agent's.
 4. **High-blast-radius facts are gated by consequence.** Evidence rules apply to them as to any fact. Any
    change to one, and any restamp after a failed check, is an attended decision.
-5. **`agent_ttl` becomes `unasserted_ttl`** at the new contract version; `agent_ttl` is still read at earlier
-   versions.
+5. **`agent_ttl` becomes `unasserted_ttl`** at contract 2.7, which carries only that field; `agent_ttl` is
+   still read at earlier versions and rejected from 2.7. The lease change itself applies to every library,
+   whatever its declared contract.
 6. **`check-stamps` is retired.** It stopped a false `by: human` from buying a tenfold lease; once `by:`
    buys nothing, there is nothing to stop.
-7. **Retrieval states the tier.** `kb-retrieve` names the evidence behind each cited fact in plain words and
-   flags an unasserted one before the answer. It refuses on dispute only, never on tier.
+7. **Retrieval states the tier.** `kb-retrieve` names the evidence behind each cited fact in plain words
+   ("carries a check", "someone's word", "unstamped") and flags an unasserted one before the answer. It
+   cannot run the lint, so it never says "asserted"; a lint demotion shows in the reports. It refuses on dispute only, never on tier.
 8. **Assertion coverage is the headline health number.** The session-start nudge and weekly report lead with
-   each library's share of asserted sections; due rechecks become background work.
+   each library's share of sourced sections that are asserted; due rechecks become background work.
 9. **No coverage gate on publishing.** A library whose facts cannot be decided by a command stays honestly
    unasserted. A gate would reward assertions that cannot fail, which §7 already calls worse than none.
 
 ## Consequences
 
-- **No library file is rewritten.** The tier is derived; the 234 asserted stamps move to the full horizon at
-  the contract bump and the due-recheck queue shrinks accordingly.
+- **No library file is rewritten.** The tier is derived; the 234 asserted stamps move to the full horizon on
+  upgrade, with no contract bump, and the due-recheck queue shrinks accordingly.
 - **The risk moves.** It was a false `by: human`; it is now a weak assertion that slips past lint. The lint
   set is the thing to strengthen when one is found.
 - **Coverage becomes visible work.** intelligence-analysis (0 of 24 asserted) and claude-code-runtime

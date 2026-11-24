@@ -434,7 +434,7 @@ a substitute for it; it deliberately leaves names to the human gate.
 
 ## 7. Currency — stamped per section, with evidence
 
-*Cadence policy — per-domain TTLs, verifier budgets, trust tiers and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md). The re-check (`kb-verify`), the offline Watcher (`kb-watch`) and the due-reminder (`kb-due`) are built and run, each reporting rather than repairing. Detection and the preparation of review packets may run on an opt-in schedule; no fact is edited unattended ([0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)).*
+*Cadence policy — per-domain horizons, verifier budgets and the detection-vs-mutation gate: [0005-currency-cadence](documents/decisions/0005-currency-cadence.md), whose trust tiers [0022](documents/decisions/0022-evidence-not-identity-sets-the-lease.md) replaces with evidence tiers. The re-check (`kb-verify`), the offline Watcher (`kb-watch`) and the due-reminder (`kb-due`) are built and run, each reporting rather than repairing. Detection and the preparation of review packets may run on an opt-in schedule; no fact is edited unattended ([0017](documents/decisions/0017-unattended-preparation-attended-decisions.md)).*
 
 Provenance says where a fact came from. Currency says whether it is still true. They are different
 questions and they attach at the same granularity (§4).
@@ -505,12 +505,22 @@ Verified: 2026-09-19 · by: agent · method: query
   decides between a stale fact, a wrong assertion and a real contradiction (§8). And **the commands
   are printed and approved per run**, because a library is content that travels between people:
   running one executes its author's shell on your machine.
-- **Trust tiers.** Agent-verified TTL is materially shorter than human-verified: **1/10th** of the
-  horizon, unless the domain declares `agent_ttl` (§3), which must stay shorter than the horizon.
-  Declare it when agent stamps would otherwise expire before the next sweep. Do not stretch the
-  horizon instead: that stretches the human TTL with it.
-  **High-blast-radius** facts require **human** re-verification regardless of any agent stamp:
-  deploy targets, environment routing, credential references. **The test is the consequence, not the
+- **Evidence tiers.** The evidence behind a stamp sets its lease; who wrote it does not
+  ([ADR-0022](documents/decisions/0022-evidence-not-identity-sets-the-lease.md)). An **asserted
+  stamp**, one backed by a passing `Recheck:` that the assertion lint above does not flag, attended
+  or not, stays fresh for the full `freshness_horizon`. Every other stamp is an **unasserted
+  stamp**, someone's word, and stays fresh for a tenth of the horizon, whether `by:` says `human` or
+  `agent`. The lint costs tier: an assertion it flags is demoted to unasserted, which stays a warning
+  for the sweep and now has a consequence. A domain may set the short lease with `unasserted_ttl`
+  (§3), which must stay shorter than the horizon; declare it when unasserted stamps would otherwise
+  expire before the next sweep. Do not stretch the horizon instead: that stretches the asserted
+  lease with it. The Arbiter's work is to approve the checks, decide failed checks and contradictions
+  (§8), and own attended decisions, not to re-stamp facts. `by:` and `method:` stay on the stamp as a
+  record and are never weighed.
+  **High-blast-radius** facts follow the same evidence rules, and are gated by consequence: **an
+  attended decision is required on any change to one, and on any restamp after a failed check.**
+  Deploy targets, environment routing and credential references are the usual cases.
+  **The test is the consequence, not the
   subject matter — if this fact is wrong, what happens?** Damage that is expensive or impossible to
   undo (shipped to the wrong place, written to the wrong environment, a wrong credential used) is
   high blast radius. A skipped check, a confused reader or a wasted afternoon is not.
@@ -825,6 +835,9 @@ must or may hold changes; an editorial change to this file does not change it.
 
 - **Minor:** adds a field, a warning, or a rejection that applies only to a library declaring that
   version or later. A library valid under an earlier minor of the same major stays valid.
+- **Not a change:** an optional golden-set field, or a record rule that rejects only records
+  carrying it, is not a contract change, because no existing library can break. `alt_excerpt`,
+  `uncorroborated` and `expected_evidence` are examples (§10).
 - **Major:** changes what something a library already holds means. Each major ships with migration
   notes from the one before it, here.
 - A library declares the version it was built to as `kb_contract:` in its root `INDEX.md` (§3).

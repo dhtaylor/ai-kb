@@ -6,6 +6,17 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A stamp's lease now follows its evidence, not who wrote it (ADR-0022, #233). An asserted stamp,
+  one backed by a passing `Recheck:` the assertion lint does not flag, stays fresh for the full
+  horizon; every other stamp, `by: human` included, is on the short lease. The session-start nudge
+  and the weekly report lead with assertion coverage, retrieval says what backs each fact instead
+  of who stamped it, contract 2.7 renames `agent_ttl:` to `unasserted_ttl:`, and `check-stamps` is
+  retired. **Due counts drop sharply on upgrade**: asserted stamps that sat on the short lease only
+  because they were `by: agent` are no longer due, so a sudden fall in due rechecks is expected.
+  **Before moving its engine pin past the release that removes `check-stamps`, each library must
+  delete the "Stamp honesty" step from its CI workflow**, or its CI fails. The entries below give
+  each change: #235 to #240 and the documentation in step (#241).
+
 - The session-start nudge and the weekly report lead with assertion coverage (#239, ADR-0022):
   per library, the sections with an asserted stamp over the sections that cite a source, as
   "assertion coverage 2 of 5 sourced sections". A lint-flagged assertion counts as unasserted. A
