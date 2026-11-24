@@ -166,6 +166,54 @@ class Stale(Fixture):
         self.assertEqual([s["heading"] for s in self.att().stale], ["NoBy"])
 
 
+class Coverage(Fixture):
+    """Assertion coverage (#239, ADR-0022): asserted sections over sourced sections."""
+    weak = "curl -fsSL https://example.com/a | grep -qF 'Widgets'"
+
+    def test_asserted_sections_over_sourced_sections(self):
+        # Sourced: A (a passing-kind Recheck), Att (attended), Plain (stamp, no check), Unstamped.
+        # NoSource has content and no Source: line, so it is not sourced and is not counted.
+        self.make(section("A", 1, recheck="true") + section("Att", 1, recheck="true", attended=True)
+                  + section("Plain", 1) + section("Unstamped") + section("NoSource", source=False))
+        self.assertEqual(tuple(self.att().coverage), (2, 4))
+
+    def test_a_lint_flagged_assertion_counts_as_unasserted(self):
+        self.make(section("Strong", 1, recheck="true") + section("Weak", 1, recheck=self.weak))
+        self.assertEqual(tuple(self.att().coverage), (1, 2))
+
+    def test_who_wrote_the_stamp_does_not_count(self):
+        self.make(section("H", 1, by="human", recheck="true") + section("P", 1, by="human"))
+        self.assertEqual(tuple(self.att().coverage), (1, 2))
+
+    def test_a_stale_asserted_stamp_still_counts_as_asserted(self):
+        # Coverage is about what backs a section, not whether it is due: 200d is past the horizon.
+        self.make(section("Old", 200, recheck="true"))
+        self.assertEqual(tuple(self.att().coverage), (1, 1))
+
+    def test_zero_coverage_reads_as_zero_not_a_failure(self):
+        self.make(section("P", 1) + section("Q"))
+        cov = self.att().coverage
+        self.assertNotIsInstance(cov, Failed)
+        self.assertEqual((cov.asserted, cov.sourced), (0, 2))
+
+    def test_a_library_with_nothing_sourced_is_zero_of_zero(self):
+        self.make()
+        self.assertEqual(tuple(self.att().coverage), (0, 0))
+
+    def test_coverage_is_there_without_a_freshness_horizon(self):
+        self.make(section("A", 1, recheck="true") + section("P", 1), horizon="")
+        self.assertEqual(tuple(self.att().coverage), (1, 2))
+        self.assertEqual(self.att().rechecks.due, [])
+
+    def test_the_fact_files_are_still_read_once_with_coverage(self):
+        self.make(section("Old", 200, recheck="true") + section("NoCmd", 200))
+        a = self.att()
+        verify = attention.script("kb-verify")
+        with mock.patch.object(verify, "due_sections", wraps=verify.due_sections) as due:
+            a.rechecks, a.stale, a.coverage
+        self.assertEqual(due.call_count, 1)
+
+
 class Queue(Fixture):
     def test_open_records_one_per_id_and_none_without_a_queue_file(self):
         self.make(queue_text=record("aaaaaaaa") + record("aaaaaaaa") + record("bbbbbbbb", status="resolved")

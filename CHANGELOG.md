@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The session-start nudge and the weekly report lead with assertion coverage (#239, ADR-0022):
+  per library, the sections with an asserted stamp over the sections that cite a source, as
+  "assertion coverage 2 of 5 sourced sections". A lint-flagged assertion counts as unasserted. A
+  library with no assertions reads "0 of N" and is never a failure or a reason to withhold it.
+  Coverage is a measure, not something due, but a library below full coverage is named in the
+  nudge even when nothing is due; one with every sourced section asserted stays silent. The report
+  lists coverage for every library, including those with nothing to decide.
 - Retrieval states what backs each cited fact, not who stamped it (#237, ADR-0022). `kb-retrieve`
   says "carries a check, last passed <date>" for a section with a `Recheck:` and "someone's word,
   <date>" for one without, and flags the latter before the answer. It never says "asserted", because

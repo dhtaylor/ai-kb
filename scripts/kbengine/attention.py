@@ -29,6 +29,11 @@ does not ask.
     episodic         the number of episodic notes not yet distilled.
     unstamped        Unstamped(total, new, since_sweep, git_error): Source: lines with no stamp. With a sweep
                      to compare with, `count` is only the ones new since it. unstamped_total: every one.
+    coverage         Coverage(asserted, sourced): assertion coverage (#239, ADR-0022). Sourced sections
+                     are the served sections of fact files that hold a Source: line (the complement of
+                     `unsourced`, a CONFLICTED one excluded). Asserted ones carry an asserted stamp,
+                     a Recheck: the assertion lint does not flag, however stale; a flagged one counts
+                     as unasserted. Zero is a value, never a failure, and does not need a horizon.
     unsourced        the number of sections with content and no Source: line.
     contract         Contract(state, version, newest, newer), as contract.contract_status gives it.
     manual_stubs     the source stubs marked Liveness: manual.
@@ -66,6 +71,23 @@ class Contract(NamedTuple):
     version: object
     newest: object
     newer: object
+
+
+class Coverage(NamedTuple):
+    asserted: int        # sourced sections with an asserted stamp
+    sourced: int         # served sections with a Source: line
+
+
+class Swept(NamedTuple):
+    with_check: list     # sections that carry a Recheck:, each with its lint findings
+    stamped: list        # every stamped section
+
+
+def describe_coverage(cov: Coverage) -> str:
+    """Assertion coverage in words, for the nudge and the report alike: zero is a number like any
+    other, never a warning (#239)."""
+    n = cov.sourced
+    return f"assertion coverage {cov.asserted} of {n} sourced section{'' if n == 1 else 's'}"
 
 
 class Unstamped(NamedTuple):
@@ -208,15 +230,52 @@ class Attention:
     def _due(self):
         return _try(self._load_due)
 
+    @cached_property
+    def _sections(self):
+        """The one pass over the fact files (#239): a `Swept(with_check, stamped)` of the sections that
+        carry a Recheck:, oldest stamp first and each with its lint findings, and of every stamped
+        section. No lease is applied here, so a library with no horizon has what coverage needs."""
+        lib = self.lib
+        def read():
+            _due, stamped, with_check = script("kb-verify").due_sections(
+                self.root, lib.horizon or 1, lib.unasserted_ttl or 1, all_sections=True)
+            return Swept(with_check, stamped)
+        return _try(read)
+
     def _load_due(self):
         lib = self.lib
         if lib.horizon is None:
             return None                  # not computable: neither due nor stale, and no failure
         if lib.unasserted_ttl is None:
             raise ValueError(lib.problem("unasserted_ttl"))
-        due, found, _with_cmd = script("kb-verify").due_sections(
-            self.root, lib.horizon, lib.unasserted_ttl)
-        return due, found
+        got = self._sections
+        if isinstance(got, Failed):
+            raise RuntimeError(got.reason)
+        verify = script("kb-verify")
+        due = [s for s in sorted(got.with_check, key=lambda s: s["date"])
+               if verify.is_due(s, lib.horizon, lib.unasserted_ttl)]   # oldest first
+        return due, got.stamped
+
+    @cached_property
+    def coverage(self):
+        """Assertion coverage (#239, ADR-0022): sections with an asserted stamp over served sections
+        with a Source: line, in fact files. A section is asserted when any of its stamps is."""
+        def count():
+            got = self._sections
+            if isinstance(got, Failed):
+                raise RuntimeError(got.reason)
+            verify = script("kb-verify")
+            asserted = {(s["file"], s["line"]) for s in got.with_check if verify.asserted(s)}
+            sourced = hit = 0
+            for f, kind in factfiles.files(self.root):
+                if kind != "fact":
+                    continue
+                for sec in factfiles.sections(f.read_text(errors="replace")):
+                    if sec.sourced:
+                        sourced += 1
+                        hit += any((f, st.line - 1) in asserted for st in sec.stamps)
+            return Coverage(hit, sourced)
+        return _try(count)
 
     @cached_property
     def rechecks(self):
