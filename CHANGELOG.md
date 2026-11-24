@@ -6,6 +6,27 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- What needs a person's attention is decided in one place (#253, part of #254). `Attention.items` is a
+  frozen, ordered list per library: coverage first, then review packets, a sweep due (unless a kb-audit
+  packet covers it), rechecks, stale facts, the queue and the records the reader could not read, notes to
+  distil (unless a kb-distill packet covers them), unstamped sources, unsourced sections, the contract
+  state and an archived library that is still registered. Each item says whether it is a decision, and a
+  field that failed is an item. `kb-due` and `kb-report` word the items and no longer test conditions to
+  find them, and `kb-due --summary` is counted from them. `kbengine.reports` owns where reports live, the
+  latest and whether it is current, so `kb-due` no longer loads the `kb-report` script. The `kb.nudge`
+  schedule moves out of `kb-session-start` into `kb-due --session`, and `--summary-out FILE` hands the
+  summary to the hook in a file, so the hook no longer matches `KB due — ` or works out the reports
+  folder; `kb-report` filters on `shelved` as `kb-due` does, before anything else about the library is read.
+  `manual_stubs` (the `Liveness: manual` source stubs, listed while a sweep is due) is a kind only the weekly
+  report says. GLOSSARY.md defines **Nudge** and **Decision**. If `kb-due` fails during the session hook,
+  the hook now says so in one line, with its exit code, to the model and the person, where it showed no nudge
+  (under `off` or a held-back `weekly:<day>`, only that setting's note). Otherwise the output is unchanged: `kb-due` (plain, `--quiet`, `--nudge`, `--summary`), the weekly
+  report and `kb-session-start` print what they printed, on the real registry and on fixtures for each
+  contract state, a contract that cannot be read, packet suppression, a read-only and an archived library,
+  a library below full coverage, a stray non-report `.md` in the reports folder, and each `kb.nudge`
+  setting. The other behavior that differs is a malformed `KB_TODAY` in the hook: `kb-due` refuses it, so
+  the hook now shows that line, where it showed no nudge with `always` and read the word as a date with
+  `weekly:<day>`.
 - A library is parsed once per sweep (#251, part of #254). `factfiles.tree(root)` returns the library's
   files, each read and parsed the first time it is asked for and never again, and `factfiles.tree_from(blobs)`
   builds the same value from git blobs, so the sweep baseline uses the same parser. `lease.sweep` now takes

@@ -79,7 +79,15 @@ asserted (or none sourced) prints nothing.
 line beginning "KB due — ", for the session-start hook to show the person (a systemMessage),
 while the full nudge above it goes to the model. One run gives both, so the two cannot disagree.
 
-Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
+--SESSION (the session-start hook): decide from kb.nudge (the registry's, or $KB_NUDGE over it: always, weekly:<day>
+or off) and today whether to show the nudge, before computing anything. Stdout is then what the hook adds to the
+model's context: the setting's note or warning, and the nudge under a heading. It is the schedule's one home (#253).
+
+--SUMMARY-OUT FILE writes what the person is shown to FILE: the summary line, after the warning when the setting
+is one this does not understand. Empty when there is nothing to show. The nudge body still goes to stdout, so the
+caller needs no text matching.
+
+Usage: kb-due [tree ...] [--quiet|--nudge [--summary] [--summary-out FILE] [--session]]
   Scans every library registered on this machine (ADR-0014; kb-library list) plus any further
   trees given (a project knowledge/ tree).
   --quiet   print only overdue trees, and nothing at all when none are (sweep only)
@@ -87,9 +95,10 @@ Usage: kb-due [tree ...] [--quiet|--nudge [--summary]]
             nothing at all when nothing in any category is due
 Exit 0 always: being due is a nudge, never a failure.
 """
-import importlib.machinery, importlib.util, pathlib, shlex, sys
+import importlib.machinery, importlib.util, pathlib, shlex, subprocess, sys
+from typing import NamedTuple
 
-from kbengine import attention, clock, contract, registry
+from kbengine import attention, clock, contract, env, registry, reports
 from kbengine.attention import Failed, describe_coverage, label
 
 
@@ -115,7 +124,7 @@ def plural(n: int, word: str) -> str:
 # The --summary categories, in the order they are shown: (key, heading).
 SUMMARY = (("report", "weekly report"), ("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
            ("queue", "queue"), ("queue_unreadable", "unreadable queue"), ("distill", "to distill"), ("unstamped", "unstamped"), ("unsourced", "unsourced"),
-           ("contract", "contract"))
+           ("contract", "contract"))   # all but the report are item kinds
 
 
 def summary_line(counts: list) -> str:
@@ -130,118 +139,186 @@ def summary_line(counts: list) -> str:
     return "KB due — " + " · ".join(out) if out else ""
 
 
-def nudge_for(att, retire=None):
-    """(line-or-None, [warning, ...], {summary key: count}) for one tree's Attention. A field that
-    failed is a warning, never a stop to the other categories, this tree's own line, or any other tree
-    — see module docstring: a malformed or uncomputable category is reported once and skipped."""
-    lbl = label(att.tree)
-    parts, warnings, counts = [], [], {}
+# What it says when a kind of item could not be worked out: warned to stderr and skipped, never a stop.
+# Not said: the records the queue reader skipped and the stubs marked manual, which are not worth a warning.
+FAILED = {"recheck": "could not compute facts due for recheck", "stale": "could not compute stale facts with no assertion",
+          "queue": "could not read needs-attention.md", "distill": "could not count episodic notes",
+          "unstamped": "could not count unstamped sections", "unsourced": "could not count unsourced sections",
+          "contract": "could not read the contract version", "coverage": "could not work out assertion coverage"}
 
-    # Review packets kb-prepare drafted for this tree (ADR-0017): the decisions already waiting.
-    if att.packets:
-        counts["packets"] = len(att.packets)
-        parts.append(f"{plural(len(att.packets), 'review packet')} awaiting your decision (kb-apply list)")
 
-    sw = att.sweep
-    if sw.due and not att.sweep_covered:   # a kb-audit packet is already the sweep, drafted (#204)
-        counts["sweep"] = " "     # named, not counted: one sweep per tree
-        when = "never swept" if sw.age is None else f"last swept {sw.age}d ago"
-        parts.append(f"sweep due ({when}, every {sw.interval}d)")
-
-    rc = att.rechecks
-    if isinstance(rc, Failed):
-        warnings.append(f"{lbl}: could not compute facts due for recheck ({rc.reason}) — skipped")
-    elif rc.due:
-        # The whole backlog, not the budget's worth: one run takes `budget` of them (#211).
-        counts["recheck"] = len(rc.due)
-        per_run = f", {rc.budget} a run" if len(rc.due) > rc.budget else ""
-        parts.append(f"{plural(len(rc.due), 'fact')} due for recheck{per_run} (kb-verify {shlex.quote(str(att.root))} --yes)")
-
-    stale = att.stale
-    if isinstance(stale, Failed):
-        warnings.append(f"{lbl}: could not compute stale facts with no assertion ({stale.reason}) — skipped")
-    elif stale:
-        counts["stale"] = len(stale)
-        parts.append(f"{plural(len(stale), 'stale fact')} with no assertion (re-check by hand, or kb-audit)")
-
-    opened = att.queue
-    if isinstance(opened, Failed):
-        warnings.append(f"{lbl}: could not read needs-attention.md ({opened.reason}) — skipped")
-    elif opened:
-        cats = {}
-        for r in opened:
-            cats[r.get("category", "?")] = cats.get(r.get("category", "?"), 0) + 1
-        counts["queue"] = len(opened)
-        by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
-        parts.append(f"{plural(len(opened), 'open queue item')} ({by_cat})")
-    bad = att.queue_unreadable     # records the parser skips are not counted above, so they are named here (#168)
-    if bad and not isinstance(bad, Failed):
-        counts["queue_unreadable"] = len(bad)
-        parts.append(f"{plural(len(bad), 'unreadable queue record')} (check-kb names the lines)")
-
-    en = att.episodic
-    if isinstance(en, Failed):
-        warnings.append(f"{lbl}: could not count episodic notes ({en.reason}) — skipped")
-    elif en and not att.distill_covered:   # a kb-distill packet is already the distillation (#204)
-        counts["distill"] = en
-        parts.append(f"{plural(en, 'episodic note')} awaiting distillation")
-
-    un = att.unstamped
-    if isinstance(un, Failed):
-        warnings.append(f"{lbl}: could not count unstamped sections ({un.reason}) — skipped")
-    else:
-        if un.git_error is not None:
-            warnings.append(f"{lbl}: could not read the last sweep from git ({un.git_error}) — full count shown")
-        if un.count:
-            counts["unstamped"] = un.count
-            if not un.since_sweep:
-                parts.append(f"{plural(un.count, 'unstamped source')} (never verified)")
-            else:
-                parts.append(f"{plural(un.count, 'new unstamped source')} since the last sweep (never verified)")
-
-    us = att.unsourced
-    if isinstance(us, Failed):
-        warnings.append(f"{lbl}: could not count unsourced sections ({us.reason}) — skipped")
-    elif us:
-        counts["unsourced"] = us
-        parts.append(f"{plural(us, 'unsourced section')} (no Source: line)")
-
-    found = att.contract   # ADR-0016: a library behind the contract is told; never a failure
-    st = None
-    if isinstance(found, Failed):
-        warnings.append(f"{lbl}: could not read the contract version ({found.reason}) — skipped")
-    else:
-        st, v, newest, _newer = found
-    if st in ("behind", "ahead", "unsupported", "malformed"):
-        counts["contract"] = "(unreadable)" if st == "malformed" else f"{contract.fmt(v)} ({st})"
+def contract_text(c) -> str:
+    """The contract item in a line: what is wrong with it, the same for every state that needs telling."""
+    st, v, newest, _newer = c
     if st == "behind":
-        parts.append(f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
-                     f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
-    elif st == "ahead":
-        parts.append(f"declares contract {contract.fmt(v)}, newer than this engine "
-                     f"({contract.fmt(newest)}) — upgrade the engine")
-    elif st == "unsupported":
-        parts.append(f"declares contract {contract.fmt(v)}, which this engine does not support — not served")
-    elif st == "malformed":
-        parts.append("kb_contract cannot be read — not served (check-kb says why)")
+        return (f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
+                f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
+    if st == "ahead":
+        return (f"declares contract {contract.fmt(v)}, newer than this engine "
+                f"({contract.fmt(newest)}) — upgrade the engine")
+    if st == "unsupported":
+        return f"declares contract {contract.fmt(v)}, which this engine does not support — not served"
+    return "kb_contract cannot be read — not served (check-kb says why)"
 
-    if retire:   # a registered library is served whatever it declares (#141)
-        parts.append(f"declares archived: {att.archived}, but is registered and still served "
-                     f"(kb-library remove {retire} to retire it)")
-    cov = att.coverage   # ADR-0022: where trust is thin leads the line, before what is due (#239)
-    if isinstance(cov, Failed):
-        warnings.append(f"{lbl}: could not work out assertion coverage ({cov.reason}) — skipped")
-    elif parts or cov.asserted < cov.sourced:   # below full coverage is named even when nothing is due
-        parts.insert(0, describe_coverage(cov))
+
+def word(item, att, retire):
+    """The nudge's words for one item that says something: terse, in the nudge's voice."""
+    n, d = item.n, item.detail
+    if item.kind == "packets":
+        return f"{plural(n, 'review packet')} awaiting your decision (kb-apply list)"
+    if item.kind == "sweep":
+        when = "never swept" if d.age is None else f"last swept {d.age}d ago"
+        return f"sweep due ({when}, every {d.interval}d)"
+    if item.kind == "recheck":
+        # The whole backlog, not the budget's worth: one run takes `budget` of them (#211).
+        per_run = f", {d.budget} a run" if n > d.budget else ""
+        return f"{plural(n, 'fact')} due for recheck{per_run} (kb-verify {shlex.quote(str(att.root))} --yes)"
+    if item.kind == "stale":
+        return f"{plural(n, 'stale fact')} with no assertion (re-check by hand, or kb-audit)"
+    if item.kind == "queue":
+        cats = {}
+        for r in d:
+            cats[r.get("category", "?")] = cats.get(r.get("category", "?"), 0) + 1
+        by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
+        return f"{plural(n, 'open queue item')} ({by_cat})"
+    if item.kind == "queue_unreadable":   # records the parser skips are not counted above, so they are named here (#168)
+        return f"{plural(n, 'unreadable queue record')} (check-kb names the lines)"
+    if item.kind == "distill":
+        return f"{plural(n, 'episodic note')} awaiting distillation"
+    if item.kind == "unstamped":
+        if not d.since_sweep:
+            return f"{plural(n, 'unstamped source')} (never verified)"
+        return f"{plural(n, 'new unstamped source')} since the last sweep (never verified)"
+    if item.kind == "unsourced":
+        return f"{plural(n, 'unsourced section')} (no Source: line)"
+    if item.kind == "contract":
+        return contract_text(d)
+    if item.kind == "archived":
+        return (f"declares archived: {d}, but is registered and still served "
+                f"(kb-library remove {retire} to retire it)")
+
+
+def summary_counts(items) -> dict:
+    """{summary key: count-or-text} for the --summary line, from the same items the nudge words. The
+    summary keys are the items' kinds."""
+    keys = {key for key, _ in SUMMARY}
+    out = {}
+    for item in items:
+        if item.kind not in keys or not item.says:
+            continue
+        if item.kind == "sweep":
+            out["sweep"] = " "     # named, not counted: one sweep per tree
+        elif item.kind == "contract":
+            c = item.detail
+            out["contract"] = "(unreadable)" if c.state == "malformed" else f"{contract.fmt(c.version)} ({c.state})"
+        else:
+            out[item.kind] = item.n
+    return out
+
+
+def nudge_for(att, retire=None):
+    """(line-or-None, [warning, ...], {summary key: count}) for one tree's Attention, worded from its
+    items (the policy of what needs saying, and when, is attention.items). A field that failed is a
+    warning, never a stop to the other categories, this tree's own line, or any other tree — see module
+    docstring: a malformed or uncomputable category is reported once and skipped."""
+    lbl = label(att.tree)
+    items = att.items
+    warnings, coverage = [], next(i for i in items if i.kind == "coverage")
+    for item in items:
+        if item is coverage:
+            continue   # leads the line, but is judged last
+        if item.failed:
+            if item.kind in FAILED:
+                warnings.append(f"{lbl}: {FAILED[item.kind]} ({item.detail.reason}) — skipped")
+        elif item.kind == "unstamped" and item.detail.git_error is not None:
+            warnings.append(f"{lbl}: could not read the last sweep from git ({item.detail.git_error}) — full count shown")
+    parts = [word(item, att, retire) for item in attention.nudgeable(items)]
+    if coverage.failed:   # ADR-0022: where trust is thin leads the line, before what is due (#239)
+        warnings.append(f"{lbl}: {FAILED['coverage']} ({coverage.detail.reason}) — skipped")
+    elif attention.worth_a_line(items):   # below full coverage is named even when nothing is due
+        parts.insert(0, describe_coverage(coverage.detail))
     line = f"{lbl}: " + "; ".join(parts) if parts else None
-    return line, warnings, counts
+    return line, warnings, summary_counts(items)
+
+
+# ------------------------------------------------------------- when the nudge is shown ----
+# The person's choice (issue #174): kb.nudge in the registry, or $KB_NUDGE over it. always (default) |
+# weekly:<day> | off. It gates only the session-start hook (--session): `kb-due --nudge` on demand,
+# kb-schedule and kb-report are unaffected, and the library-health messages the hook prints are never
+# gated, because they change what retrieval can serve. $KB_TODAY stands in for today's date.
+DAYS = {"mon": "mon", "monday": "mon", "tue": "tue", "tues": "tue", "tuesday": "tue", "wed": "wed", "wednesday": "wed",
+        "thu": "thu", "thur": "thu", "thurs": "thu", "thursday": "thu", "fri": "fri", "friday": "fri",
+        "sat": "sat", "saturday": "sat", "sun": "sun", "sunday": "sun"}
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+ON_DEMAND = "Do not start upkeep unprompted; kb-due --nudge reports what is due on demand."
+
+
+class Schedule(NamedTuple):
+    show: bool       # show the nudge this session
+    note: str        # said to the model instead of the nudge, when it is not shown
+    warning: str     # the setting is not one this understands: said to the model and the person, and the nudge is shown
+
+
+def nudge_setting() -> str:
+    """kb.nudge: $KB_NUDGE, else the registry's, lower-cased with its spaces removed; `always` when unset."""
+    raw = env.nudge_override()
+    if not raw:
+        registry_file = env.registry_path()
+        if registry_file.is_file():
+            r = subprocess.run(["git", "config", "--file", str(registry_file), "--get", "kb.nudge"], capture_output=True, text=True)
+            raw = r.stdout.strip() if r.returncode == 0 else ""
+    return "".join((raw or "").lower().split()) or "always"
+
+
+def schedule(setting: str, today, latest=None) -> Schedule:
+    """Whether to show the nudge on `today` (a date) under `setting` (nudge_setting()'s normal form).
+    `latest` is the newest report's path, named when the nudge is held back for the week."""
+    if setting == "always":
+        return Schedule(True, "", "")
+    if setting == "off":
+        return Schedule(False, f"The librarian's nudge is off on this machine (kb.nudge=off). {ON_DEMAND}", "")
+    if setting.startswith("weekly:"):
+        want = DAYS.get(setting[len("weekly:"):])
+        if want is None:
+            return Schedule(True, "", f"kb.nudge '{setting}' is not a weekday (use weekly:mon .. weekly:sun) — showing the nudge every session.")
+        if WEEKDAYS[today.weekday()] != want:
+            return Schedule(False, f"The librarian's nudge is weekly (kb.nudge=weekly:{want}) and is not shown today. {ON_DEMAND}"
+                                   + (f" Latest kb-report: {latest}" if latest else ""), "")
+        return Schedule(True, "", "")
+    return Schedule(True, "", f"kb.nudge '{setting}' is not one of always, weekly:<day>, off — showing the nudge every session.")
+
+
+HEADER = "Due for a librarian's attention — nothing printed here means nothing is due and every sourced section is asserted:"
+
+
+def session_block(sched: Schedule, body) -> str:
+    """What the session-start hook adds to the model's context: the setting's note or warning, then the nudge."""
+    out = f"\nWARNING: {sched.warning}" if sched.warning else (f"\n{sched.note}" if sched.note else "")
+    return out + (f"\n{HEADER}\n{body}" if sched.show and body else "")
 
 
 def main(argv) -> int:
     nudge = "--nudge" in argv
     quiet = "--quiet" in argv
     summary = "--summary" in argv
-    args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary")]
+    session = "--session" in argv
+    summary_out = None
+    if "--summary-out" in argv:
+        i = argv.index("--summary-out")
+        if i + 1 >= len(argv):
+            print("kb-due: --summary-out needs a file", file=sys.stderr); return 2
+        summary_out = pathlib.Path(argv[i + 1])
+        argv = argv[:i] + argv[i + 2:]
+    args = [a for a in argv if a not in ("--quiet", "--nudge", "--summary", "--session")]
+
+    sched = Schedule(True, "", "")
+    if session:   # the session-start hook: the person's kb.nudge decides, before anything is computed
+        sched = schedule(nudge_setting(), clock.today(), reports.newest())
+        if not sched.show:
+            if summary_out:
+                summary_out.write_text("")
+            print(session_block(sched, None))
+            return 0
 
     trees, registered, consumed = [], {}, set()
     try:   # the registry's one reader; an unreadable registry must not crash a session
@@ -258,10 +335,10 @@ def main(argv) -> int:
             packets = load_module("kb_apply", "kb-apply").pending()
         except Exception as e:
             print(f"kb-due: review packets unreadable, skipped: {e}", file=sys.stderr)
-    rows = [attention.attention(t, packets, consumed) for t in trees if (t / "INDEX.md").is_file()]
+    rows = [attention.attention(t, packets, consumed, set(registered)) for t in trees if (t / "INDEX.md").is_file()]
     # An archived tree that is not registered drops out of the nudge and of --quiet (issue #141).
     # A read-only library is a consumer's copy, curated by its publisher (ADR-0020): it too drops out.
-    shelved = lambda a: attention.shelved(a, registered)
+    shelved = attention.shelved
     due = [a for a in rows if a.sweep.due and not shelved(a)]
 
     if nudge:
@@ -276,22 +353,30 @@ def main(argv) -> int:
             warnings += warn
             counts.append((label(a.tree), c))
         try:   # the weekly report (ADR-0017): named while it is this week's and lists decisions
-            rep = load_module("kb_report", "kb-report").latest()
+            rep = reports.current()
         except Exception as e:
             warnings.append(f"the weekly report is unreadable ({e}) — skipped")
             rep = None
-        if rep and rep[1] and rep[2] < 8:
-            lines.append(f"Weekly report: {rep[1]} decision(s) waiting in {rep[0]}")
-            counts.append(("report", {"report": rep[1]}))
+        if rep:
+            lines.append(f"Weekly report: {rep.decisions} decision(s) waiting in {rep.path}")
+            counts.append(("report", {"report": rep.decisions}))
         for w in warnings:
             print(f"kb-due: {w}", file=sys.stderr)
+        body = None
         if lines:
-            print("\n".join(lines))
-            print("Commands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
-                  "the rechecks above; kb-distill for the episodic notes above; kb-audit "
-                  "<library> queues unstamped sources and stale facts with no assertion.")
+            body = ("\n".join(lines) + "\nCommands: kb-audit <library> for a sweep; kb-verify <path> --yes for "
+                    "the rechecks above; kb-distill for the episodic notes above; kb-audit "
+                    "<library> queues unstamped sources and stale facts with no assertion.")
+        line = summary_line(counts) if lines else ""
+        if summary_out:   # what the person is shown: the setting's warning, then the summary
+            summary_out.write_text(" · ".join(x for x in (sched.warning, line) if x))
+        if session:
+            if sched.warning or body:
+                print(session_block(sched, body))
+        elif body:
+            print(body)
             if summary:
-                print(summary_line(counts))
+                print(line)
         return 0
 
     if quiet:
