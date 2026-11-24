@@ -693,9 +693,9 @@ not otherwise: `check-golden` fails a library holding the marker with no such ca
 
 **`expected_evidence` tests how retrieval states what backs a fact** (ADR-0022). `check` means the
 section holding the excerpt carries a `Recheck:`, and the answer must say it "carries a check";
-`word` means it is stamped but carries no `Recheck:`, and the answer must say "someone's word" before it gives the fact.
-A section with no stamp at all is a third tier, `unstamped`: retrieval says so and does not call it "someone's word",
-and `check-golden` fails a `word` on it.
+`word` means it is stamped but carries no `Recheck:`, and the answer must say "someone's word" before
+it gives the fact. A section with no stamp at all is a third tier, `unstamped`: retrieval says so and
+does not call it "someone's word", and `check-golden` fails a `word` on it.
 `check-golden` fails a record whose value disagrees with the file. Retrieval cannot run the
 weak-assertion lint, so it says "carries a check", never "asserted". The field is optional and
 positive cases only. A fact without a check is still served: only a `CONFLICTED` fact is refused.
