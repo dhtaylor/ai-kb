@@ -89,7 +89,7 @@ Exit 0 always: being due is a nudge, never a failure.
 """
 import importlib.machinery, importlib.util, pathlib, shlex, sys
 
-from kbengine import attention, clock, contract, registry
+from kbengine import attention, clock, contract, registry, reports
 from kbengine.attention import Failed, describe_coverage, label
 
 
@@ -276,13 +276,13 @@ def main(argv) -> int:
             warnings += warn
             counts.append((label(a.tree), c))
         try:   # the weekly report (ADR-0017): named while it is this week's and lists decisions
-            rep = load_module("kb_report", "kb-report").latest()
+            rep = reports.current()
         except Exception as e:
             warnings.append(f"the weekly report is unreadable ({e}) — skipped")
             rep = None
-        if rep and rep[1] and rep[2] < 8:
-            lines.append(f"Weekly report: {rep[1]} decision(s) waiting in {rep[0]}")
-            counts.append(("report", {"report": rep[1]}))
+        if rep:
+            lines.append(f"Weekly report: {rep.decisions} decision(s) waiting in {rep.path}")
+            counts.append(("report", {"report": rep.decisions}))
         for w in warnings:
             print(f"kb-due: {w}", file=sys.stderr)
         if lines:

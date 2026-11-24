@@ -37,9 +37,9 @@ Usage: kb-report [tree ...] [--out DIR]
   written, 2 could not run (the engine's readers would not load, or the report's own folder is inside a
   library). A library that cannot be read is an item under its name, not a failure.
 """
-import datetime, importlib.machinery, importlib.util, os, pathlib, re, sys
+import datetime, importlib.machinery, importlib.util, os, pathlib, sys
 
-from kbengine import attention, clock, contract, env, registry
+from kbengine import attention, clock, contract, env, registry, reports
 from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
@@ -52,24 +52,6 @@ def load_module(name: str, filename: str):
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
     return mod
-
-
-def reports_dir(out=None) -> pathlib.Path:
-    if out:
-        return pathlib.Path(out)
-    return env.reports_dir()
-
-
-def latest(out=None):
-    """(path, decisions, age in days) of the newest report, or None."""
-    root = reports_dir(out)
-    found = sorted(root.glob("*-W*.md")) if root.is_dir() else []
-    if not found:
-        return None
-    path = found[-1]
-    m = re.search(r"^decisions: (\d+)$", path.read_text(errors="replace"), re.M)
-    age = (datetime.datetime.now().timestamp() - path.stat().st_mtime) / 86400
-    return path, int(m.group(1)) if m else 0, age
 
 
 def where(rec: dict) -> str:
@@ -207,7 +189,7 @@ def main(argv) -> int:
     registered = set(names)
     trees = [t for t in trees if t.resolve() not in consumed]
 
-    dest_dir = reports_dir(out).resolve()
+    dest_dir = reports.directory(out).resolve()
     for t in trees:
         if dest_dir == t.resolve() or t.resolve() in dest_dir.parents:
             print(f"kb-report: the report must be kept outside every library, not in {dest_dir}", file=sys.stderr)
