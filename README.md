@@ -25,7 +25,7 @@ facts**:
 | `plugins/knowledge-tools/` | The Claude Code plugin: five curation skills, the `kb-retrieve` agent, the `kb-ask` triage skill, and the `/kb-capture` and `/kb-init` commands. |
 | `plugins/analysis-tools/` | A second plugin: a skill that reviews a work product for analytic rigor and coaches intelligence-analysis tradecraft. It reads its tradecraft from a library and holds none. |
 | `scripts/` | Setup commands (`kb-bootstrap`, `kb-library`, `kb-init`, `kb-capture`), the upkeep commands (`kb-verify`, `kb-sources`, `kb-watch`, `kb-due`), the opt-in weekly job (`kb-schedule`, with `kb-prepare`, `kb-apply` and `kb-report`), `kb-backup`, the retrieval-cost tools (`kb-telemetry`, `kb-eval-sample`), and the checks that guard the contract. Run them from the engine tree or through a symlink: most import the `kbengine` package in `scripts/kbengine/`, so a script copied on its own fails at import. |
-| `documents/decisions/` | Architecture decision records (ADR-0001 to ADR-0021). Each one explains why a rule exists. |
+| `documents/decisions/` | Architecture decision records, numbered from ADR-0001. Each one explains why a rule exists. |
 | `tests/run-checks` | A regression suite that breaks each check on purpose and requires it to notice. |
 
 The facts live elsewhere, in two kinds of home:
@@ -113,7 +113,7 @@ the contract it was built to is [ADR-0016](documents/decisions/0016-versioned-li
 The reference library, ai-kb-architecture, is released with the engine under the same tag
 ([ADR-0019](documents/decisions/0019-engine-and-reference-library-release-together.md)).
 
-- **Built and tested:** the contract (version 2.7), ADRs 1 to 17, the five skills, the retrieval agent, both
+- **Built and tested:** the contract (version 2.7), the ADRs, the five skills, the retrieval agent, both
   halves of the retrieval eval, the guardrails above, and the weekly job.
 - **Evidenced, not guaranteed:** that an agent retrieves rather than recalls has been tested on five
   libraries by agents that never saw the answer key. The latest recorded runs scored 15/16, 16/16,

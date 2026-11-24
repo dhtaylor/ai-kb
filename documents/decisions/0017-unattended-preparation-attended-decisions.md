@@ -1,11 +1,16 @@
 # ADR-0017: Prepare unattended, decide attended, report weekly
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-11-24 by [ADR-0022](0022-evidence-not-identity-sets-the-lease.md) (see the note under the title)
 - **Date:** 2026-10-23
 - **Deciders:** Dandy Taylor
 - **Amends:** [0013](0013-steady-state-surfaced-not-scheduled.md) (supersedes "Cadence is a nudge at
   session start" where it declines every unattended run; the nudge itself, the queue routing, the
   offline Watcher and the capture guide stand)
+
+> **Amended 2026-11-24 by [ADR-0022](0022-evidence-not-identity-sets-the-lease.md).** "Writing a human
+> stamp" under *Still never automated* no longer names a distinct act: a stamp's author no longer sets
+> its lease, so a `by: human` stamp earns nothing a `by: agent` one does not. What stands is that attended
+> decisions are never automated. The decision below is otherwise unchanged.
 
 ## Context and problem statement
 

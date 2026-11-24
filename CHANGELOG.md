@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- Documentation fixes where the docs disagreed with the code, with no behaviour or contract change.
+  CONVENTIONS §10 now says `expected_evidence: word` is a stamp with no `Recheck:`, and that an unstamped
+  section is its own tier `check-golden` rejects `word` on; §13 counts its checks as twenty-seven, not
+  twenty-eight; the `kb-due` docstring no longer says "the six" categories and its "silence" sentence says
+  one thing; README no longer states an ADR range that goes stale; ADR-0017 carries a dated note that
+  since ADR-0022 a stamp's author sets no lease, while attended decisions stay unautomated.
 - What needs a person's attention is decided in one place (#253, part of #254). `Attention.items` is a
   frozen, ordered list per library: coverage first, then review packets, a sweep due (unless a kb-audit
   packet covers it), rechecks, stale facts, the queue and the records the reader could not read, notes to

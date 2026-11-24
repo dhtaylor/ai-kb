@@ -693,7 +693,9 @@ not otherwise: `check-golden` fails a library holding the marker with no such ca
 
 **`expected_evidence` tests how retrieval states what backs a fact** (ADR-0022). `check` means the
 section holding the excerpt carries a `Recheck:`, and the answer must say it "carries a check";
-`word` means it carries none, and the answer must say "someone's word" before it gives the fact.
+`word` means it is stamped but carries no `Recheck:`, and the answer must say "someone's word" before it gives the fact.
+A section with no stamp at all is a third tier, `unstamped`: retrieval says so and does not call it "someone's word",
+and `check-golden` fails a `word` on it.
 `check-golden` fails a record whose value disagrees with the file. Retrieval cannot run the
 weak-assertion lint, so it says "carries a check", never "asserted". The field is optional and
 positive cases only. A fact without a check is still served: only a `CONFLICTED` fact is refused.
@@ -823,7 +825,7 @@ to-build, is in [0004-scope-attribute](documents/decisions/0004-scope-attribute.
 | guardrail regression suite | each check still fails on the defect it was written to catch | **built** — `tests/run-checks`, in CI and in the engine hook |
 | external `Source:` liveness | the URLs source stubs cite still resolve (HEAD, then GET on any HTTP error but 429; GET decides); a 404/410 is queued as `source-dead` and an undecidable one, or a redirect to a sign-in page, as `source-unreachable`, each with its dependants; a `Liveness: manual` stub is counted, never fetched; fetches only with `--yes`, never edits or marks a fact | **built** — `kb-sources` |
 
-All twenty-eight are built. A library passing the built checks is **structurally sound within itself**
+All twenty-seven are built. A library passing the built checks is **structurally sound within itself**
 — it is not verified. Whether an agent retrieves rather than answering from memory is what the
 routing check and the answer-grounding eval are for: both are built, and routing is graded from the agent's tool calls rather than its own account of them.
 
