@@ -25,24 +25,25 @@ caller can pass a stale list or re-derive the rule from one.
                        the lint's, then "failed-recheck"), asserted, age (days), lease (days),
                        lease_label, due.
 
-An asserted stamp is a passing Recheck: attended or not, whoever wrote it. "Passing" means two things
-and no more: the lint does not flag the assertion, and the library's needs-attention.md holds no open
-stale-recheck record for its file and section (ADR-0022 decision 1, #264). A section stays unasserted
-until the Arbiter settles that record (status other than open) or a passing recheck restamps it and the
-record is closed. A stale-recheck-error record (a timeout, a command that would not run) does not
-demote, and a record naming a file or heading that is not there matches nothing. A demoting record adds
-the kind "failed-recheck" to the lint kinds of every Recheck: stamp in that section; it is not a WEAK or
-OUTSIDE warning. An asserted stamp's lease is the full horizon; every other stamp's is the short lease,
-unasserted_ttl. It is due once its age exceeds its lease (age equal to the lease is not due). The lease
-label reads "full horizon", "short lease: <kinds>" or "short lease: no Recheck".
+An asserted stamp is a passing Recheck:, attended or not, whoever wrote it. "Passing" means two things and
+no more: the lint does not flag the assertion, and the library's needs-attention.md holds no open
+stale-recheck record for its file and section (ADR-0022 decision 1, #264). A section stays unasserted until
+that record is settled (its status is no longer open: the Arbiter resolves it, or a passing recheck
+restamps the section and the record is closed); nothing here closes one. A stale-recheck-error record (a
+timeout, a command that would not run) does not demote, a record naming a file or heading that is not
+there matches nothing, and a queue that cannot be read demotes nothing (Attention reports it on its own).
+A demoting record adds the kind "failed-recheck" to the lint kinds of each Recheck: stamp in that section;
+it is no WEAK or OUTSIDE warning. An asserted stamp's lease is the full horizon; every other stamp's is
+the short lease, unasserted_ttl. It is due once its age exceeds its lease (age equal to the lease is not
+due). The lease label reads "full horizon", "short lease: <kinds>" or "short lease: no Recheck".
 
 Without a horizon no lease applies: lease is None, due and stale are empty and every stamp's due is
 false, but coverage and the lint still work. A horizon with no usable unasserted_ttl (a whole number
-of days, at least 1 and shorter than the horizon) raises ValueError, and an unreadable file raises
+of days, at least 1 and shorter than the horizon) raises ValueError, and an unreadable fact file raises
 what reading it raises; the caller decides what a failure means.
 
 Assertion coverage counts a sourced section (factfiles' in_scope, with a Source: line) once when any
-of its stamps is asserted, however old. A tree with no root (factfiles.tree_from) has no queue to read. The budget cap and skipping attended assertions are policy
+of its stamps is asserted, however old. The budget cap and skipping attended assertions are policy
 and stay with the callers (kb-verify, Attention's Rechecks).
 """
 import datetime, pathlib
@@ -99,11 +100,14 @@ def _failed(tree) -> set:
     """(library-relative file, heading) of each section with an open stale-recheck record in the
     library's needs-attention.md (ADR-0022 decision 1, #264). stale-recheck-error does not count: a
     timeout or a command that would not run says nothing about the claim. A record naming a section
-    that is not there matches nothing."""
+    that is not there matches nothing. A queue that cannot be read demotes nothing: Attention reports an
+    unreadable queue as its own item, and the lease of every other stamp is still worth judging."""
     qpath = tree.root and tree.root / "needs-attention.md"
-    if not qpath or not qpath.is_file():
+    try:
+        text = qpath.read_text(errors="replace") if qpath and qpath.is_file() else ""
+    except OSError:
         return set()
-    return {(r.get("file"), r.get("section")) for r in queue.open_findings(qpath.read_text(errors="replace"))
+    return {(r.get("file"), r.get("section")) for r in queue.open_findings(text)
             if r.get("category") == "stale-recheck"}
 
 

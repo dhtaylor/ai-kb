@@ -259,6 +259,20 @@ class FailedRecheck(Lib):
         self.queue(("stale-recheck", "widgets.md", "Flagged", "open"))
         self.assertEqual(self.stamp(self.sweep(), "Flagged").lint, ("short-fragment", "failed-recheck"))
 
+    def test_an_unreadable_queue_demotes_nothing_and_stops_nothing(self):
+        # Attention reports an unreadable queue on its own; it is no reason to stop judging the leases.
+        self.lib()
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
+        real = pathlib.Path.read_text
+
+        def deny(path, *a, **k):
+            if path.name == "needs-attention.md":
+                raise PermissionError("denied")
+            return real(path, *a, **k)
+        with mock.patch.object(pathlib.Path, "read_text", deny):
+            got = self.sweep()
+        self.assertEqual((tuple(got.coverage), [s.asserted for s in got.stamps]), ((2, 2), [True, True]))
+
     def test_without_a_horizon_coverage_still_follows_the_failure(self):
         self.lib()
         self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
