@@ -43,6 +43,8 @@ Exit 0 when nothing is dead, 1 otherwise, 2 on a usage error. Warnings alone do 
 """
 import importlib.machinery, importlib.util, pathlib, re, sys
 
+from kbengine import factfiles
+
 # episodic/ is NOT excluded: a session note is a routed, citable file, and a fact
 # in one library legitimately cites one in another. Excluding it here called such
 # a citation dead while check-kb, which does not exclude it, called it live.
@@ -54,7 +56,6 @@ PLACEHOLDER = re.compile(r"[<>]")
 # anyway, so this cannot mask a real reference.
 EXAMPLES = {"library:slug"}
 LINK = re.compile(r"\[\[([^\]]+)\]\]")
-FENCE = re.compile(r"^\s*(```|~~~)")
 SPAN = re.compile(r"(`+).*?\1")
 
 
@@ -65,7 +66,7 @@ def links(text):
     still resolved: it only cannot warn that its library is absent."""
     fenced = False
     for line in text.splitlines():
-        if FENCE.match(line):
+        if factfiles.FENCE.match(line):
             fenced = not fenced
         elif not fenced:
             for s in SPAN.finditer(line):

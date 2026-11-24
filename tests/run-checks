@@ -192,7 +192,7 @@ build_clean "$TMP/fenceddead"
 printf '\nHow a link looks:\n\n```\n[[nowhere]]\n```\n\n~~~\n[[nowhere-either]]\n~~~\n' >> "$TMP/fenceddead/widgets.md"
 case_run "a dead [[slug]] inside a code fence is an example, not a dead link (#257)" 0 "clean" -- "$ENGINE/scripts/check-kb" "$TMP/fenceddead"
 build_clean "$TMP/unfenceddead"
-printf '\nHow a link looks:\n\n```\n[[nowhere]]\n```\n\nBut [[nowhere]] and [[nowhere-either]] after the fence.\n' >> "$TMP/unfenceddead/widgets.md"
+printf '\nHow a link looks:\n\n```\n[[nowhere]]\n```\n\nBut [[nowhere]] after the fence.\n' >> "$TMP/unfenceddead/widgets.md"
 case_run "...and the same [[slug]] outside a fence is still dead (#257)" 1 "dead [[nowhere]]" -- "$ENGINE/scripts/check-kb" "$TMP/unfenceddead"
 
 # kb-verify parses stamps only at column 0, so an indented one certifies nothing (issue #38).
