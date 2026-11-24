@@ -326,6 +326,36 @@ class ReadOnce(Fixture):
                 getattr(a, name)
         self.assertEqual(lib.call_count, 1)
 
+    def reads_during(self, fields):
+        """{file name: how many times it was read} while `fields` are read off one Attention. The
+        read path itself is wrapped, so this counts real reads, whoever makes them."""
+        reads, real = {}, pathlib.Path.read_text
+
+        def counting(path, *a, **kw):
+            reads[path.name] = reads.get(path.name, 0) + 1
+            return real(path, *a, **kw)
+
+        with mock.patch.object(pathlib.Path, "read_text", counting):
+            a = self.att()
+            for name in fields:
+                getattr(a, name)
+        return reads
+
+    FIELDS = ("rechecks", "stale", "coverage", "unstamped", "unstamped_total", "unsourced")
+
+    def test_a_fact_file_is_read_once_for_every_field_that_reads_it(self):
+        self.make(section("Old", 200, recheck="true") + section("NoCmd", 200) + section("Bare", 1, source=False)
+                  + section("Unstamped", None), swept=ago(1))
+        self.git_commit()
+        (self.root / "extra.md").write_text(FM.replace("widgets", "extra") + "# Extra\n" + section("New", None))
+        reads = self.reads_during(self.FIELDS)
+        self.assertEqual((reads["widgets.md"], reads["extra.md"]), (1, 1))
+
+    def test_a_lease_the_library_cannot_use_does_not_read_a_fact_file_twice(self):
+        # coverage falls back to a sweep without a lease: the same parsed library, not another read
+        self.make(section("Old", 200, recheck="true"), extra="unasserted_ttl: 0d\n")
+        self.assertEqual(self.reads_during(self.FIELDS)["widgets.md"], 1)
+
     def test_a_field_is_not_worked_out_until_it_is_read(self):
         self.make(section("Old", 200, recheck="true"))
         with mock.patch.object(attention, "_unstamped_keys", side_effect=AssertionError("read early")), \

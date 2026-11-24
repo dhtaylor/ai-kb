@@ -215,7 +215,7 @@ class Attention:
         def read():
             if lib.horizon is not None and lib.unasserted_ttl is None:
                 raise ValueError(lib.problem("unasserted_ttl"))   # the library's reason, not the lease's
-            return lease.sweep(self.root, horizon=lib.horizon, unasserted_ttl=lib.unasserted_ttl)
+            return lease.sweep(self._tree, horizon=lib.horizon, unasserted_ttl=lib.unasserted_ttl)
         return _try(read)
 
     @cached_property
@@ -226,7 +226,7 @@ class Attention:
         if isinstance(got, Failed):
             # Coverage does not depend on the lease: a short lease the library cannot use fails
             # rechecks and stale, not what backs each section.
-            got = _try(lease.sweep, self.root)
+            got = _try(lease.sweep, self._tree)
         return got if isinstance(got, Failed) else got.coverage
 
     @cached_property
