@@ -13,9 +13,13 @@ engine release it was last verified against in its own release notes.
   reads each fact file once for the lease, the unstamped sources (now and at the last sweep) and the
   unsourced count, where it read it three times. `check-kb`'s `kb_files`, `unsourced`, `unstamped_keys`,
   `marked_sections` and `reachable` move into `factfiles`; no engine module and no golden-set script loads
-  `check-kb` any more, which closes the pointer #252 left in `check-golden`. `check-xlinks` and `check-scope`
-  use `factfiles.EXCLUDED_DIRS`, so one rule names the folders that are not the knowledge base. The output
-  is unchanged: every check, `kb-verify` and `kb-due` print byte-for-byte what they printed.
+  `check-kb` any more, which closes the pointer #252 left in `check-golden`. `check-xlinks`, `check-scope`,
+  `check-blast` and `kb-library` use `factfiles.EXCLUDED_DIRS`, so one rule names the folders that are not
+  the knowledge base. The output is unchanged for valid UTF-8: `check-kb`, `check-golden`, `check-xlinks`,
+  `check-scope`, `check-blast`, `kb-verify`, `kb-due`, `kb-report` and `kb-library` print byte-for-byte what
+  they printed, on all six libraries and on a library whose last sweep differs from its working tree. One
+  difference: a router that is not valid UTF-8 is read with replacement characters, so it no longer crashes
+  `check-kb` or `check-golden`.
 - `check-kb` no longer reports a `[[slug]]` inside a code fence as a dead link, nor a fenced `[[...]]`
   naming a path-addressed file (#257, part of #254). A fence is an example. One fence definition,
   `factfiles.FENCE`, now serves `check-kb`, `check-xlinks` and the stamp checks, and the dead-link check
