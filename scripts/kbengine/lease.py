@@ -27,15 +27,19 @@ caller can pass a stale list or re-derive the rule from one.
 
 An asserted stamp is a passing Recheck:, attended or not, whoever wrote it. "Passing" means two things and
 no more: the lint does not flag the assertion, and the library's needs-attention.md holds no open
-stale-recheck record for its file and section (ADR-0022 decision 1, #264). A section stays unasserted until
-that record is settled (its status is no longer open: the Arbiter resolves it, or a passing recheck
-restamps the section and the record is closed); nothing here closes one. A stale-recheck-error record (a
+stale-recheck record raised against this stamp (ADR-0022 decision 1, #264). A record is raised against a
+stamp when its file and section name the stamp's and its `stamp:` equals the stamp's own Verified: content,
+"<date> · by: <by> · method: <method>", as kb-verify writes it (by agent, method unknown when the stamp
+names none). A record with no `stamp:` (an older one) covers a stamp dated on or before the record's date,
+and one whose date cannot be read covers the stamp. So the demotion lasts only until the section is
+restamped: a newer stamp, such as an attended kb-verify --apply after a pass, is asserted at once, with the
+record still open as the Arbiter's decision. Nothing here closes a record. A stale-recheck-error record (a
 timeout, a command that would not run) does not demote, a record naming a file or heading that is not
 there matches nothing, and a queue that cannot be read demotes nothing (Attention reports it on its own).
-A demoting record adds the kind "failed-recheck" to the lint kinds of each Recheck: stamp in that section;
-it is no WEAK or OUTSIDE warning. An asserted stamp's lease is the full horizon; every other stamp's is
-the short lease, unasserted_ttl. It is due once its age exceeds its lease (age equal to the lease is not
-due). The lease label reads "full horizon", "short lease: <kinds>" or "short lease: no Recheck".
+A demoting record adds the kind "failed-recheck" to the lint kinds of each Recheck: stamp it covers; it is
+no WEAK or OUTSIDE warning. An asserted stamp's lease is the full horizon; every other stamp's is the short
+lease, unasserted_ttl. It is due once its age exceeds its lease (age equal to the lease is not due). The
+lease label reads "full horizon", "short lease: <kinds>" or "short lease: no Recheck".
 
 Without a horizon no lease applies: lease is None, due and stale are empty and every stamp's due is
 false, but coverage and the lint still work. A horizon with no usable unasserted_ttl (a whole number
@@ -96,19 +100,41 @@ def _label(cmd, kinds: tuple, asserted: bool) -> str:
 FAILED = "failed-recheck"    # the kind a stale-recheck record adds to a stamp's lint kinds
 
 
-def _failed(tree) -> set:
-    """(library-relative file, heading) of each section with an open stale-recheck record in the
-    library's needs-attention.md (ADR-0022 decision 1, #264). stale-recheck-error does not count: a
-    timeout or a command that would not run says nothing about the claim. A record naming a section
-    that is not there matches nothing. A queue that cannot be read demotes nothing: Attention reports an
-    unreadable queue as its own item, and the lease of every other stamp is still worth judging."""
+def _failed(tree) -> dict:
+    """{(library-relative file, heading): [(stamp line, date)]} for each open stale-recheck record in the
+    library's needs-attention.md (ADR-0022 decision 1, #264): the stamp the failure was raised against, in
+    the form kb-verify writes into `stamp:` (None for an older record with none), and the record's date.
+    stale-recheck-error does not count: a timeout or a command that would not run says nothing about the
+    claim. A queue that cannot be read demotes nothing: Attention reports an unreadable queue as its own
+    item, and the lease of every other stamp is still worth judging."""
     qpath = tree.root and tree.root / "needs-attention.md"
     try:
         text = qpath.read_text(errors="replace") if qpath and qpath.is_file() else ""
     except OSError:
-        return set()
-    return {(r.get("file"), r.get("section")) for r in queue.open_findings(text)
-            if r.get("category") == "stale-recheck"}
+        return {}
+    out = {}
+    for r in queue.open_findings(text):
+        if r.get("category") == "stale-recheck":
+            out.setdefault((r.get("file"), r.get("section")), []).append((r.get("stamp"), r.get("date")))
+    return out
+
+
+def _covers(records, row) -> bool:
+    """Whether an open record was raised against this stamp: its `stamp:` equals the stamp as kb-verify
+    writes it. A record with no `stamp:` falls back to its date: it covers a stamp dated on or before it.
+    A date that cannot be read covers the stamp."""
+    mine = f"{row['date']} · by: {row['by']} · method: {row['method']}"
+    for stamp, date in records:
+        if stamp:
+            if stamp == mine:
+                return True
+            continue
+        try:
+            if datetime.date.fromisoformat(date) >= row["date"]:
+                return True
+        except (TypeError, ValueError):
+            return True
+    return False
 
 
 def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
@@ -133,7 +159,7 @@ def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
         made = []
         for r in rows:
             kinds = tuple(found.findings.get((r["file"], r["line"]), ()))
-            if failed and r["cmd"] and (r["file"].relative_to(tree.root).as_posix(), r["heading"]) in failed:
+            if failed and r["cmd"] and _covers(failed.get((r["file"].relative_to(tree.root).as_posix(), r["heading"]), ()), r):
                 kinds += (FAILED,)
             asserted = bool(r["cmd"]) and not kinds
             age = (today - r["date"]).days

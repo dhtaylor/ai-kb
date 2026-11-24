@@ -193,13 +193,19 @@ class FailedRecheck(Lib):
     """ADR-0022 decision 1 (#264): an open stale-recheck record for a section makes its stamp
     unasserted until the record is settled. The sweep reads the queue itself."""
 
-    def queue(self, *records):
-        """needs-attention.md with one record per (category, file, section, status)."""
+    def queue(self, *records, stamp="same", date=None):
+        """needs-attention.md with one record per (category, file, section, status). `stamp` is the
+        record's stamp: line ("same" is the stamp section() writes at 20 days, None leaves it out, as an
+        older record may); `date` replaces the record's date."""
         body = ""
         for category, file, section_, status in records:
-            f = queue.Finding(category, (file, section_, "true"),
-                              {"file": file, "section": section_, "assertion": "true", "stamp": "x", "exit": "exit 1"})
-            body += queue.render(f).replace('status: "open"', f'status: "{status}"')
+            fields = {"file": file, "section": section_, "assertion": "true", "exit": "exit 1"}
+            if stamp is not None:
+                fields["stamp"] = f"{ago(20)} · by: agent · method: manual" if stamp == "same" else stamp
+            r = queue.render(queue.Finding(category, (file, section_, "true"), fields)).replace('status: "open"', f'status: "{status}"')
+            if date:
+                r = r.replace(f'date: "{TODAY.isoformat()}"', f'date: "{date}"')
+            body += r
         (self.root / "needs-attention.md").write_text(
             "---\nname: needs-attention\n---\n# Needs attention\n\n```yaml\n" + body + "```\n")
 
@@ -218,6 +224,33 @@ class FailedRecheck(Lib):
         self.assertEqual(tuple(got.coverage), (1, 2))
         self.assertEqual([x.heading for x in got.due], ["Pressure"])
         self.assertEqual(got.weak, ())     # a failed check is a reason for the lease, not a printed lint warning
+
+    def test_a_section_restamped_since_the_failure_is_asserted_with_the_record_still_open(self):
+        # the record was raised against the 20-day-old stamp; the section now carries a 5-day-old one
+        self.write("widgets.md", section("Pressure", 5, recheck="true"), section("Other", 20, recheck="true"))
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
+        got = self.sweep()
+        s = self.stamp(got, "Pressure")
+        self.assertEqual((s.asserted, s.lease, s.due, s.lint, s.lease_label), (True, 90, False, (), "full horizon"))
+        self.assertEqual(tuple(got.coverage), (2, 2))
+        self.assertIn('status: "open"', (self.root / "needs-attention.md").read_text())
+
+    def test_a_record_with_no_stamp_demotes_only_a_stamp_not_newer_than_its_date(self):
+        self.lib()      # both stamps are dated 20 days ago
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"), stamp=None)   # dated today
+        self.assertEqual(tuple(self.sweep().coverage), (1, 2))
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"), stamp=None, date=ago(20))   # the stamp's own day
+        self.assertEqual(tuple(self.sweep().coverage), (1, 2))
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"), stamp=None, date=ago(21))   # before the stamp
+        self.assertEqual(tuple(self.sweep().coverage), (2, 2))
+
+    def test_the_stamp_is_compared_as_kb_verify_writes_it(self):
+        # no by: or method: reads as agent / unknown; kb-verify queues what the sweep reads
+        (self.root / "widgets.md").write_text(FM.format(n="widgets") + f"# T\n\n## S\n\nc\n\nSource: m\nVerified: {ago(20)}\nRecheck: true\n")
+        self.queue(("stale-recheck", "widgets.md", "S", "open"), stamp=f"{ago(20)} · by: agent · method: unknown")
+        self.assertEqual(tuple(self.sweep().coverage), (0, 1))
+        self.queue(("stale-recheck", "widgets.md", "S", "open"), stamp=f"{ago(20)} · by: human · method: unknown")
+        self.assertEqual(tuple(self.sweep().coverage), (1, 1))
 
     def test_a_resolved_record_leaves_the_stamp_asserted(self):
         self.lib()

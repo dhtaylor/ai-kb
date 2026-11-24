@@ -981,6 +981,21 @@ case_run "failed recheck: once the Arbiter resolves the record, the stamp is ass
   "$ENGINE/scripts/kb-verify" "$TMP/vfailed"
 case_run "failed recheck: ...and coverage is back to 1 of 1" 0 "assertion coverage 1 of 1 sourced section" -- \
   "$ENGINE/scripts/kb-due" "$TMP/vfailed" --nudge
+# A later passing stamp restores the section while the record stays open (the Arbiter's decision): the
+# record was raised against the old stamp, and a passing kb-verify --apply writes a new one.
+build_clean "$TMP/vcycle" --stamp "$(date -d "$KB_TODAY -20 days" +%F)"
+printf 'Recheck: false\n' >> "$TMP/vcycle/widgets.md"
+"$ENGINE/scripts/kb-verify" "$TMP/vcycle" --all --yes >/dev/null 2>&1
+case_run "failed recheck cycle: the failure is queued and demotes the section" 0 "short lease: failed-recheck" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vcycle"
+patch "$TMP/vcycle/widgets.md" 's/^Recheck: false$/Recheck: true/'
+"$ENGINE/scripts/kb-verify" "$TMP/vcycle" --all --yes --apply >/dev/null 2>&1
+case_run "failed recheck cycle: a passing kb-verify --apply restamps it, and it is asserted at once" 0 "1 with a Recheck assertion, 0 due to run" -- \
+  "$ENGINE/scripts/kb-verify" "$TMP/vcycle"
+case_run "failed recheck cycle: ...back in assertion coverage" 0 "assertion coverage 1 of 1 sourced section" -- \
+  "$ENGINE/scripts/kb-due" "$TMP/vcycle" --nudge
+case_run "failed recheck cycle: ...with the record still open, for the Arbiter" 0 "" -- \
+  grep -qF 'status: "open"' "$TMP/vcycle/needs-attention.md"
 build_clean "$TMP/vfailed-error" --stamp "$(date -d "$KB_TODAY -20 days" +%F)"
 printf 'Recheck: exit 127\n' >> "$TMP/vfailed-error/widgets.md"
 "$ENGINE/scripts/kb-verify" "$TMP/vfailed-error" --all --yes >/dev/null 2>&1
@@ -996,11 +1011,15 @@ case_run "failed recheck: an open stale-recheck-error leaves the stamp asserted"
 KR="$ENGINE/plugins/knowledge-tools/agents/kb-retrieve.md"
 case_run "kb-retrieve: a section whose check last failed is stated as such" 0 "" -- grep -qF "its check last failed" "$KR"
 case_run "kb-retrieve: it looks for an open stale-recheck record in the library's needs-attention.md" 0 "" -- \
-  bash -c 'grep -F "needs-attention.md" "$1" | grep -qF "open record" && grep -qF "category: \"stale-recheck\"" "$1"' _ "$KR"
+  bash -c 'grep -F "needs-attention.md" "$1" | grep -qF "open record" && grep -qF "status: \"open\"" "$1"' _ "$KR"
 case_run "kb-retrieve: a failed check is flagged before the answer, as someone's word" 0 "" -- \
   grep -qF "Resting on someone's word, its check last failed" "$KR"
 case_run "kb-retrieve: a stale-recheck-error does not count as a failed check" 0 "" -- \
   grep -qF 'category: "stale-recheck-error"' "$KR"
+case_run "kb-retrieve: a failure counts only against the section's current stamp, by the record's stamp: line" 0 "" -- \
+  grep -qF "its \`stamp:\` equals the section's current \`Verified:\` line" "$KR"
+case_run "kb-retrieve: a section restamped since the failure is not reported as failed" 0 "" -- \
+  grep -qF 'has a newer `Verified:` line' "$KR"
 case_run "kb-retrieve: a failed check is never a reason to refuse" 0 "" -- \
   grep -qF "never refuse, withhold or soften a fact for a failed check" "$KR"
 # #201: only fact files hold assertions. A Recheck in an episodic note, a source stub or a router
