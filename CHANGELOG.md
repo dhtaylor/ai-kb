@@ -6,6 +6,13 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The golden set and citation resolution move out of the command-line scripts into three engine
+  modules, `kbengine.golden`, `kbengine.citations` and `kbengine.transcripts` (#252, part of #254),
+  ending the load cycle in which `check-golden` and `grade-eval` each loaded the other.
+  `grade-routing`, `kb-telemetry` and `kb-eval-sample` no longer load `grade-eval`. Behaviour and
+  output are unchanged: the five scripts print the same reports and exit with the same codes.
+  `check-golden` still loads `check-kb` for reachability, pending #251. `GLOSSARY.md` now defines
+  **Golden set** and **Citation**.
 - The assertion lint moves out of `scripts/kb-verify` into the engine module `kbengine.lint` (#249), the
   groundwork for the lease module. Behaviour is unchanged: `kb-verify` imports the lint and prints the
   same report. `GLOSSARY.md` now defines **Sourced section**.

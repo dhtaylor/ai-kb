@@ -39,3 +39,13 @@ _Avoid_: sensitive fact, critical fact
 **Consumer**:
 Anyone who uses a published library without knowing its author, so they can trust only evidence they could check for themselves.
 _Avoid_: user, reader (when a stranger to the author is meant)
+
+## Testing retrieval
+
+**Golden set**:
+A library's own answer key: questions paired with the file and excerpt a correct answer must cite, used to test retrieval against the library.
+_Avoid_: test set, eval set, answer file
+
+**Citation**:
+The file an answer names as its source, which grading resolves to one file across the registered libraries.
+_Avoid_: reference, link
