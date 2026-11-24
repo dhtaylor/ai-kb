@@ -507,8 +507,14 @@ Verified: 2026-09-19 · by: agent · method: query
   running one executes its author's shell on your machine.
 - **Evidence tiers.** The evidence behind a stamp sets its lease; who wrote it does not
   ([ADR-0022](documents/decisions/0022-evidence-not-identity-sets-the-lease.md)). An **asserted
-  stamp**, one backed by a passing `Recheck:` that the assertion lint above does not flag, attended
-  or not, stays fresh for the full `freshness_horizon`. Every other stamp is an **unasserted
+  stamp**, one backed by a passing `Recheck:`, attended or not, stays fresh for the full
+  `freshness_horizon`. **Passing** means the assertion lint above does not flag it and the library's
+  `needs-attention.md` holds no open failed-recheck record for the section: a record with
+  `category: stale-recheck` and `status: open` whose `file:` and `section:` name it. A failed check
+  is reported and never applied (above), so the record is how the failure reaches the stamp: the
+  section is unasserted, on the short lease and out of assertion coverage, until the Arbiter settles
+  the record. A `stale-recheck-error` (a timeout, or a command that could not run) says nothing about
+  the claim and demotes nothing. Every other stamp is an **unasserted
   stamp**, someone's word, and stays fresh for a tenth of the horizon, whether `by:` says `human` or
   `agent`. The lint costs tier: an assertion it flags is demoted to unasserted, which stays a warning
   for the sweep and now has a consequence. A domain may set the short lease with `unasserted_ttl`
