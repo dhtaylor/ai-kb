@@ -73,7 +73,7 @@ def unstamped_keys(body: str) -> list:
     no Verified: stamp of its own: unknown, not fresh (§7). One per source, not per section (§6
     stacks one stamp per source; #64). kb-due compares these with the last sweep's to name only
     new ones (#142)."""
-    return [(s.heading, src.text) for s in factfiles.sections(body) if not s.conflicted
+    return [(s.heading, src.text) for s in factfiles.sections(body) if s.served
             for src in s.sources if src.stamp is None]
 
 
@@ -89,7 +89,7 @@ def derived_floor(body: str) -> str:
     this to move the floor when it restamps, so there is one derivation, not two."""
     if unstamped(body):
         return "unknown"
-    return min((st.date for s in factfiles.sections(body) if not s.conflicted for st in s.stamps),
+    return min((st.date for s in factfiles.sections(body) if s.served for st in s.stamps),
                default="unknown")
 
 

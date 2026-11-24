@@ -2,9 +2,10 @@
 and which reach outside the library, as structured findings and as the warnings kb-verify
 prints. Stdlib only.
 
+assess(root, sections)           Assessment(findings, weak, outside) from one run of the lint: what the
+                                 lease (kbengine.lease) reads.
 lint_findings(root, sections)    {(file, stamp line): [kind, ...]}, kind one of
-                                 short-fragment, reused-fragment, outside. The lease and
-                                 assertion coverage read this.
+                                 short-fragment, reused-fragment, outside.
 weak_rechecks(root, sections)    the printed WEAK warnings.
 outside_rechecks(root, sections) the printed OUTSIDE warnings.
 
@@ -13,6 +14,7 @@ builds it; the lint reads them and writes nothing. It was a pure move out of the
 judgements are unchanged.
 """
 import pathlib, re, shlex
+from typing import NamedTuple
 
 URL =re.compile(r"https?://[^\s'\"|;)<>]+")
 # A command fetches when it runs one of these (issue #185); a URL that is only text in it (a
@@ -190,12 +192,24 @@ def _outside(root: pathlib.Path, sections: list) -> list:
     return out
 
 
+class Assessment(NamedTuple):
+    findings: dict       # as lint_findings gives it
+    weak: tuple          # the printed WEAK warnings
+    outside: tuple       # the printed OUTSIDE warnings
+
+
+def assess(root: pathlib.Path, sections: list) -> Assessment:
+    """The findings and both sets of printed warnings from one run of the lint over `sections`
+    (#250): the lease takes all three from it, so the library is linted once."""
+    weak, outside, got = _weak(root, sections), _outside(root, sections), {}
+    for flagged, kind, _ in weak + outside:
+        for s in flagged:
+            got.setdefault((s["file"], s["line"]), []).append(kind)
+    return Assessment(got, tuple(m for _, _, m in weak), tuple(m for _, _, m in outside))
+
+
 def lint_findings(root: pathlib.Path, sections: list) -> dict:
     """{(file, stamp line): [kind, ...]} for every section the assertion lint flags, kind one of
     short-fragment, reused-fragment, outside (#235). The same findings the printed warnings
     report, keyed so the lease and assertion coverage (ADR-0022) can tell which sections they cover."""
-    got = {}
-    for flagged, kind, _ in _weak(root, sections) + _outside(root, sections):
-        for s in flagged:
-            got.setdefault((s["file"], s["line"]), []).append(kind)
-    return got
+    return assess(root, sections).findings

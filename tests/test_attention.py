@@ -105,28 +105,31 @@ class Rechecks(Fixture):
                   + section("Att", 150, recheck="true", attended=True) + section("Fresh", 1, recheck="true"),
                   budget=2)
         r = self.att().rechecks
-        self.assertEqual([s["heading"] for s in r.due], ["Old", "Att", "New"])
-        self.assertEqual([bool(s["attended"]) for s in r.due], [False, True, False])
+        self.assertEqual([s.heading for s in r.due], ["Old", "Att", "New"])
+        self.assertEqual([s.attended for s in r.due], [False, True, False])
         self.assertEqual(r.budget, 2)
-        self.assertEqual([s["heading"] for s in r.capped], ["Old", "Att"])
-        self.assertEqual([s["heading"] for s in r.attended], ["Att"])
+        self.assertEqual([s.heading for s in r.capped], ["Old", "Att"])
+        self.assertEqual([s.heading for s in r.attended], ["Att"])
 
-    def test_an_asserted_stamp_stays_fresh_for_the_horizon_whoever_wrote_it(self):
-        # ADR-0022: the evidence sets the lease, not by:. 20d is past the short lease (9d of 90d).
-        self.make(section("A", 20, recheck="true") + section("H", 20, by="human", recheck="true")
-                  + section("Past", 100, recheck="true"))
-        self.assertEqual([s["heading"] for s in self.att().rechecks.due], ["Past"])
-
-    def test_an_assertion_the_lint_flags_is_on_the_short_lease_and_says_why(self):
-        self.make(section("Weak", 20, recheck="curl -fsSL https://example.com/a | grep -qF 'Widgets'")
-                  + section("Att", 20, recheck="true", attended=True))
-        due = self.att().rechecks.due
-        self.assertEqual([(s["heading"], s["lint"]) for s in due], [("Weak", ["short-fragment"])])
-
-    def test_a_declared_unasserted_ttl_is_the_short_lease_of_a_flagged_assertion(self):
+    def test_the_lease_is_the_lease_modules(self):
+        # kbengine.lease owns the rules (tests/test_lease.py): this proves Attention hands it the library's
+        # numbers. 20d is past the short lease (9d of 90d), and inside the horizon.
         weak = "curl -fsSL https://example.com/a | grep -qF 'Widgets'"
-        self.make(section("Within", 20, recheck=weak) + section("Past", 40, recheck=weak), extra="unasserted_ttl: 30d\n")
-        self.assertEqual([s["heading"] for s in self.att().rechecks.due], ["Past"])
+        self.make(section("A", 20, recheck="true") + section("Weak", 20, recheck=weak) + section("Plain", 20))
+        a = self.att()
+        self.assertEqual([(s.heading, s.lint) for s in a.rechecks.due], [("Weak", ("short-fragment",))])
+        self.assertEqual([s.heading for s in a.stale], ["Plain"])
+
+    def test_rechecks_stale_and_coverage_come_from_one_sweep(self):
+        self.make(section("Old", 200, recheck="true") + section("NoCmd", 200))
+        a = self.att()
+        with mock.patch.object(attention.lease, "sweep", wraps=attention.lease.sweep) as sweep:
+            a.rechecks, a.stale, a.coverage
+        self.assertEqual(sweep.call_count, 1)
+
+    def test_a_declared_unasserted_ttl_is_the_short_lease(self):
+        self.make(section("Within", 20) + section("Past", 40), extra="unasserted_ttl: 30d\n")
+        self.assertEqual([s.heading for s in self.att().stale], ["Past"])
 
     def test_without_a_horizon_nothing_is_due_and_nothing_failed(self):
         self.make(section("Old", 200, recheck="true"), horizon="")
@@ -142,28 +145,11 @@ class Rechecks(Fixture):
         self.assertEqual(a.rechecks.kind, "ValueError")
         self.assertEqual(a.stale, a.rechecks)
 
-    def test_the_fact_files_are_read_once_for_rechecks_and_stale_together(self):
-        self.make(section("Old", 200, recheck="true") + section("NoCmd", 200))
-        a = self.att()
-        verify = attention.script("kb-verify")
-        with mock.patch.object(verify, "due_sections", wraps=verify.due_sections) as due:
-            a.rechecks, a.stale
-        self.assertEqual(due.call_count, 1)
-
 
 class Stale(Fixture):
     def test_stamped_past_the_horizon_with_no_recheck(self):
         self.make(section("NoCmd", 200) + section("Cmd", 200, recheck="true") + section("Fresh", 1))
-        self.assertEqual([s["heading"] for s in self.att().stale], ["NoCmd"])
-
-    def test_a_human_stamp_buys_no_longer_lease(self):
-        # ADR-0022: someone's word is on the short lease (9d of 90d), whoever gave it.
-        self.make(section("H", 20, by="human") + section("A", 20) + section("Fresh", 5, by="human"))
-        self.assertEqual([s["heading"] for s in self.att().stale], ["H", "A"])
-
-    def test_a_stamp_with_no_by_is_on_the_short_lease_without_an_assertion(self):
-        self.make(section("NoBy", 20).replace(" · by: agent · method: manual", ""))
-        self.assertEqual([s["heading"] for s in self.att().stale], ["NoBy"])
+        self.assertEqual([s.heading for s in self.att().stale], ["NoCmd"])
 
 
 class Coverage(Fixture):
@@ -177,41 +163,16 @@ class Coverage(Fixture):
                   + section("Plain", 1) + section("Unstamped") + section("NoSource", source=False))
         self.assertEqual(tuple(self.att().coverage), (2, 4))
 
-    def test_a_lint_flagged_assertion_counts_as_unasserted(self):
-        self.make(section("Strong", 1, recheck="true") + section("Weak", 1, recheck=self.weak))
-        self.assertEqual(tuple(self.att().coverage), (1, 2))
-
-    def test_who_wrote_the_stamp_does_not_count(self):
-        self.make(section("H", 1, by="human", recheck="true") + section("P", 1, by="human"))
-        self.assertEqual(tuple(self.att().coverage), (1, 2))
-
-    def test_a_stale_asserted_stamp_still_counts_as_asserted(self):
-        # Coverage is about what backs a section, not whether it is due: 200d is past the horizon.
-        self.make(section("Old", 200, recheck="true"))
-        self.assertEqual(tuple(self.att().coverage), (1, 1))
-
     def test_zero_coverage_reads_as_zero_not_a_failure(self):
         self.make(section("P", 1) + section("Q"))
         cov = self.att().coverage
         self.assertNotIsInstance(cov, Failed)
         self.assertEqual((cov.asserted, cov.sourced), (0, 2))
 
-    def test_a_library_with_nothing_sourced_is_zero_of_zero(self):
-        self.make()
-        self.assertEqual(tuple(self.att().coverage), (0, 0))
-
     def test_coverage_is_there_without_a_freshness_horizon(self):
         self.make(section("A", 1, recheck="true") + section("P", 1), horizon="")
         self.assertEqual(tuple(self.att().coverage), (1, 2))
         self.assertEqual(self.att().rechecks.due, [])
-
-    def test_the_fact_files_are_still_read_once_with_coverage(self):
-        self.make(section("Old", 200, recheck="true") + section("NoCmd", 200))
-        a = self.att()
-        verify = attention.script("kb-verify")
-        with mock.patch.object(verify, "due_sections", wraps=verify.due_sections) as due:
-            a.rechecks, a.stale, a.coverage
-        self.assertEqual(due.call_count, 1)
 
 
 class Queue(Fixture):

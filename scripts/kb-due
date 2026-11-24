@@ -35,8 +35,8 @@ asserted (or none sourced) prints nothing.
   1. sweep due            — --quiet's own check, unchanged. Left out of the nudge while a pending kb-audit
                              packet covers it (the packet is already named), and the notes in 4 while a
                              pending kb-distill packet does (#204), as kb-report does.
-  2. facts due for recheck — reuses kb-verify's own staleness selection (its horizon/agent-TTL
-                             test), through kbengine.attention — one judgment of "is this section
+  2. facts due for recheck — reuses kb-verify's own staleness selection (its horizon/short-lease
+                             test, kbengine.lease), through kbengine.attention — one judgment of "is this section
                              due", not two copies of it that can drift apart. The count is every due
                              assertion; when it is more than the verifier_budget, ", N a run" says how
                              many one run takes (#211). Only a count and the command
@@ -61,7 +61,7 @@ asserted (or none sourced) prints nothing.
                              check-kb's own reader (§6, issue #154). Shown beside unstamped sources:
                              nothing was cited, so there is nothing to recheck.
   6. stale, no assertion   — stamped sections past the horizon or short lease that carry no
-                             Recheck:, by kb-verify's own is_due(). kb-verify cannot settle them,
+                             Recheck:, by kbengine.lease's own judgement. kb-verify cannot settle them,
                              so they are told apart from category 2, and the budget does not cap
                              them (issue #63).
 

@@ -51,8 +51,8 @@ while the page exists and tests nothing about its own claim. A warning, not a fa
 Selection is by staleness, per §7 and ADR-0022: the evidence sets the lease, not by:. An
 asserted stamp (its Recheck is one the lint above does not flag) is due once older than the
 domain's freshness_horizon; any other is due once older than the short lease (unasserted_ttl)
-(a TENTH of the horizon unless the domain declares one). Each command names its lease, and
-the lint finding behind a short one. The domain's verifier_budget caps how many run per
+(a TENTH of the horizon unless the domain declares one). kbengine.lease (#250) makes that judgement
+and this script prints it. Each command names its lease, and the lint finding behind a short one. The domain's verifier_budget caps how many run per
 sweep, oldest first.
 
 THE QUEUE (Phase 5, plan §6 exit: "stale or drifted facts surface as a queue rather
@@ -95,10 +95,9 @@ output, not a mutation of any fact (documents/state-change-gates.md), so it foll
 exists because there is nothing for it to opt out of that --yes does not already gate.
 Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
-import datetime, importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
+import importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
 
-from kbengine import clock, factfiles, library, queue
-from kbengine.lint import lint_findings, outside_rechecks, weak_rechecks
+from kbengine import clock, lease, library, queue
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 
@@ -137,52 +136,6 @@ def failure_detail(result):
     if result.returncode in (126, 127):
         return "stale-recheck-error", f"exit {result.returncode} (command not found or not executable)"
     return "stale-recheck", f"exit {result.returncode}"
-
-
-def asserted(s: dict) -> bool:
-    """An asserted stamp: a Recheck: backs it and the assertion lint flags none (ADR-0022).
-    Who wrote it does not count. due_sections records the lint's findings on each section."""
-    return bool(s["cmd"]) and not s.get("lint")
-
-
-def is_due(s: dict, horizon: int, unasserted_ttl: int) -> bool:
-    """A stamped section is due for recheck once its age exceeds its lease — the full horizon
-    for an asserted stamp, the short lease (unasserted_ttl) for every other, whatever its by:
-    says (ADR-0022).
-    Top-level (not nested in main()) so kb-due can import and call it: the two scripts must
-    judge staleness identically, and a condition copied into a second file is a condition
-    that can drift out from under the first."""
-    age = (clock.today() - s["date"]).days
-    return age > (horizon if asserted(s) else unasserted_ttl)
-
-
-def due_sections(root: pathlib.Path, horizon: int, unasserted_ttl: int, all_sections=False):
-    """(due_sorted, found, with_cmd): every stamped section in the tree (`found`), the ones
-    that carry a Recheck: assertion (`with_cmd`), and the due subset — oldest stamp first,
-    NOT yet capped to a budget (`due_sorted`). Exposed so kb-due's nudge can report the same
-    'due to run' set this script would select by default, without re-deriving staleness."""
-    found = []
-    for f, kind in factfiles.files(root):
-        if kind == "fact":       # a Recheck in a note, a stub or a router is an example, not an assertion
-            found += sections(f)
-    with_cmd = [s for s in found if s["cmd"]]
-    lint = lint_findings(root, with_cmd)
-    for s in with_cmd:
-        s["lint"] = lint.get((s["file"], s["line"]), [])
-    due = [s for s in with_cmd if all_sections or is_due(s, horizon, unasserted_ttl)]
-    due.sort(key=lambda s: s["date"])
-    return due, found, with_cmd
-
-
-def sections(path: pathlib.Path):
-    """Every stamped section of a fact file: its heading, stamp line number (0-based), date, by,
-    method, and assertion. A stamp that names no `by:` is read as an agent's, the shorter TTL."""
-    return [{"file": path, "heading": sec.title if sec.level else "(file)", "line": st.line - 1,
-             "date": datetime.date.fromisoformat(st.date), "by": st.by or "agent",
-             "method": st.method or "unknown", "cmd": st.recheck and st.recheck.cmd,
-             "attended": bool(st.recheck and st.recheck.attended)}
-            for sec in factfiles.sections(path.read_text(errors="replace")) for st in sec.stamps]
-
 
 
 PROXY_VARS = ("http_proxy", "https_proxy", "no_proxy", "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY")
@@ -238,10 +191,12 @@ def main(argv) -> int:
         print(f"kb-verify: {root}/INDEX.md: {lib.problem('unasserted_ttl')}", file=sys.stderr)
         return 2
 
-    due, found, with_cmd = due_sections(root, horizon, ttl, "--all" in flags)
-    skipped_attended = [s for s in due if s["attended"]] if unattended else []
-    due = [s for s in due if not (unattended and s["attended"])]
-    stamped = len(found)
+    got = lease.sweep(root, horizon=horizon, unasserted_ttl=ttl)
+    with_cmd = got.rechecks
+    due = list(with_cmd if "--all" in flags else got.due)
+    skipped_attended = [s for s in due if s.attended] if unattended else []
+    due = [s for s in due if not (unattended and s.attended)]
+    stamped = len(got.stamps)
     over_budget = max(0, len(due) - budget)
     selected = due[:budget]
 
@@ -253,13 +208,13 @@ def main(argv) -> int:
         print(f"  {len(skipped_attended)} attended assertion(s) skipped — they need a person; run "
               f"kb-verify {shlex.quote(str(root))} --yes when you are here")
 
-    weak = weak_rechecks(root, with_cmd)
+    weak = got.weak
     if weak:
         print(f"\n  Assertions that cannot fail — grep each claim's own supporting sentence (§7) ({len(weak)}):")
         for w in weak:
             print(f"    {w}")
 
-    outside = outside_rechecks(root, with_cmd)
+    outside = got.outside
     if outside:
         print(f"\n  Assertions that reach outside the library — they hold in one layout only ({len(outside)}):")
         for o in outside:
@@ -267,12 +222,12 @@ def main(argv) -> int:
 
     # The facts no command can settle. Naming them is the point: a verifier that
     # only reports what it can check reads as though everything else were verified.
-    unverifiable = [s for s in found if not s["cmd"] and is_due(s, horizon, ttl)]
+    unverifiable = got.stale
     if unverifiable:
         print(f"\n  STALE, no assertion — a human or an agent must re-check these ({len(unverifiable)}):")
         for s in unverifiable:
-            print(f"    {s['file'].relative_to(root)} § {s['heading']}"
-                  f"  ({(clock.today() - s['date']).days}d, short lease: no Recheck)")
+            print(f"    {s.file.relative_to(root)} § {s.heading}"
+                  f"  ({s.age}d, {s.lease_label})")
 
     if not selected:
         print("\nNothing to run.")
@@ -280,9 +235,8 @@ def main(argv) -> int:
 
     print(f"\n  Commands{'' if '--yes' in flags else ' (NOT run — pass --yes to run them)'}:")
     for s in selected:
-        lease = "full horizon" if asserted(s) else "short lease: " + ", ".join(s["lint"])
-        print(f"    {s['file'].relative_to(root)} § {s['heading']}  ({(clock.today() - s['date']).days}d, {lease})")
-        print(f"      $ {s['cmd']}")
+        print(f"    {s.file.relative_to(root)} § {s.heading}  ({s.age}d, {s.lease_label})")
+        print(f"      $ {s.cmd}")
     if "--yes" not in flags:
         print("\nRead them before you do. A library's assertions run as you, with your privileges.")
         return 0
@@ -293,13 +247,13 @@ def main(argv) -> int:
         env = assertion_env(empty_home) if unattended else {**os.environ, "KB_ENGINE_ROOT": str(ENGINE)}
         for s in selected:
             try:
-                r = subprocess.run(s["cmd"], shell=True, cwd=s["file"].parent, env=env,
+                r = subprocess.run(s.cmd, shell=True, cwd=s.file.parent, env=env,
                                    capture_output=True, text=True, timeout=120)
             except subprocess.TimeoutExpired:
                 r = None
             results.append((s, r))
     for s, r in results:
-        where = f"{s['file'].relative_to(root)} § {s['heading']}"
+        where = f"{s.file.relative_to(root)} § {s.heading}"
         if r is not None and r.returncode == 0:
             passed.append(s); print(f"  PASS {where}")
         else:
@@ -315,10 +269,10 @@ def main(argv) -> int:
 
     if passed and "--apply" in flags:
         for s in passed:
-            lines = s["file"].read_text().split("\n")
-            lines[s["line"]] = f"Verified: {clock.today()} · by: agent · method: query"
-            s["file"].write_text("\n".join(lines))
-        for f in {s["file"] for s in passed}:
+            lines = s.file.read_text().split("\n")
+            lines[s.line] = f"Verified: {clock.today()} · by: agent · method: query"
+            s.file.write_text("\n".join(lines))
+        for f in {s.file for s in passed}:
             move_floor(f)
         print(f"\n  restamped {len(passed)} section(s) to {clock.today()} (by: agent — kb-verify is an agent, "
               f"whatever ran the assertion)")
@@ -334,10 +288,10 @@ def main(argv) -> int:
         findings = []
         for s, r in failed:
             category, detail = failure_detail(r)
-            file_rel = str(s["file"].relative_to(root))
-            section = s["heading"]
-            assertion = s["cmd"]
-            stamp = f"{s['date']} · by: {s['by']} · method: {s['method']}"
+            file_rel = str(s.file.relative_to(root))
+            section = s.heading
+            assertion = s.cmd
+            stamp = f"{s.date} · by: {s.by} · method: {s.method}"
             findings.append(queue.Finding(
                 category, (file_rel, section, assertion),
                 {"file": file_rel, "section": section, "assertion": assertion, "stamp": stamp,

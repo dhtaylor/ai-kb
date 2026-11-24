@@ -20,10 +20,10 @@ does not ask.
     sweep_covered    a kb-audit packet is waiting, so a sweep is already in hand. distill_covered: the same
                      for kb-distill and the episodic notes.
     sweep            Sweep(due, age, interval): age in days, None when never swept (or unreadably).
-    rechecks         Rechecks(due, budget): every section with a Recheck: that is due, oldest stamp first,
-                     each marked "attended" when only a person can run it, and the library's
+    rechecks         Rechecks(due, budget): every stamp with a Recheck: that is due, oldest first, each
+                     marked `attended` when only a person can run it, and the library's
                      verifier_budget. Empty without a freshness_horizon.
-    stale            [section]: stamped sections past their horizon or short lease with no Recheck:.
+    stale            [stamp]: stamped sections past their horizon or short lease with no Recheck:.
     queue            [record]: the open records in needs-attention.md, one per id.
     queue_unreadable [(line number, line)]: what the queue reader skips.
     episodic         the number of episodic notes not yet distilled.
@@ -39,15 +39,17 @@ does not ask.
     manual_stubs     the source stubs marked Liveness: manual.
     archived         the text of `archived:`, or None. read_only: registered as a consumer's copy (ADR-0020).
 
-kb-verify (due sections), check-kb (the section readers), kb-sources (manual stubs) are scripts, not
-modules yet: they are loaded here, in one place, on first use, rather than by each caller.
+rechecks, stale and coverage come from one kbengine.lease sweep, which owns the lease rules (#250).
+check-kb (the section readers) and kb-sources (manual stubs) are scripts, not modules yet: they are
+loaded here, in one place, on first use, rather than by each caller.
 """
 import collections, importlib.machinery, importlib.util, pathlib, re, subprocess, sys
 from dataclasses import dataclass
 from functools import cached_property
 from typing import NamedTuple
 
-from . import clock, contract, factfiles, library, queue
+from . import clock, contract, factfiles, lease, library, queue
+from .lease import Coverage
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent.parent
 DISTILLED = re.compile(r"^##\s+Distill", re.M)
@@ -73,16 +75,6 @@ class Contract(NamedTuple):
     newer: object
 
 
-class Coverage(NamedTuple):
-    asserted: int        # sourced sections with an asserted stamp
-    sourced: int         # served sections with a Source: line
-
-
-class Swept(NamedTuple):
-    with_check: list     # sections that carry a Recheck:, each with its lint findings
-    stamped: list        # every stamped section
-
-
 def describe_coverage(cov: Coverage) -> str:
     """Assertion coverage in words, for the nudge and the report alike: zero is a number like any
     other, never a warning (#239)."""
@@ -103,7 +95,7 @@ class Unstamped(NamedTuple):
 
 @dataclass(frozen=True)
 class Rechecks:
-    due: list            # section dicts, oldest stamp first, each with "attended"
+    due: list            # stamps, oldest first, each with `attended`
     budget: int
 
     @property
@@ -113,7 +105,7 @@ class Rechecks:
 
     @property
     def attended(self) -> list:
-        return [s for s in self.due if s.get("attended")]
+        return [s for s in self.due if s.attended]
 
 
 # --------------------------------------------------------------------- the scripts ----
@@ -225,78 +217,36 @@ class Attention:
         age = (today - lib.last_swept).days if lib.last_swept is not None else None
         self.sweep = Sweep(age is None or age > lib.sweep_interval, age, lib.sweep_interval)
 
-    # -- facts past their horizon: one pass over the fact files serves rechecks and stale --
+    # -- the lease of every stamp: one sweep serves rechecks, stale and coverage --
     @cached_property
-    def _due(self):
-        return _try(self._load_due)
-
-    @cached_property
-    def _sections(self):
-        """The one pass over the fact files (#239): a `Swept(with_check, stamped)` of the sections that
-        carry a Recheck:, oldest stamp first and each with its lint findings, and of every stamped
-        section. No lease is applied here, so a library with no horizon has what coverage needs."""
+    def _leases(self):
+        """kbengine.lease's one pass over the fact files (#250). Without a horizon nothing is due, and
+        coverage is there all the same."""
         lib = self.lib
         def read():
-            _due, stamped, with_check = script("kb-verify").due_sections(
-                self.root, lib.horizon or 1, lib.unasserted_ttl or 1, all_sections=True)
-            return Swept(with_check, stamped)
+            if lib.horizon is not None and lib.unasserted_ttl is None:
+                raise ValueError(lib.problem("unasserted_ttl"))   # the library's reason, not the lease's
+            return lease.sweep(self.root, horizon=lib.horizon, unasserted_ttl=lib.unasserted_ttl)
         return _try(read)
-
-    def _load_due(self):
-        lib = self.lib
-        if lib.horizon is None:
-            return None                  # not computable: neither due nor stale, and no failure
-        if lib.unasserted_ttl is None:
-            raise ValueError(lib.problem("unasserted_ttl"))
-        got = self._sections
-        if isinstance(got, Failed):
-            raise RuntimeError(got.reason)
-        verify = script("kb-verify")
-        due = [s for s in sorted(got.with_check, key=lambda s: s["date"])
-               if verify.is_due(s, lib.horizon, lib.unasserted_ttl)]   # oldest first
-        return due, got.stamped
 
     @cached_property
     def coverage(self):
         """Assertion coverage (#239, ADR-0022): sections with an asserted stamp over served sections
         with a Source: line, in fact files. A section is asserted when any of its stamps is."""
-        def count():
-            got = self._sections
-            if isinstance(got, Failed):
-                raise RuntimeError(got.reason)
-            verify = script("kb-verify")
-            asserted = {(s["file"], s["line"]) for s in got.with_check if verify.asserted(s)}
-            sourced = hit = 0
-            for f, kind in factfiles.files(self.root):
-                if kind != "fact":
-                    continue
-                for sec in factfiles.sections(f.read_text(errors="replace")):
-                    if sec.sourced:
-                        sourced += 1
-                        hit += any((f, st.line - 1) in asserted for st in sec.stamps)
-            return Coverage(hit, sourced)
-        return _try(count)
+        got = self._leases
+        return got if isinstance(got, Failed) else got.coverage
 
     @cached_property
     def rechecks(self):
-        got = self._due
-        if isinstance(got, Failed):
-            return got
-        return Rechecks(got[0] if got else [], self.lib.budget)
+        got = self._leases
+        return got if isinstance(got, Failed) else Rechecks(list(got.due), self.lib.budget)
 
     @cached_property
     def stale(self):
-        """Stamped sections past their horizon or short lease that carry no Recheck: (issue #63), by
-        kb-verify's own is_due(). Not capped by the budget: nothing runs these."""
-        got = self._due
-        if isinstance(got, Failed):
-            return got
-        if got is None:
-            return []
-        is_due = script("kb-verify").is_due
-        lib = self.lib
-        return _try(lambda: [s for s in got[1]
-                             if not s["cmd"] and is_due(s, lib.horizon, lib.unasserted_ttl)])
+        """Stamped sections past their horizon or short lease that carry no Recheck: (issue #63). Not
+        capped by the budget: nothing runs these."""
+        got = self._leases
+        return got if isinstance(got, Failed) else list(got.stale)
 
     # -- needs-attention.md, read once --
     @cached_property
