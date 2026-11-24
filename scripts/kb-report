@@ -185,7 +185,7 @@ def main(argv) -> int:
             print(__doc__.strip().split("\n\n")[-1], file=sys.stderr); return 2
         trees.append(pathlib.Path(argv[i])); i += 1
     try:
-        attention.script("kb-verify"), attention.script("kb-sources")   # attention's readers: fail here, not per library
+        attention.script("kb-sources")   # attention's readers: fail here, not per library
         mods = {"kb_telemetry": load_module("kb_telemetry", "kb-telemetry")}
         packets = load_module("kb_apply", "kb-apply").pending()
     except Exception as e:

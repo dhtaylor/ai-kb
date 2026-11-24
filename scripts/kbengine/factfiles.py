@@ -114,10 +114,18 @@ class Section:
     indented: list = field(default_factory=list)         # (line, "Verified" | "Recheck") read as nothing
 
     @property
+    def served(self) -> bool:
+        """Not CONFLICTED (§8): the sections check-kb reads. Unlike in_scope it keeps the level-0 text
+        before the first heading and the level-1 title, so the `verified:` floor and the unstamped
+        Source: keys see the whole file. Merging the two would move floors in published libraries."""
+        return not self.conflicted
+
+    @property
     def in_scope(self) -> bool:
         """A section a reader is served: below the title, and not CONFLICTED. Sourced, unsourced and
-        assertion coverage all start from it, so they cannot disagree about which sections count."""
-        return self.level >= 2 and not self.conflicted
+        assertion coverage all start from it, so they cannot disagree about which sections count.
+        It is `served` without the level-0 and level-1 sections."""
+        return self.level >= 2 and self.served
 
     @property
     def sourced(self) -> bool:

@@ -7,7 +7,7 @@ Run by tests/run-checks with scripts/ on PYTHONPATH:
 """
 import pathlib, tempfile, unittest
 
-from kbengine import attention, lint
+from kbengine import factfiles, lint
 
 FM = ("---\nname: {n}\ndescription: x.\nmemory_type: reference\ndomain: fx\nscope: general\n"
       "metadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n")
@@ -25,14 +25,15 @@ class Findings(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.root = pathlib.Path(tmp.name) / "fx"
         (self.root / "sub").mkdir(parents=True)
-        self.v = attention.script("kb-verify")
 
     def write(self, name, *sections):
         (self.root / name).write_text(FM.format(n=pathlib.Path(name).stem) + "# T\n" + "".join(sections))
 
     def findings(self):
-        found = [s for f in sorted(self.root.rglob("*.md")) for s in self.v.sections(f)]
-        got = lint.lint_findings(self.root, [s for s in found if s["cmd"]])
+        found = [{"file": f, "heading": sec.title, "line": st.line - 1, "cmd": st.recheck and st.recheck.cmd}
+                 for f in sorted(self.root.rglob("*.md"))
+                 for sec in factfiles.sections(f.read_text()) for st in sec.stamps]
+        got = lint.assess(self.root, [s for s in found if s["cmd"]]).findings
         return {s["heading"]: sorted(got.get((s["file"], s["line"]), [])) for s in found}
 
     def test_names_each_flagged_section_and_why(self):
