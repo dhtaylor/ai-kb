@@ -1,13 +1,16 @@
-"""The assertion lint (#249, from kb-verify; ADR-0022): which Recheck: assertions cannot fail, and which
-reach outside the library, as structured findings and as the warnings kb-verify prints. Stdlib only.
+"""The assertion lint (#249, from kb-verify; ADR-0022): which Recheck: assertions cannot fail,
+and which reach outside the library, as structured findings and as the warnings kb-verify
+prints. Stdlib only.
 
-lint_findings(root, sections)    {(file, stamp line): [kind, ...]}, kind one of short-fragment,
-                                 reused-fragment, outside. The lease and assertion coverage read this.
+lint_findings(root, sections)    {(file, stamp line): [kind, ...]}, kind one of
+                                 short-fragment, reused-fragment, outside. The lease and
+                                 assertion coverage read this.
 weak_rechecks(root, sections)    the printed WEAK warnings.
 outside_rechecks(root, sections) the printed OUTSIDE warnings.
 
-A section is a dict with at least file, heading, line and cmd, as kb-verify's sections() builds it; the
-lint reads them and writes nothing. It was a pure move out of the script: its judgements are unchanged.
+A section is a dict with at least file, heading, line and cmd, as kb-verify's sections()
+builds it; the lint reads them and writes nothing. It was a pure move out of the script: its
+judgements are unchanged.
 """
 import pathlib, re, shlex
 
