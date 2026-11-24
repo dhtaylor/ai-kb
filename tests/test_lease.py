@@ -8,7 +8,7 @@ Run by tests/run-checks with scripts/ on PYTHONPATH:
 import dataclasses, datetime, os, pathlib, tempfile, unittest
 from unittest import mock
 
-from kbengine import factfiles, lease
+from kbengine import factfiles, lease, queue
 
 FM = ("---\nname: {n}\ndescription: x.\nmemory_type: reference\ndomain: fx\nscope: general\n"
       "metadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n")
@@ -187,6 +187,83 @@ class Due(Lib):
             got = self.sweep()
         self.assertEqual(today.call_count, 1)
         self.assertEqual({s.age for s in got.stamps}, {20})
+
+
+class FailedRecheck(Lib):
+    """ADR-0022 decision 1 (#264): an open stale-recheck record for a section makes its stamp
+    unasserted until the record is settled. The sweep reads the queue itself."""
+
+    def queue(self, *records):
+        """needs-attention.md with one record per (category, file, section, status)."""
+        body = ""
+        for category, file, section_, status in records:
+            f = queue.Finding(category, (file, section_, "true"),
+                              {"file": file, "section": section_, "assertion": "true", "stamp": "x", "exit": "exit 1"})
+            body += queue.render(f).replace('status: "open"', f'status: "{status}"')
+        (self.root / "needs-attention.md").write_text(
+            "---\nname: needs-attention\n---\n# Needs attention\n\n```yaml\n" + body + "```\n")
+
+    def lib(self):
+        self.write("widgets.md", section("Pressure", 20, recheck="true"), section("Other", 20, recheck="true"))
+
+    def test_an_open_stale_recheck_demotes_the_section_to_unasserted(self):
+        self.lib()
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
+        got = self.sweep()
+        s = self.stamp(got, "Pressure")
+        self.assertEqual((s.asserted, s.lease, s.due, s.lint, s.lease_label),
+                         (False, 9, True, ("failed-recheck",), "short lease: failed-recheck"))
+        o = self.stamp(got, "Other")
+        self.assertEqual((o.asserted, o.lease, o.due, o.lint), (True, 90, False, ()))
+        self.assertEqual(tuple(got.coverage), (1, 2))
+        self.assertEqual([x.heading for x in got.due], ["Pressure"])
+        self.assertEqual(got.weak, ())     # a failed check is a reason for the lease, not a printed lint warning
+
+    def test_a_resolved_record_leaves_the_stamp_asserted(self):
+        self.lib()
+        for status in ("resolved", "acknowledged"):
+            with self.subTest(status=status):
+                self.queue(("stale-recheck", "widgets.md", "Pressure", status))
+                got = self.sweep()
+                self.assertEqual((self.stamp(got, "Pressure").asserted, tuple(got.coverage)), (True, (2, 2)))
+
+    def test_an_open_stale_recheck_error_does_not_demote(self):
+        self.lib()
+        self.queue(("stale-recheck-error", "widgets.md", "Pressure", "open"))
+        got = self.sweep()
+        self.assertEqual((self.stamp(got, "Pressure").asserted, tuple(got.coverage)), (True, (2, 2)))
+
+    def test_a_record_naming_a_heading_or_file_that_is_not_there_has_no_effect(self):
+        self.lib()
+        self.queue(("stale-recheck", "widgets.md", "No such heading", "open"),
+                   ("stale-recheck", "gone.md", "Pressure", "open"))
+        got = self.sweep()
+        self.assertEqual([s.asserted for s in got.stamps], [True, True])
+        self.assertEqual(tuple(got.coverage), (2, 2))
+
+    def test_no_queue_file_and_a_queue_with_no_records_are_no_failure(self):
+        self.lib()
+        self.assertEqual(tuple(self.sweep().coverage), (2, 2))
+        self.queue()
+        self.assertEqual(tuple(self.sweep().coverage), (2, 2))
+
+    def test_the_demotion_follows_the_file_not_only_the_heading(self):
+        self.write("widgets.md", section("Same", 20, recheck="true"))
+        self.write("sub/deep.md", section("Same", 20, recheck="true"))
+        self.queue(("stale-recheck", "sub/deep.md", "Same", "open"))
+        got = self.sweep()
+        self.assertEqual(sorted((s.file.name, s.asserted) for s in got.stamps), [("deep.md", False), ("widgets.md", True)])
+
+    def test_a_flagged_assertion_keeps_its_lint_kinds_beside_the_failure(self):
+        self.write("widgets.md", section("Flagged", 20, recheck=WEAK))
+        self.queue(("stale-recheck", "widgets.md", "Flagged", "open"))
+        self.assertEqual(self.stamp(self.sweep(), "Flagged").lint, ("short-fragment", "failed-recheck"))
+
+    def test_without_a_horizon_coverage_still_follows_the_failure(self):
+        self.lib()
+        self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
+        got = lease.sweep(factfiles.tree(self.root))
+        self.assertEqual((tuple(got.coverage), got.due), ((1, 2), ()))
 
 
 class Policy(Lib):

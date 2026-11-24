@@ -7,9 +7,11 @@ sweep(tree, *, horizon=None, unasserted_ttl=None)   a Leases for the library `tr
 
 The sweep is eager. It takes the library already parsed, so a caller that also reads the fact files for
 something else (Attention) parses each once; it runs the assertion lint (kbengine.lint) once over the
-whole library, reads the clock (kbengine.clock) once, and returns frozen values; nothing is written back
-into the sections it read. It takes plain numbers, not a Library: the caller says what the library
-declares (kb-verify and Attention read INDEX.md; a test passes numbers).
+whole library, reads the clock (kbengine.clock) once, reads the library's needs-attention.md once through
+kbengine.queue, and returns frozen values; nothing is written back into the sections it read. It takes
+plain numbers, not a Library: the caller says what the library declares (kb-verify and Attention read
+INDEX.md; a test passes numbers). It takes no queue records: the library's queue is read here, so no
+caller can pass a stale list or re-derive the rule from one.
 
     Leases.stamps      every stamp of the fact files, in file and line order.
     Leases.rechecks    those with a Recheck:, oldest first, however fresh (kb-verify --all).
@@ -19,13 +21,20 @@ declares (kb-verify and Attention read INDEX.md; a test passes numbers).
     Leases.weak        the WEAK warnings kb-verify prints; outside: the OUTSIDE ones.
 
     Stamp              file, heading, line (0-based, of the Verified: line), date, by, method, cmd (the
-                       Recheck: command or None), attended, lint (the lint's kinds, a tuple), asserted,
-                       age (days), lease (days), lease_label, due.
+                       Recheck: command or None), attended, lint (the kinds that demote it, a tuple:
+                       the lint's, then "failed-recheck"), asserted, age (days), lease (days),
+                       lease_label, due.
 
-An asserted stamp is a passing Recheck: the lint does not flag, attended or not, whoever wrote it. Its
-lease is the full horizon; every other stamp's is the short lease, unasserted_ttl. It is due once its
-age exceeds its lease (age equal to the lease is not due). The lease label reads "full horizon",
-"short lease: <lint kinds>" or "short lease: no Recheck".
+An asserted stamp is a passing Recheck: attended or not, whoever wrote it. "Passing" means two things
+and no more: the lint does not flag the assertion, and the library's needs-attention.md holds no open
+stale-recheck record for its file and section (ADR-0022 decision 1, #264). A section stays unasserted
+until the Arbiter settles that record (status other than open) or a passing recheck restamps it and the
+record is closed. A stale-recheck-error record (a timeout, a command that would not run) does not
+demote, and a record naming a file or heading that is not there matches nothing. A demoting record adds
+the kind "failed-recheck" to the lint kinds of every Recheck: stamp in that section; it is not a WEAK or
+OUTSIDE warning. An asserted stamp's lease is the full horizon; every other stamp's is the short lease,
+unasserted_ttl. It is due once its age exceeds its lease (age equal to the lease is not due). The lease
+label reads "full horizon", "short lease: <kinds>" or "short lease: no Recheck".
 
 Without a horizon no lease applies: lease is None, due and stale are empty and every stamp's due is
 false, but coverage and the lint still work. A horizon with no usable unasserted_ttl (a whole number
@@ -33,14 +42,14 @@ of days, at least 1 and shorter than the horizon) raises ValueError, and an unre
 what reading it raises; the caller decides what a failure means.
 
 Assertion coverage counts a sourced section (factfiles' in_scope, with a Source: line) once when any
-of its stamps is asserted, however old. The budget cap and skipping attended assertions are policy
+of its stamps is asserted, however old. A tree with no root (factfiles.tree_from) has no queue to read. The budget cap and skipping attended assertions are policy
 and stay with the callers (kb-verify, Attention's Rechecks).
 """
 import datetime, pathlib
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from . import clock, lint
+from . import clock, lint, queue
 
 
 class Coverage(NamedTuple):
@@ -83,6 +92,21 @@ def _label(cmd, kinds: tuple, asserted: bool) -> str:
     return "short lease: " + ", ".join(kinds) if cmd else "short lease: no Recheck"
 
 
+FAILED = "failed-recheck"    # the kind a stale-recheck record adds to a stamp's lint kinds
+
+
+def _failed(tree) -> set:
+    """(library-relative file, heading) of each section with an open stale-recheck record in the
+    library's needs-attention.md (ADR-0022 decision 1, #264). stale-recheck-error does not count: a
+    timeout or a command that would not run says nothing about the claim. A record naming a section
+    that is not there matches nothing."""
+    qpath = tree.root and tree.root / "needs-attention.md"
+    if not qpath or not qpath.is_file():
+        return set()
+    return {(r.get("file"), r.get("section")) for r in queue.open_findings(qpath.read_text(errors="replace"))
+            if r.get("category") == "stale-recheck"}
+
+
 def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
     if horizon is not None and not (isinstance(unasserted_ttl, int) and 0 < unasserted_ttl < horizon):
         raise ValueError(f"unasserted_ttl: {unasserted_ttl!r} is not a short lease: it must be a whole "
@@ -97,6 +121,7 @@ def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
                  "date": datetime.date.fromisoformat(st.date), "by": st.by or "agent",
                  "method": st.method or "unknown", "cmd": st.recheck and st.recheck.cmd,
                  "attended": bool(st.recheck and st.recheck.attended)} for st in sec.stamps]))
+    failed = _failed(tree)
     found = lint.assess(tree.root, [r for _, rows in parsed for r in rows if r["cmd"]])
 
     stamps, hit, sourced = [], 0, 0
@@ -104,6 +129,8 @@ def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
         made = []
         for r in rows:
             kinds = tuple(found.findings.get((r["file"], r["line"]), ()))
+            if failed and r["cmd"] and (r["file"].relative_to(tree.root).as_posix(), r["heading"]) in failed:
+                kinds += (FAILED,)
             asserted = bool(r["cmd"]) and not kinds
             age = (today - r["date"]).days
             days = None if horizon is None else horizon if asserted else unasserted_ttl
