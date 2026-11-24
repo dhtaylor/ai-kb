@@ -1,13 +1,13 @@
-"""In-process tests of kb-verify's assertion lint as structured findings (#235): which sections the
-weak-assertion and outside-the-library checks flag, and why, so the lease (ADR-0022) and assertion
-coverage can use them. The printed warnings are covered by tests/run-checks.
+"""In-process tests of the assertion lint (kbengine.lint) as structured findings (#235): which
+sections the weak-assertion and outside-the-library checks flag, and why, so the lease (ADR-0022) and
+assertion coverage can use them. The printed warnings are covered by tests/run-checks.
 
 Run by tests/run-checks with scripts/ on PYTHONPATH:
     PYTHONPATH=scripts python3 -m unittest discover -s tests -p 'test_*.py'
 """
 import pathlib, tempfile, unittest
 
-from kbengine import attention
+from kbengine import attention, lint
 
 FM = ("---\nname: {n}\ndescription: x.\nmemory_type: reference\ndomain: fx\nscope: general\n"
       "metadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n")
@@ -32,7 +32,7 @@ class Findings(unittest.TestCase):
 
     def findings(self):
         found = [s for f in sorted(self.root.rglob("*.md")) for s in self.v.sections(f)]
-        got = self.v.lint_findings(self.root, [s for s in found if s["cmd"]])
+        got = lint.lint_findings(self.root, [s for s in found if s["cmd"]])
         return {s["heading"]: sorted(got.get((s["file"], s["line"]), [])) for s in found}
 
     def test_names_each_flagged_section_and_why(self):

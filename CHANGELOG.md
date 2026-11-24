@@ -6,6 +6,9 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- The assertion lint moves out of `scripts/kb-verify` into the engine module `kbengine.lint` (#249), the
+  groundwork for the lease module. Behaviour is unchanged: `kb-verify` imports the lint and prints the
+  same report. `GLOSSARY.md` now defines **Sourced section**.
 - A stamp's lease now follows its evidence, not who wrote it (ADR-0022, #233): an asserted stamp
   stays fresh for the full horizon, every other stamp for the short lease, whoever wrote it.
   **Due counts drop sharply on upgrade**: asserted stamps that sat on the short lease only because
