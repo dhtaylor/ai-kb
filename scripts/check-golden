@@ -42,7 +42,20 @@ def load_script(name):
     return mod
 
 
-FIELD = re.compile(r"^(question|expected_file|expected_excerpt|alt_excerpt):\s*(.*?)\s*$")
+FIELD = re.compile(r"^(question|expected_file|expected_excerpt|alt_excerpt|expected_evidence):\s*(.*?)\s*$")
+# expected_evidence -> the words retrieval uses for it (ADR-0022). grade-eval imports this map.
+EVIDENCE = {"check": "carries a check", "word": "someone's word"}
+
+
+def evidence_of(ckb, body: str, excerpt: str):
+    """What backs the section holding `excerpt`, as retrieval reports it: "check" if a stamp in it
+    carries a `Recheck:`, "word" if it is stamped without one, "unstamped" if it has no stamp (retrieval
+    says so, not "someone's word"), None if no section holds the excerpt. Retrieval can see this and
+    cannot run the check, so it is all an evidence case can ask of the file. `ckb` is check-kb."""
+    for s in ckb.factfiles.sections(body):
+        if ws(excerpt) in ws(s.text):
+            return "check" if any(st.recheck for st in s.stamps) else "word" if s.stamps else "unstamped"
+    return None
 
 
 def unquote(v: str) -> str:
@@ -169,6 +182,19 @@ def main(root: pathlib.Path) -> int:
             if re.sub(r"\s+", " ", alt) not in re.sub(r"\s+", " ", target.read_text()):
                 defects.append(f"{where} [{case}]: alt_excerpt not found in {ef} — "
                                f"the oracle tests nothing: {alt[:60]!r}")
+        ev = r.get("expected_evidence")
+        if ev:
+            if ev not in EVIDENCE:
+                defects.append(f"{where} [{case}]: expected_evidence '{ev}' is not one of {sorted(EVIDENCE)}")
+            elif case != "positive":
+                defects.append(f"{where} [{case}]: expected_evidence is for a positive case only")
+            elif (found := evidence_of(ckb, target.read_text(), exc)) != ev:
+                why = {"check": "carries a Recheck:", "word": "has no Recheck:",
+                       "unstamped": "has no Verified: stamp, so retrieval reports it unstamped, not as "
+                                    "someone's word"}.get(found)
+                if why:
+                    defects.append(f"{where} [{case}]: expected_evidence '{ev}' but the section holding "
+                                   f"the excerpt in {ef} {why}")
         if case == "uncorroborated":
             # The case tests the caveat a marked claim is served with, so its excerpt must be
             # the marked claim, not a sound neighbour in the same file.

@@ -76,8 +76,8 @@ SPECIALIST: <library>
 ## Step 4 — Pass the answer back
 
 - **One specialist answered.** Return its answer exactly as written: the prose, the quotes, the
-  `Verified:` line and the `Sources:` line. Do not reread its files, reword its quotes, or add
-  anything from the catalog or your own knowledge.
+  evidence flag and `Evidence:` line, and the `Sources:` line. Do not reread its files, reword its
+  quotes, or add anything from the catalog or your own knowledge.
 - **Two specialists each answered part of a question that needed both.** Return both answers, each
   under its library's name and with its own `Sources:`. Then give one combined `Sources:` line
   listing every path. Do not join their facts into a conclusion neither states.

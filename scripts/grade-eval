@@ -14,6 +14,9 @@ would forgive it; grep does not.
 An uncorroborated case also requires the answer to BEGIN "uncorroborated — single source": a
 one-source fact is served caveat first (CONVENTIONS §8), and a caveat after the value is read past.
 
+A record with `expected_evidence: check` requires the answer to say "carries a check"; `word`
+requires "someone's word", ahead of the quoted fact (ADR-0022).
+
 Answers file: one record per line,  Q<n>|<cited-files, comma-separated>|<answer text>
 A cited file may be library-relative (x.md), library-prefixed (<lib>/x.md) or
 kb-rooted (kb/<lib>/x.md); it is resolved to a file, not matched as text.
@@ -203,6 +206,18 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
     # this phrase. Leading markup (bold, a heading, a quote mark) is presentation, not order.
     LEAD = "uncorroborated — single source"
     leads = lambda a: re.sub(r'^[\s*_#>"]+', "", norm(a)).startswith(LEAD)
+    # A cited fact states what backs it in plain words (ADR-0022): `check` needs "carries a check",
+    # `word` needs "someone's word" ahead of the fact, so a reader who stops there knows. Retrieval
+    # cannot run the lint, so "carries a check", never "asserted". The phrases are check-golden's.
+    def evidence_ok(ev, ans, excerpts):
+        a, phrase = norm(ans), norm(check_golden().EVIDENCE[ev])
+        at = a.find(phrase)
+        if at < 0:
+            return False
+        # `first` is where the fact is quoted, -1 when it is not quoted at all; that case is already
+        # failed by the excerpt check, so the flag cannot be late and is not failed twice.
+        first = min((a.find(x) for x in (norm(e).rstrip('.!?;:,"') for e in excerpts) if x in a), default=-1)
+        return ev == "check" or first < 0 or at < first
     rows, npass, ngraded = [], 0, 0
     for i, r in enumerate(recs, 1):
         q = f"Q{i}"
@@ -239,11 +254,15 @@ def main(lib: pathlib.Path, answers_file: pathlib.Path, transcripts: bool = Fals
             in_file = target is not None and target.is_file() and all(pr in norm(target.read_text()) for pr in probes)
 
         led = case != "uncorroborated" or leads(ans)
-        ok = in_answer and file_ok and in_file and led
+        ev = r.get("expected_evidence")
+        evidenced = not ev or evidence_ok(ev, ans, excerpts)
+        ok = in_answer and file_ok and in_file and led and evidenced
         npass += ok
         why = []
         if not in_answer: why.append("excerpt not in answer")
         if not led:       why.append(f"does not lead with {LEAD!r}")
+        if not evidenced: why.append(f"does not state its evidence as {check_golden().EVIDENCE[ev]!r}"
+                                     + (" before the answer" if ev == "word" else ""))
         if not file_ok:   why.append(f"cited {cited or '(none)'!r}, expected {ef or '(none)'!r}")
         if not in_file:   why.append("excerpt not in the expected file — ORACLE ROT")
         rows.append((q, case, "yes" if in_answer else "no", "yes" if file_ok else "no",

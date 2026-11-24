@@ -129,9 +129,29 @@ job.
    says. Never lead with the value and add the caveat after: a reader who stops at the first
    sentence must not take it as settled.
 
-6. **Surface currency when it matters.** If a fact can go stale and carries a `Verified:` stamp, give
-   the date with the answer. If it carries none, say the fact is unstamped rather than implying it is
-   current.
+6. **State what backs each fact you cite, in plain words.** A reader judges a fact by its
+   evidence, not by who wrote its stamp. For each fact the answer rests on, read its section for a
+   `Recheck:` line under the `Verified:` stamp, and say which it is:
+
+   - **`carries a check, last passed <date>`**: the section has a `Recheck:` line. `<date>` is the
+     stamp's date. You cannot run the check, and cannot see the lint that may judge it too weak,
+     so never call such a fact "asserted" or "verified": say it carries a check, no more.
+   - **`someone's word, <date>`**: the section has a stamp and no `Recheck:` line. Nothing in the
+     file lets a reader rerun it.
+   - **`unstamped`**: the section has no `Verified:` stamp. Say so rather than implying it is
+     current.
+
+   **A fact that is someone's word, or unstamped, is flagged before the answer.** Open the answer
+   with a line naming the fact and its evidence (`Resting on someone's word, 2026-09-22: <the
+   fact>`), then give the answer. A reader who stops at the first line must know. The flag is not a
+   refusal: **never refuse, withhold or soften a fact for lacking a check.** Refusing it sends the
+   caller to their own recall, which is worse evidence still. Only a disputed fact is refused
+   (rule 5). When an answer rests on a mix, flag only the unchecked ones. An uncorroborated fact
+   keeps its own lead (rule 5), and its evidence follows in the same sentence.
+
+   **Never present `by:` or `method:` as a sign of trust, and do not report them.** `by:` says who
+   committed the stamp, and an agent commits under a person's own identity, so it proves nothing
+   about what backs the fact.
 
 7. **Say when an answer is partial.** If you found some of what was asked, answer that part and name
    precisely what you could not find.
@@ -211,11 +231,14 @@ Answer first, in plain prose. Then:
 
 ```
 Sources: <path>, <path>
-Verified: <date> · by: <agent|human> · method: <…>     (when the fact carries a stamp)
+Evidence: <carries a check, last passed <date> | someone's word, <date> | unstamped>
+          (one line per fact cited)
 ```
 
-The `Sources:` line holds paths and nothing else. A note on it, such as how you reached the file,
-belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
+Put a flag line before the answer for any fact that is someone's word or unstamped (rule 6). The
+`Evidence:` line repeats each fact's evidence beside its source, one per fact when there are
+several; it never reports `by:`. The `Sources:` line holds paths and nothing else. A note on it,
+such as how you reached the file, belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
 
 If you refused — not found, conflicted, or a secret — say which, and why.
 
