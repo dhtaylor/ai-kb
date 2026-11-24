@@ -7,6 +7,13 @@
   release tag" section and the engine-version half of "A library release records the engine it was
   verified against"; its semantic versioning of the engine stands)
 
+> **Amended 2026-11-24 by the owner (#263):** a library behind on a supported contract is no longer told
+> in the session-start nudge, and no longer counts as a decision in the weekly report. The engine serves
+> every minor of a supported major, so there is nothing to decide. `check-kb` still tells it what the
+> newer versions add. This replaces the nudge half of "A library that is **behind** ... is told so" and
+> the consequence "A library behind the contract is reminded at every session start" below. A library
+> that is ahead, on an unsupported major, or malformed is reported as before.
+
 ## Context and problem statement
 
 ADR-0015 made every library's CI pin the engine to a release tag, and made each engine release move

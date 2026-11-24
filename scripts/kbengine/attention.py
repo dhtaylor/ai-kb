@@ -48,9 +48,10 @@ and `unsourced` share.
 rechecks, stale and coverage come from one kbengine.lease sweep, which owns the lease rules (#250).
 
 items (#253). Which of the fields above need saying, and when, is decided here and nowhere else: a
-packet suppresses the sweep or the notes it covers, a failed field is an item of its own, and the four
-contract states that need telling (ahead, unsupported, malformed) are one item; behind is not one (#263). kb-due words the
-items tersely and kb-report imperatively, and neither tests a condition to find them. An Item holds its
+packet suppresses the sweep or the notes it covers, a failed field is an item of its own, and the three
+contract states that need telling (ahead, unsupported, malformed) are one item; behind is not one, since
+the engine serves it (#263). kb-due words the items tersely and kb-report imperatively, and neither
+tests a condition to find them. An Item holds its
 kind, `n` (how many, and what `says` is made of), whether it is a `decision` (something only a person can
 settle: the weekly report lists these, the nudge lists everything), and `detail`: the field's value, or
 its Failed. The kinds, in order:
