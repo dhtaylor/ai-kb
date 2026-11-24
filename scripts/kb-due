@@ -17,9 +17,9 @@ WHAT IT READS, from each tree's INDEX.md:
                             nag and a 14d project a 1.4d one, surprising in both
                             directions. Default when absent: 30d.
 
-SILENCE IS THE POINT. Nothing due prints nothing (exit 0) in --quiet or --nudge (and, in --nudge, every
-sourced section asserted, #239): a
-reminder that fires every session is ignored by the time it matters.
+SILENCE IS THE POINT. Nothing due prints nothing (exit 0): in --quiet, when no tree is overdue; in --nudge, when
+nothing is due in any tree and every sourced section is asserted (#239). A reminder that
+fires every session is ignored by the time it matters.
 
 --NUDGE (Phase 5): the owner's cadence decision for kb-audit AND kb-distill is "surfaced
 when due, never run unattended" — one nudge, not two. --quiet's sweep-only report is kept
@@ -65,7 +65,8 @@ asserted (or none sourced) prints nothing.
                              so they are told apart from category 2, and the budget does not cap
                              them (issue #63).
 
-  A tree with nothing due in any of the six contributes no line at all, and so does a tree whose
+  A tree whose Attention items say nothing beyond full coverage contributes no line at all, and so
+  does a tree whose
   root INDEX.md declares `archived: <date or reason>` (issue #141): a read-only archive cannot act on
   a nudge. Plain kb-due still lists it, marked archived. A registered library is served whatever it
   declares, so it is nudged as usual and told to use kb-library remove. A library registered
