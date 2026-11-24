@@ -510,17 +510,17 @@ Verified: 2026-09-19 · by: agent · method: query
   stamp**, one backed by a passing `Recheck:`, attended or not, stays fresh for the full
   `freshness_horizon`. **Passing** means the assertion lint above does not flag it and the library's
   `needs-attention.md` holds no open failed-recheck record raised against the section's current
-  stamp: a record with `category: stale-recheck` and `status: open` whose `file:` and `section:` name
-  it and whose `stamp:` equals the stamp's own content after `Verified:` (`<date> · by: <by> ·
-  method: <method>`, as `kb-verify` writes it). A failed check is reported and never applied
+  stamp. Such a record has `category: stale-recheck` and `status: open`, its `file:` and `section:`
+  name the section, and its `stamp:` equals the stamp's content after `Verified:` (`<date> · by:
+  <by> · method: <method>`, as `kb-verify` writes it). A failed check is reported and never applied
   (above), so the record is how the failure reaches the stamp: the section is unasserted, on the
   short lease and out of assertion coverage. It stays so until a newer stamp replaces the one the
   record was raised against, such as a passing attended `kb-verify --apply`, which makes it asserted
-  again at once, or until the record is no longer open. The record itself stays open as the
-  Arbiter's decision, and nothing in the engine closes one. A record with no `stamp:` (an older one)
-  covers a stamp dated on or before the record's `date:`. A `stale-recheck-error` (a timeout, or a
-  command that could not run) says nothing about the claim and demotes nothing. Every other stamp is an **unasserted
-  stamp**, someone's word, and stays fresh for a tenth of the horizon, whether `by:` says `human` or
+  again at once. The record itself stays open as the Arbiter's decision, and nothing in the engine
+  closes one. A record with no `stamp:` (an older one) covers a stamp dated on or before the
+  record's `date:`. A `stale-recheck-error` (a timeout, or a command that could not run), an
+  unreadable queue and an unreadable record date demote nothing. Every other stamp is an
+  **unasserted stamp**, someone's word, and stays fresh for a tenth of the horizon, whether `by:` says `human` or
   `agent`. The lint costs tier: an assertion it flags is demoted to unasserted, which stays a warning
   for the sweep and now has a consequence. A domain may set the short lease with `unasserted_ttl`
   (§3), which must stay shorter than the horizon; declare it when unasserted stamps would otherwise
