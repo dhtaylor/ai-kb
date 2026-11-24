@@ -60,8 +60,23 @@ class Fixture(unittest.TestCase):
                 (self.root / "sources" / name).write_text(text)
         return self.root
 
-    def att(self, packets=(), consumed=()):
-        return attention.attention(self.root, list(packets), set(consumed))
+    def att(self, packets=(), consumed=(), registered=()):
+        return attention.attention(self.root, list(packets), set(consumed), set(registered))
+
+    STUB = "# Source: m\n\n- **URL:** http://x.invalid/\n- **Liveness:** manual\n"
+
+    def packet(self, *kinds):
+        return [(pathlib.Path(f"p{n}.md"), {"library_path": str(self.root.resolve()), "packet": k})
+                for n, k in enumerate(kinds)]
+
+    def everything(self, **kw):
+        """A library with something of every kind, and a sweep due."""
+        self.make(section("A", 1, recheck="true") + section("Att", 200, recheck="true", attended=True)
+                  + section("Old", 200, recheck="true") + section("NoCmd", 200) + section("Unstamped")
+                  + section("Bare", 1, source=False),
+                  queue_text=record("aaaaaaaa") + "id: ffffffff\ncategory: bare\nstatus: open\n",
+                  episodic=["# a\n"], stubs={"m.md": self.STUB}, declared="2.1", extra="archived: moved\n", **kw)
+        return self.att(self.packet("kb-review"), registered={self.root.resolve()})
 
     def git_commit(self):
         run = lambda *a: subprocess.run(["git", "-C", str(self.root), "-c", "user.email=t@t", "-c", "user.name=t", *a],
@@ -316,6 +331,116 @@ class ManualStubs(Fixture):
             self.assertEqual(self.att().manual_stubs, Failed("gone", "ImportError"))
 
 
+class Items(Fixture):
+    """The policy (#253): what this library needs said, in order, from the fields above."""
+    def kinds(self, a=None):
+        return [i.kind for i in (a or self.att()).items]
+
+    def test_every_kind_in_order_with_its_numbers_and_whether_it_is_a_decision(self):
+        a = self.everything()
+        self.assertEqual([(i.kind, i.n, i.decision) for i in a.items], [
+            ("coverage", 0, False), ("packets", 1, True), ("sweep", 1, True), ("manual_stubs", 1, True),
+            ("recheck", 2, True), ("stale", 1, False), ("queue", 1, True), ("queue_unreadable", 1, True),
+            ("distill", 1, True), ("unstamped", 1, False), ("unsourced", 1, False), ("contract", 1, True),
+            ("archived", 1, False)])
+        self.assertIsInstance(a.items, tuple)
+        by = {i.kind: i.detail for i in a.items}
+        self.assertEqual(tuple(by["coverage"]), (3, 5))
+        self.assertEqual(by["sweep"], attention.Sweep(True, None, 30))
+        self.assertEqual(by["manual_stubs"], ["sources/m.md"])
+        self.assertEqual(by["contract"].state, "behind")
+        self.assertEqual(by["archived"], "moved")
+
+    def test_coverage_leads_and_is_the_only_item_of_a_library_with_nothing_to_say(self):
+        self.make(section("A", 1, recheck="true"), swept=ago(1))
+        self.assertEqual(self.kinds(), ["coverage"])
+        self.assertFalse(attention.worth_a_line(self.att().items))
+
+    def test_a_recheck_is_a_decision_only_when_a_person_has_to_be_there(self):
+        self.make(section("Old", 200, recheck="true"), swept=ago(1))
+        a = self.att()
+        self.assertEqual([(i.kind, i.n, i.decision) for i in a.items if i.kind == "recheck"], [("recheck", 1, False)])
+        self.make(section("Old", 200, recheck="true", attended=True), swept=ago(1))
+        self.assertEqual([i.decision for i in self.att().items if i.kind == "recheck"], [True])
+
+    def test_a_kb_audit_packet_covers_the_sweep_and_a_kb_distill_packet_the_notes(self):
+        self.make(episodic=["# a\n"], stubs={"m.md": self.STUB})
+        self.assertEqual(self.kinds(), ["coverage", "sweep", "manual_stubs", "distill"])
+        both = self.att(self.packet("kb-audit", "kb-distill"))
+        # the packets are said, the sweep and the notes are not; the manual stubs wait on the sweep, not on the packet
+        self.assertEqual(self.kinds(both), ["coverage", "packets", "manual_stubs"])
+        self.assertEqual(self.kinds(self.att(self.packet("kb-audit"))), ["coverage", "packets", "manual_stubs", "distill"])
+        self.assertEqual(self.kinds(self.att(self.packet("kb-distill"))), ["coverage", "packets", "sweep", "manual_stubs"])
+        self.assertEqual(self.kinds(self.att(self.packet("kb-review"))), ["coverage", "packets", "sweep", "manual_stubs", "distill"])
+
+    def test_manual_stubs_are_said_only_while_a_sweep_is_due(self):
+        self.make(swept=ago(1), stubs={"m.md": self.STUB})
+        self.assertEqual(self.kinds(), ["coverage"])
+
+    def test_the_contract_states_that_need_telling_are_one_item_and_current_is_none(self):
+        for declared, state in (("2.1", "behind"), ("2.99", "ahead"), ("7.0", "unsupported"), ("x.y", "malformed")):
+            self.make(declared=declared, swept=ago(1))
+            got = [i for i in self.att().items if i.kind == "contract"]
+            self.assertEqual([(i.n, i.decision, i.detail.state) for i in got], [(1, True, state)], declared)
+        self.make(swept=ago(1))
+        self.assertNotIn("contract", self.kinds())
+
+    def test_archived_is_said_of_a_registered_library_only(self):
+        self.make(swept=ago(1), extra="archived: moved\n")
+        self.assertNotIn("archived", self.kinds())
+        self.assertIn("archived", self.kinds(self.att(registered={self.root.resolve()})))
+        self.make(swept=ago(1))
+        self.assertNotIn("archived", self.kinds(self.att(registered={self.root.resolve()})))
+
+    def test_a_field_that_failed_is_an_item_of_its_kind_and_a_decision_when_the_kind_is_one(self):
+        self.make(section("Old", 200, recheck="true"), swept=ago(1), extra="unasserted_ttl: 90d\n")
+        got = {i.kind: i for i in self.att().items}
+        self.assertEqual((got["recheck"].n, got["recheck"].decision, got["recheck"].failed), (0, True, True))
+        self.assertEqual((got["stale"].n, got["stale"].decision, got["stale"].failed), (0, False, True))
+        self.assertFalse(got["recheck"].says)
+        self.assertEqual(got["coverage"].failed, False)       # coverage does not depend on the lease
+
+    def test_a_queue_that_cannot_be_read_is_said_once(self):
+        self.make(queue_text=record("aaaaaaaa"), swept=ago(1))
+        with mock.patch.object(pathlib.Path, "read_text", side_effect=PermissionError("no read")):
+            a = self.att()
+            got = [i for i in a.items if i.kind.startswith("queue")]
+        self.assertEqual([(i.kind, i.failed) for i in got], [("queue", True)])
+        self.make(queue_text=record("aaaaaaaa"), swept=ago(1))
+        with mock.patch.object(queue, "problems", side_effect=ValueError("boom")):
+            got = [(i.kind, i.failed) for i in self.att().items if i.kind.startswith("queue")]
+        self.assertEqual(got, [("queue", False), ("queue_unreadable", True)])
+
+    def test_a_failed_git_comparison_is_an_unstamped_item_that_says_nothing(self):
+        self.make(section("One"), swept=ago(1))
+        self.git_commit()
+        (self.root / "widgets.md").write_text((self.root / "widgets.md").read_text() + section("Stamped", 1))
+        with mock.patch.object(attention, "_sweep_baseline", side_effect=OSError("no git")):
+            self.assertEqual([i for i in self.att().items if i.kind == "unstamped"][0].n, 1)
+        self.make(section("Stamped", 1), swept=ago(1))
+        with mock.patch.object(attention, "_sweep_baseline", side_effect=OSError("no git")):
+            a = self.att()
+            self.assertEqual([(i.kind, i.n) for i in a.items if i.kind == "unstamped"], [])   # nothing unstamped: no baseline read, no error
+        self.make(section("One"), swept=ago(1))
+        with mock.patch.object(attention, "_unstamped_keys", side_effect=OSError("gone")):
+            got = [i for i in self.att().items if i.kind == "unstamped"]
+        self.assertEqual([(i.failed, i.says) for i in got], [(True, False)])
+
+    def test_worth_a_line_is_something_said_or_coverage_below_full(self):
+        self.make(section("A", 1, recheck="true") + section("P", 1), swept=ago(1))       # coverage 1 of 2, nothing due
+        self.assertTrue(attention.worth_a_line(self.att().items))
+        self.make(section("A", 1, recheck="true"), swept=ago(1), stubs={"m.md": self.STUB})
+        self.assertFalse(attention.worth_a_line(self.att().items))
+        self.make(section("A", 1, recheck="true"), swept=ago(40), stubs={"m.md": self.STUB})
+        self.assertTrue(attention.worth_a_line(self.att().items))                          # the sweep
+        self.make(section("A", 1, recheck="true"), swept=ago(1), stubs={"m.md": self.STUB}, extra="unasserted_ttl: 90d\n")
+        self.assertFalse(attention.worth_a_line(self.att().items))                         # failures warn, they do not speak
+
+    def test_items_are_worked_out_once(self):
+        a = self.everything()
+        self.assertIs(a.items, a.items)
+
+
 class Shelving(Fixture):
     def test_archived_and_read_only(self):
         self.make(extra="archived: moved to fy\n")
@@ -329,6 +454,13 @@ class Shelving(Fixture):
         self.assertTrue(a.read_only and attention.shelved(a, {self.root.resolve()}))
         self.assertIsNone(a.archived)
         self.assertFalse(attention.shelved(self.att(), set()))
+
+    def test_shelved_defaults_to_the_registration_the_attention_was_given(self):
+        self.make(extra="archived: moved to fy\n")
+        root = self.root.resolve()
+        self.assertTrue(attention.shelved(attention.attention(self.root, [], set(), set())))
+        self.assertFalse(attention.shelved(attention.attention(self.root, [], set(), {root})))
+        self.assertTrue(attention.shelved(attention.attention(self.root, [], {root}, {root})))
 
 
 class ReadOnce(Fixture):

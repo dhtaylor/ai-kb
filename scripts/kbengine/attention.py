@@ -5,6 +5,7 @@ what is "due" is one judgment, and a category added or changed here reaches all 
 attention(tree, packets, consumed)   an Attention for the library at `tree`.
 label(tree)                          the name to show for a tree.
 shelved(att, registered)             whether a nudge or report leaves the library out.
+worth_a_line(items)                  whether the nudge has a line for a library with these items.
 
 The caller reads the review packets once (kb-apply's pending()) and the read-only set once (the
 registry's read-only paths, resolved), and passes both to every tree. The tree's INDEX.md is read once,
@@ -40,7 +41,35 @@ and `unsourced` share.
     manual_stubs     the source stubs marked Liveness: manual.
     archived         the text of `archived:`, or None. read_only: registered as a consumer's copy (ADR-0020).
 
+    registered       the library is registered on this machine (the caller passes the resolved registered paths).
+    items            the policy: the frozen, ordered tuple of Item that this library needs said, below.
+
 rechecks, stale and coverage come from one kbengine.lease sweep, which owns the lease rules (#250).
+
+items (#253). Which of the fields above need saying, and when, is decided here and nowhere else: a
+packet suppresses the sweep or the notes it covers, a failed field is an item of its own, and the four
+contract states that need telling (behind, ahead, unsupported, malformed) are one item. kb-due words the
+items tersely and kb-report imperatively, and neither tests a condition to find them. An Item holds its
+kind, `n` (how many, and what `says` is made of), whether it is a `decision` (something only a person can
+settle: the weekly report lists these, the nudge lists everything), and `detail`: the field's value, or
+its Failed. The kinds, in order:
+
+    coverage          always, first: the library's assertion coverage (never a decision).
+    packets           the review packets waiting. decision.
+    sweep             a sweep is due and no kb-audit packet covers it. decision.
+    manual_stubs      while a sweep is due, the source stubs marked Liveness: manual. decision. REPORT_ONLY:
+                      the nudge does not name them.
+    recheck           the facts due for recheck. A decision when one needs a person there (attended).
+    stale             stale facts with no assertion.
+    queue             open queue records. decision. queue_unreadable: the records the reader skipped. decision.
+    distill           episodic notes to distil, and no kb-distill packet covers them. decision.
+    unstamped         Source: lines with no stamp; also present, with n of 0, when only the git comparison failed.
+    unsourced         sections with content and no Source: line.
+    contract          behind, ahead, unsupported or malformed. decision.
+    archived          declares `archived:` and is registered, so is still served and can be removed.
+
+A field that failed is its Failed in an item of its kind (n of 0), a decision when the kind is one.
+
 kb-sources (manual stubs) is a script, not a module yet: it is loaded here, in one place, on first
 use, rather than by each caller.
 """
@@ -52,6 +81,7 @@ from typing import NamedTuple
 from . import clock, contract, factfiles, lease, library, queue
 from .lease import Coverage
 
+REPORT_ONLY = ("manual_stubs",)   # items only the weekly report says: the nudge leaves them out
 SCRIPTS = pathlib.Path(__file__).resolve().parent.parent
 DISTILLED = re.compile(r"^##\s+Distill", re.M)
 
@@ -92,6 +122,23 @@ class Unstamped(NamedTuple):
     @property
     def count(self) -> int:
         return self.new
+
+
+class Item(NamedTuple):
+    """One thing a library needs said (see the module docstring)."""
+    kind: str
+    n: int               # how many; 0 for a field that failed
+    decision: bool       # only a person can settle it
+    detail: object       # the field's value, or its Failed
+
+    @property
+    def failed(self) -> bool:
+        return isinstance(self.detail, Failed)
+
+    @property
+    def says(self) -> bool:
+        """Something to say about the library, as opposed to a failure to warn of."""
+        return not self.failed and bool(self.n)
 
 
 @dataclass(frozen=True)
@@ -191,12 +238,13 @@ def _sweep_baseline(root: pathlib.Path, swept, now: collections.Counter):
 class Attention:
     """What one library needs from a person; see the module docstring for the fields."""
 
-    def __init__(self, tree, packets, consumed):
+    def __init__(self, tree, packets, consumed, registered=()):
         self.tree = pathlib.Path(tree)
         self.root = self.tree.resolve()
         self.lib = library.library(self.root)           # INDEX.md, read once
         self.packets = [(p, h) for p, h in packets if h.get("library_path") == str(self.root)]
         self.read_only = self.root in consumed
+        self.registered = self.root in registered
         self.archived = self.lib.archived
         covered = {h.get("packet") for _, h in self.packets}
         self.sweep_covered = "kb-audit" in covered
@@ -307,6 +355,54 @@ class Attention:
         (§6, issue #154). A sourceless section is never counted as unstamped."""
         return _try(lambda: sum(len(factfiles.unsourced(f.body_sections)) for f in self._tree.facts))
 
+    # -- the policy --
+    @cached_property
+    def items(self) -> tuple:
+        """What this library needs said, in order (module docstring). Reads every field it needs."""
+        out = []
+
+        def say(kind, got, n, decision=True):
+            if isinstance(got, Failed):
+                out.append(Item(kind, 0, decision, got))
+            elif n:
+                out.append(Item(kind, n, decision, got))
+
+        def size(got):
+            return 0 if isinstance(got, Failed) else len(got)
+
+        out.append(Item("coverage", 0, False, self.coverage))
+        say("packets", self.packets, len(self.packets))
+        sw = self.sweep
+        say("sweep", sw, int(sw.due and not self.sweep_covered))   # a kb-audit packet is already the sweep (#204)
+        if sw.due:
+            stubs = self.manual_stubs
+            say("manual_stubs", stubs, size(stubs))
+        rc = self.rechecks
+        say("recheck", rc, size(rc.due) if not isinstance(rc, Failed) else 0,
+            isinstance(rc, Failed) or bool(rc.attended))
+        stale = self.stale
+        say("stale", stale, size(stale), False)
+        queued = self.queue
+        say("queue", queued, size(queued))
+        bad = self.queue_unreadable   # a queue that cannot be read is said once, by `queue`
+        if not (isinstance(bad, Failed) and bad == queued):
+            say("queue_unreadable", bad, size(bad))
+        notes = self.episodic
+        say("distill", notes, 0 if isinstance(notes, Failed) or self.distill_covered else notes)   # a kb-distill packet is the distillation (#204)
+        un = self.unstamped
+        if isinstance(un, Failed):
+            out.append(Item("unstamped", 0, False, un))
+        elif un.count or un.git_error is not None:
+            out.append(Item("unstamped", un.count, False, un))
+        us = self.unsourced
+        say("unsourced", us, 0 if isinstance(us, Failed) else us, False)
+        found = self.contract
+        if isinstance(found, Failed) or found.state in ("behind", "ahead", "unsupported", "malformed"):
+            say("contract", found, 1)
+        if self.archived and self.registered:   # served whatever it declares (#141)
+            out.append(Item("archived", 1, False, self.archived))
+        return tuple(out)
+
     # -- the library's own declarations --
     @cached_property
     def contract(self):
@@ -324,15 +420,31 @@ class Attention:
         return _try(lambda: script("kb-sources").manual_stubs(self.root))
 
 
-def attention(tree, packets, consumed) -> Attention:
+def attention(tree, packets, consumed, registered=()) -> Attention:
     """The Attention for the library at `tree`. `packets` is kb-apply's pending() ([(path, header)]);
-    `consumed` the resolved paths registered read-only. Both are read once by the caller."""
-    return Attention(tree, packets, consumed)
+    `consumed` the resolved paths registered read-only, `registered` those of every registered library.
+    All are read once by the caller."""
+    return Attention(tree, packets, consumed, registered)
 
 
-def shelved(att: Attention, registered) -> bool:
+def worth_a_line(items) -> bool:
+    """Whether the nudge has a line for a library with these items: something is said besides coverage,
+    or coverage is below full. Coverage is a measure, not something due, but a library below full coverage
+    is named even when nothing is due (#239, ADR-0022)."""
+    for item in items:
+        if item.kind == "coverage":
+            if not item.failed and item.detail.asserted < item.detail.sourced:
+                return True
+        elif item.says and item.kind not in REPORT_ONLY:
+            return True
+    return False
+
+
+def shelved(att: Attention, registered=None) -> bool:
     """Whether a nudge or report leaves the library out: an archived library that is not registered
     (#141: a read-only archive cannot act on it; a registered one is served whatever it declares),
     or one registered read-only, a consumer's copy curated by its publisher (ADR-0020).
-    `registered` holds the resolved paths of the registered libraries."""
-    return bool((att.archived and att.root not in registered) or att.read_only)
+    `registered` holds the resolved paths of the registered libraries; by default, the ones the
+    Attention was given."""
+    registered = att.registered if registered is None else att.root in registered
+    return bool((att.archived and not registered) or att.read_only)

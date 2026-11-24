@@ -40,7 +40,6 @@ Usage: kb-report [tree ...] [--out DIR]
 import datetime, importlib.machinery, importlib.util, os, pathlib, sys
 
 from kbengine import attention, clock, contract, env, registry, reports
-from kbengine.attention import Failed
 
 SCRIPTS = pathlib.Path(__file__).resolve().parent
 
@@ -82,68 +81,64 @@ def not_found_week(mods: dict) -> dict:
     return out
 
 
-def computed(value, what: str, out: list):
-    """`value`, or None after listing under the library that `what` could not be worked out (#204): a
-    failure in one library is an item for a person, not the end of the report."""
-    if isinstance(value, Failed):
-        out.append(f"Could not compute {what} ({value.kind}). Run check-kb on the library to see why.")
-        return None
-    return value
-
-
 def coverage_for(att) -> str:
     """One library's assertion coverage line, or why it could not be worked out (#239, ADR-0022)."""
-    cov = att.coverage
-    if isinstance(cov, Failed):
-        return f"{attention.label(att.tree)}: assertion coverage could not be worked out ({cov.reason})."
-    return f"{attention.label(att.tree)}: {attention.describe_coverage(cov)}"
+    cov = next(i for i in att.items if i.kind == "coverage")
+    if cov.failed:
+        return f"{attention.label(att.tree)}: assertion coverage could not be worked out ({cov.detail.reason})."
+    return f"{attention.label(att.tree)}: {attention.describe_coverage(cov.detail)}"
+
+
+# What each kind of item is called when it could not be worked out (#204): a failure in one library is an
+# item for a person, not the end of the report. The kinds not named here are not decisions when they fail.
+FAILED = {"queue": "the open queue items", "queue_unreadable": "the unreadable queue records",
+          "recheck": "the facts due for recheck", "manual_stubs": "the source stubs marked Liveness: manual",
+          "distill": "the notes awaiting distillation", "contract": "the contract version"}
+
+
+def worded(item, att) -> list:
+    """The report's lines for one decision item, imperative: what a person is to do about it."""
+    d, root = item.detail, att.root
+    if item.failed:
+        return [f"Could not compute {FAILED[item.kind]} ({d.kind}). Run check-kb on the library to see why."]
+    if item.kind == "packets":
+        return [f"Review packet: {h.get('packet', '?')}, prepared {h.get('prepared', '?')[:10]}. "
+                f"Ask a session to review it (`kb-apply show {p}`)." for p, h in d]
+    if item.kind == "queue":
+        return [f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
+                f"Triage it in needs-attention.md." for r in d]
+    if item.kind == "queue_unreadable":
+        return [f"{len(d)} unreadable queue record(s) in needs-attention.md, which the report cannot "
+                f"list: check-kb names the lines."]
+    if item.kind == "recheck":
+        return [f"{len(d.attended)} attended recheck(s) due, which need you there: `kb-verify {root} --yes`."]
+    if item.kind == "sweep":
+        return ["Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule."]
+    if item.kind == "manual_stubs":   # once per sweep interval: listed while the sweep is due, gone once it is done (#120)
+        return [f"{len(d)} source(s) marked Liveness: manual, which only a person can check: "
+                f"{', '.join(d)}. Open each and confirm it still holds what its facts cite."]
+    if item.kind == "distill":
+        return [f"{d} note(s) awaiting distillation and no packet drafted: run kb-distill."]
+    state, v, newest, _newer = d
+    if state == "behind":
+        return [f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
+                f"Decide whether to adopt it (CONVENTIONS §14)."]
+    if state == "ahead":
+        return [f"Declares contract {contract.fmt(v)}, newer than this engine ({contract.fmt(newest)}). "
+                f"Upgrade the engine."]
+    return ["Its contract version cannot be served by this engine; check-kb says why."]
+
+
+# The order the report lists a library's decisions in: by what a person does first, not the nudge's order.
+ORDER = ("packets", "queue", "queue_unreadable", "recheck", "sweep", "manual_stubs", "distill", "contract")
 
 
 def decisions_for(att, names: dict, gaps=None) -> list:
     root, out = att.root, []
-    for p, h in att.packets:
-        out.append(f"Review packet: {h.get('packet', '?')}, prepared {h.get('prepared', '?')[:10]}. "
-                   f"Ask a session to review it (`kb-apply show {p}`).")
-
-    for r in computed(att.queue, "the open queue items", out) or []:
-        out.append(f"Queue item {r.get('id', '?')} [{r.get('category', '?')}]: {where(r)}. "
-                   f"Triage it in needs-attention.md.")
-
-    bad = att.queue_unreadable   # records the queue reader skips are named, not lost (#168, #204)
-    if not (isinstance(bad, Failed) and bad == att.queue):   # a queue that cannot be read is listed once
-        bad = computed(bad, "the unreadable queue records", out)
-        if bad:
-            out.append(f"{len(bad)} unreadable queue record(s) in needs-attention.md, which the report cannot "
-                       f"list: check-kb names the lines.")
-
-    rechecks = computed(att.rechecks, "the facts due for recheck", out)
-    attended = rechecks.attended if rechecks else []
-    if attended:
-        out.append(f"{len(attended)} attended recheck(s) due, which need you there: "
-                   f"`kb-verify {root} --yes`.")
-
-    if att.sweep.due and not att.sweep_covered:
-        out.append("Sweep due and no audit packet drafted: run kb-audit, or enable preparation in kb-schedule.")
-    if att.sweep.due:
-        # Once per sweep interval: listed while the sweep is due, gone once it is done (#120).
-        manual = computed(att.manual_stubs, "the source stubs marked Liveness: manual", out)
-        if manual:
-            out.append(f"{len(manual)} source(s) marked Liveness: manual, which only a person can check: "
-                       f"{', '.join(manual)}. Open each and confirm it still holds what its facts cite.")
-    notes = computed(att.episodic, "the notes awaiting distillation", out)
-    if notes and not att.distill_covered:
-        out.append(f"{notes} note(s) awaiting distillation and no packet drafted: run kb-distill.")
-
-    found = computed(att.contract, "the contract version", out)
-    state, v, newest, _newer = found or (None, None, None, None)
-    if state == "behind":
-        out.append(f"Built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)}. "
-                   f"Decide whether to adopt it (CONVENTIONS §14).")
-    elif state == "ahead":
-        out.append(f"Declares contract {contract.fmt(v)}, newer than this engine ({contract.fmt(newest)}). "
-                   f"Upgrade the engine.")
-    elif state in ("unsupported", "malformed"):
-        out.append("Its contract version cannot be served by this engine; check-kb says why.")
+    decisions = {i.kind: i for i in att.items if i.decision}
+    for kind in ORDER:
+        if kind in decisions:
+            out += worded(decisions[kind], att)
 
     mine = (gaps or {}).get(root, [])
     name = names.get(root)
@@ -187,10 +182,11 @@ def main(argv) -> int:
     for n, p in installed.items():
         names.setdefault(pathlib.Path(p).resolve(), n)
     registered = set(names)
-    trees = [t for t in trees if t.resolve() not in consumed]
 
     dest_dir = reports.directory(out).resolve()
     for t in trees:
+        if t.resolve() in consumed:   # not curated here, so not this report's to keep clear of (ADR-0020)
+            continue
         if dest_dir == t.resolve() or t.resolve() in dest_dir.parents:
             print(f"kb-report: the report must be kept outside every library, not in {dest_dir}", file=sys.stderr)
             return 2
@@ -200,8 +196,8 @@ def main(argv) -> int:
         if not (t / "INDEX.md").is_file():
             continue
         try:
-            att = attention.attention(t, packets, consumed)
-            if attention.shelved(att, registered):   # a read-only archive cannot act on a decision (#141)
+            att = attention.attention(t, packets, consumed, registered)
+            if attention.shelved(att):   # a read-only archive cannot act on a decision (#141)
                 continue
             coverage.append(coverage_for(att))
             items = decisions_for(att, names, gaps)

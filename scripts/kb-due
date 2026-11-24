@@ -115,7 +115,7 @@ def plural(n: int, word: str) -> str:
 # The --summary categories, in the order they are shown: (key, heading).
 SUMMARY = (("report", "weekly report"), ("packets", "to decide"), ("sweep", "sweeps due"), ("recheck", "to recheck"), ("stale", "stale, no assertion"),
            ("queue", "queue"), ("queue_unreadable", "unreadable queue"), ("distill", "to distill"), ("unstamped", "unstamped"), ("unsourced", "unsourced"),
-           ("contract", "contract"))
+           ("contract", "contract"))   # all but the report are item kinds
 
 
 def summary_line(counts: list) -> str:
@@ -130,111 +130,109 @@ def summary_line(counts: list) -> str:
     return "KB due — " + " · ".join(out) if out else ""
 
 
-def nudge_for(att, retire=None):
-    """(line-or-None, [warning, ...], {summary key: count}) for one tree's Attention. A field that
-    failed is a warning, never a stop to the other categories, this tree's own line, or any other tree
-    — see module docstring: a malformed or uncomputable category is reported once and skipped."""
-    lbl = label(att.tree)
-    parts, warnings, counts = [], [], {}
+# What it says when a kind of item could not be worked out: warned to stderr and skipped, never a stop.
+# Not said: the records the queue reader skipped and the stubs marked manual, which are not worth a warning.
+FAILED = {"recheck": "could not compute facts due for recheck", "stale": "could not compute stale facts with no assertion",
+          "queue": "could not read needs-attention.md", "distill": "could not count episodic notes",
+          "unstamped": "could not count unstamped sections", "unsourced": "could not count unsourced sections",
+          "contract": "could not read the contract version", "coverage": "could not work out assertion coverage"}
 
-    # Review packets kb-prepare drafted for this tree (ADR-0017): the decisions already waiting.
-    if att.packets:
-        counts["packets"] = len(att.packets)
-        parts.append(f"{plural(len(att.packets), 'review packet')} awaiting your decision (kb-apply list)")
 
-    sw = att.sweep
-    if sw.due and not att.sweep_covered:   # a kb-audit packet is already the sweep, drafted (#204)
-        counts["sweep"] = " "     # named, not counted: one sweep per tree
-        when = "never swept" if sw.age is None else f"last swept {sw.age}d ago"
-        parts.append(f"sweep due ({when}, every {sw.interval}d)")
-
-    rc = att.rechecks
-    if isinstance(rc, Failed):
-        warnings.append(f"{lbl}: could not compute facts due for recheck ({rc.reason}) — skipped")
-    elif rc.due:
-        # The whole backlog, not the budget's worth: one run takes `budget` of them (#211).
-        counts["recheck"] = len(rc.due)
-        per_run = f", {rc.budget} a run" if len(rc.due) > rc.budget else ""
-        parts.append(f"{plural(len(rc.due), 'fact')} due for recheck{per_run} (kb-verify {shlex.quote(str(att.root))} --yes)")
-
-    stale = att.stale
-    if isinstance(stale, Failed):
-        warnings.append(f"{lbl}: could not compute stale facts with no assertion ({stale.reason}) — skipped")
-    elif stale:
-        counts["stale"] = len(stale)
-        parts.append(f"{plural(len(stale), 'stale fact')} with no assertion (re-check by hand, or kb-audit)")
-
-    opened = att.queue
-    if isinstance(opened, Failed):
-        warnings.append(f"{lbl}: could not read needs-attention.md ({opened.reason}) — skipped")
-    elif opened:
-        cats = {}
-        for r in opened:
-            cats[r.get("category", "?")] = cats.get(r.get("category", "?"), 0) + 1
-        counts["queue"] = len(opened)
-        by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
-        parts.append(f"{plural(len(opened), 'open queue item')} ({by_cat})")
-    bad = att.queue_unreadable     # records the parser skips are not counted above, so they are named here (#168)
-    if bad and not isinstance(bad, Failed):
-        counts["queue_unreadable"] = len(bad)
-        parts.append(f"{plural(len(bad), 'unreadable queue record')} (check-kb names the lines)")
-
-    en = att.episodic
-    if isinstance(en, Failed):
-        warnings.append(f"{lbl}: could not count episodic notes ({en.reason}) — skipped")
-    elif en and not att.distill_covered:   # a kb-distill packet is already the distillation (#204)
-        counts["distill"] = en
-        parts.append(f"{plural(en, 'episodic note')} awaiting distillation")
-
-    un = att.unstamped
-    if isinstance(un, Failed):
-        warnings.append(f"{lbl}: could not count unstamped sections ({un.reason}) — skipped")
-    else:
-        if un.git_error is not None:
-            warnings.append(f"{lbl}: could not read the last sweep from git ({un.git_error}) — full count shown")
-        if un.count:
-            counts["unstamped"] = un.count
-            if not un.since_sweep:
-                parts.append(f"{plural(un.count, 'unstamped source')} (never verified)")
-            else:
-                parts.append(f"{plural(un.count, 'new unstamped source')} since the last sweep (never verified)")
-
-    us = att.unsourced
-    if isinstance(us, Failed):
-        warnings.append(f"{lbl}: could not count unsourced sections ({us.reason}) — skipped")
-    elif us:
-        counts["unsourced"] = us
-        parts.append(f"{plural(us, 'unsourced section')} (no Source: line)")
-
-    found = att.contract   # ADR-0016: a library behind the contract is told; never a failure
-    st = None
-    if isinstance(found, Failed):
-        warnings.append(f"{lbl}: could not read the contract version ({found.reason}) — skipped")
-    else:
-        st, v, newest, _newer = found
-    if st in ("behind", "ahead", "unsupported", "malformed"):
-        counts["contract"] = "(unreadable)" if st == "malformed" else f"{contract.fmt(v)} ({st})"
+def contract_text(c) -> str:
+    """The contract item in a line: what is wrong with it, the same for every state that needs telling."""
+    st, v, newest, _newer = c
     if st == "behind":
-        parts.append(f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
-                     f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
-    elif st == "ahead":
-        parts.append(f"declares contract {contract.fmt(v)}, newer than this engine "
-                     f"({contract.fmt(newest)}) — upgrade the engine")
-    elif st == "unsupported":
-        parts.append(f"declares contract {contract.fmt(v)}, which this engine does not support — not served")
-    elif st == "malformed":
-        parts.append("kb_contract cannot be read — not served (check-kb says why)")
+        return (f"built to contract {contract.fmt(v)}; this engine knows {contract.fmt(newest)} "
+                f"(CONVENTIONS §14 says what it adds; check-kb lists it)")
+    if st == "ahead":
+        return (f"declares contract {contract.fmt(v)}, newer than this engine "
+                f"({contract.fmt(newest)}) — upgrade the engine")
+    if st == "unsupported":
+        return f"declares contract {contract.fmt(v)}, which this engine does not support — not served"
+    return "kb_contract cannot be read — not served (check-kb says why)"
 
-    if retire:   # a registered library is served whatever it declares (#141)
-        parts.append(f"declares archived: {att.archived}, but is registered and still served "
-                     f"(kb-library remove {retire} to retire it)")
-    cov = att.coverage   # ADR-0022: where trust is thin leads the line, before what is due (#239)
-    if isinstance(cov, Failed):
-        warnings.append(f"{lbl}: could not work out assertion coverage ({cov.reason}) — skipped")
-    elif parts or cov.asserted < cov.sourced:   # below full coverage is named even when nothing is due
-        parts.insert(0, describe_coverage(cov))
+
+def word(item, att, retire):
+    """The nudge's words for one item that says something: terse, in the nudge's voice."""
+    n, d = item.n, item.detail
+    if item.kind == "packets":
+        return f"{plural(n, 'review packet')} awaiting your decision (kb-apply list)"
+    if item.kind == "sweep":
+        when = "never swept" if d.age is None else f"last swept {d.age}d ago"
+        return f"sweep due ({when}, every {d.interval}d)"
+    if item.kind == "recheck":
+        # The whole backlog, not the budget's worth: one run takes `budget` of them (#211).
+        per_run = f", {d.budget} a run" if n > d.budget else ""
+        return f"{plural(n, 'fact')} due for recheck{per_run} (kb-verify {shlex.quote(str(att.root))} --yes)"
+    if item.kind == "stale":
+        return f"{plural(n, 'stale fact')} with no assertion (re-check by hand, or kb-audit)"
+    if item.kind == "queue":
+        cats = {}
+        for r in d:
+            cats[r.get("category", "?")] = cats.get(r.get("category", "?"), 0) + 1
+        by_cat = ", ".join(f"{v} {k}" for k, v in sorted(cats.items()))
+        return f"{plural(n, 'open queue item')} ({by_cat})"
+    if item.kind == "queue_unreadable":   # records the parser skips are not counted above, so they are named here (#168)
+        return f"{plural(n, 'unreadable queue record')} (check-kb names the lines)"
+    if item.kind == "distill":
+        return f"{plural(n, 'episodic note')} awaiting distillation"
+    if item.kind == "unstamped":
+        if not d.since_sweep:
+            return f"{plural(n, 'unstamped source')} (never verified)"
+        return f"{plural(n, 'new unstamped source')} since the last sweep (never verified)"
+    if item.kind == "unsourced":
+        return f"{plural(n, 'unsourced section')} (no Source: line)"
+    if item.kind == "contract":
+        return contract_text(d)
+    if item.kind == "archived":
+        return (f"declares archived: {d}, but is registered and still served "
+                f"(kb-library remove {retire} to retire it)")
+
+
+def summary_counts(items) -> dict:
+    """{summary key: count-or-text} for the --summary line, from the same items the nudge words. The
+    summary keys are the items' kinds."""
+    keys = {key for key, _ in SUMMARY}
+    out = {}
+    for item in items:
+        if item.kind not in keys or not item.says:
+            continue
+        if item.kind == "sweep":
+            out["sweep"] = " "     # named, not counted: one sweep per tree
+        elif item.kind == "contract":
+            c = item.detail
+            out["contract"] = "(unreadable)" if c.state == "malformed" else f"{contract.fmt(c.version)} ({c.state})"
+        else:
+            out[item.kind] = item.n
+    return out
+
+
+def nudge_for(att, retire=None):
+    """(line-or-None, [warning, ...], {summary key: count}) for one tree's Attention, worded from its
+    items (the policy of what needs saying, and when, is attention.items). A field that failed is a
+    warning, never a stop to the other categories, this tree's own line, or any other tree — see module
+    docstring: a malformed or uncomputable category is reported once and skipped."""
+    lbl = label(att.tree)
+    items = att.items
+    parts, warnings, coverage = [], [], None
+    for item in items:
+        if item.kind == "coverage":
+            coverage = item   # leads the line, but is judged last
+            continue
+        if item.failed:
+            if item.kind in FAILED:
+                warnings.append(f"{lbl}: {FAILED[item.kind]} ({item.detail.reason}) — skipped")
+            continue
+        if item.kind == "unstamped" and item.detail.git_error is not None:
+            warnings.append(f"{lbl}: could not read the last sweep from git ({item.detail.git_error}) — full count shown")
+        if item.says and item.kind not in attention.REPORT_ONLY:
+            parts.append(word(item, att, retire))
+    if coverage.failed:   # ADR-0022: where trust is thin leads the line, before what is due (#239)
+        warnings.append(f"{lbl}: {FAILED['coverage']} ({coverage.detail.reason}) — skipped")
+    elif attention.worth_a_line(items):   # below full coverage is named even when nothing is due
+        parts.insert(0, describe_coverage(coverage.detail))
     line = f"{lbl}: " + "; ".join(parts) if parts else None
-    return line, warnings, counts
+    return line, warnings, summary_counts(items)
 
 
 def main(argv) -> int:
@@ -258,10 +256,10 @@ def main(argv) -> int:
             packets = load_module("kb_apply", "kb-apply").pending()
         except Exception as e:
             print(f"kb-due: review packets unreadable, skipped: {e}", file=sys.stderr)
-    rows = [attention.attention(t, packets, consumed) for t in trees if (t / "INDEX.md").is_file()]
+    rows = [attention.attention(t, packets, consumed, set(registered)) for t in trees if (t / "INDEX.md").is_file()]
     # An archived tree that is not registered drops out of the nudge and of --quiet (issue #141).
     # A read-only library is a consumer's copy, curated by its publisher (ADR-0020): it too drops out.
-    shelved = lambda a: attention.shelved(a, registered)
+    shelved = attention.shelved
     due = [a for a in rows if a.sweep.due and not shelved(a)]
 
     if nudge:
