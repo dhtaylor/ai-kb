@@ -27,8 +27,8 @@ repo with neither is not one check-blast recognizes — usage error, not a silen
 rules apply.
 
 WHAT COUNTS AS A "FACT FILE" (library repos): any tracked *.md file, outside documents/, plugins/,
-scripts/, .github/, .githooks/, .claude-plugin/, .claude/ and .git/ (the same NON_KB exclusion
-check-kb and check-scope already use), EXCEPT an INDEX.md at any level (a router, not a fact) and a
+scripts/, .github/, .githooks/, .claude-plugin/, .claude/ and .git/ (factfiles.EXCLUDED_DIRS, the
+same exclusion check-kb and check-scope use), EXCEPT an INDEX.md at any level (a router, not a fact) and a
 *-golden.md (the test oracle, not a fact — its own removal is already check-golden's job: "a library
 with content and no oracle is untested by construction"). documents/ holds archived EVIDENCE
 (CONVENTIONS §6), not the facts themselves, which is why it is excluded here rather than overlooked.
@@ -79,8 +79,8 @@ repo root has neither CONVENTIONS.md nor INDEX.md).
 """
 import pathlib, re, subprocess, sys
 
-NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
-          ".claude-plugin", ".claude", ".git"}
+from kbengine import factfiles
+
 OWNER_LABEL = "owner-approved"
 CONFLICTED_RE = re.compile(r"^\s*status:\s*CONFLICTED\b", re.M)
 UNCORROBORATED_RE = re.compile(r"^\s*status:\s*UNCORROBORATED\b", re.M)
@@ -109,7 +109,7 @@ def repo_kind(root: pathlib.Path):
 
 def in_kb(path: str) -> bool:
     parts = pathlib.Path(path).parts
-    return path.endswith(".md") and not (NON_KB & set(parts))
+    return path.endswith(".md") and not (factfiles.EXCLUDED_DIRS & set(parts))
 
 
 def is_fact_file(path: str) -> bool:

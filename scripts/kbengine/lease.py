@@ -2,12 +2,14 @@
 asserted, what lease it is on, whether it is due or stale, and how much of the library is asserted.
 Stdlib only.
 
-sweep(root, *, horizon=None, unasserted_ttl=None)   a Leases for the library at `root`.
+sweep(tree, *, horizon=None, unasserted_ttl=None)   a Leases for the library `tree` (a factfiles.Tree
+                                                    of a library on disk, from factfiles.tree(root)).
 
-The sweep is eager. It reads and parses each fact file once, runs the assertion lint (kbengine.lint)
-once over the whole library, reads the clock (kbengine.clock) once, and returns frozen values;
-nothing is written back into the sections it read. It takes plain numbers, not a Library: the
-caller says what the library declares (kb-verify and Attention read INDEX.md; a test passes numbers).
+The sweep is eager. It takes the library already parsed, so a caller that also reads the fact files for
+something else (Attention) parses each once; it runs the assertion lint (kbengine.lint) once over the
+whole library, reads the clock (kbengine.clock) once, and returns frozen values; nothing is written back
+into the sections it read. It takes plain numbers, not a Library: the caller says what the library
+declares (kb-verify and Attention read INDEX.md; a test passes numbers).
 
     Leases.stamps      every stamp of the fact files, in file and line order.
     Leases.rechecks    those with a Recheck:, oldest first, however fresh (kb-verify --all).
@@ -38,7 +40,7 @@ import datetime, pathlib
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from . import clock, factfiles, lint
+from . import clock, lint
 
 
 class Coverage(NamedTuple):
@@ -81,24 +83,21 @@ def _label(cmd, kinds: tuple, asserted: bool) -> str:
     return "short lease: " + ", ".join(kinds) if cmd else "short lease: no Recheck"
 
 
-def sweep(root, *, horizon=None, unasserted_ttl=None) -> Leases:
-    root = pathlib.Path(root)
+def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
     if horizon is not None and not (isinstance(unasserted_ttl, int) and 0 < unasserted_ttl < horizon):
         raise ValueError(f"unasserted_ttl: {unasserted_ttl!r} is not a short lease: it must be a whole "
                          f"number of days, at least 1 and shorter than the horizon ({horizon}d)")
     today = clock.today()
 
     parsed = []       # (section, [stamp as the lint reads it])
-    for f, kind in factfiles.files(root):
-        if kind != "fact":      # a Recheck in a note, a stub or a router is an example, not an assertion
-            continue
-        for sec in factfiles.sections(f.read_text(errors="replace")):
+    for f in tree.facts:        # a Recheck in a note, a stub or a router is an example, not an assertion
+        for sec in f.sections:
             parsed.append((sec, [
-                {"file": f, "heading": sec.title if sec.level else "(file)", "line": st.line - 1,
+                {"file": f.path, "heading": sec.title if sec.level else "(file)", "line": st.line - 1,
                  "date": datetime.date.fromisoformat(st.date), "by": st.by or "agent",
                  "method": st.method or "unknown", "cmd": st.recheck and st.recheck.cmd,
                  "attended": bool(st.recheck and st.recheck.attended)} for st in sec.stamps]))
-    found = lint.assess(root, [r for _, rows in parsed for r in rows if r["cmd"]])
+    found = lint.assess(tree.root, [r for _, rows in parsed for r in rows if r["cmd"]])
 
     stamps, hit, sourced = [], 0, 0
     for sec, rows in parsed:

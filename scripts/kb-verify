@@ -97,7 +97,7 @@ Exit 0 when nothing failed, 1 when an assertion failed, 2 on usage error.
 """
 import importlib.machinery, importlib.util, os, pathlib, re, shlex, subprocess, sys, tempfile
 
-from kbengine import clock, lease, library, queue
+from kbengine import clock, factfiles, lease, library, queue
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 
@@ -191,7 +191,7 @@ def main(argv) -> int:
         print(f"kb-verify: {root}/INDEX.md: {lib.problem('unasserted_ttl')}", file=sys.stderr)
         return 2
 
-    got = lease.sweep(root, horizon=horizon, unasserted_ttl=ttl)
+    got = lease.sweep(factfiles.tree(root), horizon=horizon, unasserted_ttl=ttl)
     with_cmd = got.rechecks
     due = list(with_cmd if "--all" in flags else got.due)
     skipped_attended = [s for s in due if s.attended] if unattended else []

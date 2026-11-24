@@ -2,7 +2,7 @@
 
 Run by tests/run-checks with scripts/ on PYTHONPATH:
     PYTHONPATH=scripts python3 -m unittest discover -s tests -p 'test_*.py'
-Libraries are built in a temp dir, dated from today; kb-verify, check-kb and kb-sources are the real
+Libraries are built in a temp dir, dated from today; kb-verify and kb-sources are the real
 scripts. Each category is asserted on the structured result; nothing is printed.
 """
 import datetime, os, pathlib, subprocess, tempfile, unittest
@@ -254,12 +254,20 @@ class Unstamped(Fixture):
         self.make(section("Stamped", 1), swept=ago(1))
         self.assertEqual(self.att().unstamped, attention.Unstamped(0, 0, False, None))
 
-    def test_check_kb_that_will_not_load_fails_the_fields_that_need_it(self):
+
+    def test_a_fact_file_that_cannot_be_read_fails_the_fields_that_need_it(self):
         self.make(self.BODY)
-        with mock.patch.dict(attention._scripts, {"check-kb": ImportError("gone")}):
+        real = pathlib.Path.read_text
+
+        def unreadable(path, *a, **kw):
+            if path.name == "widgets.md":
+                raise OSError("unreadable")
+            return real(path, *a, **kw)
+
+        with mock.patch.object(pathlib.Path, "read_text", unreadable):
             a = self.att()
             for got in (a.unstamped, a.unstamped_total, a.unsourced):
-                self.assertEqual(got, Failed("check-kb could not be loaded", "RuntimeError"))
+                self.assertEqual(got, Failed("unreadable", "OSError"))
 
 
 class Unsourced(Fixture):
@@ -332,6 +340,36 @@ class ReadOnce(Fixture):
                          "unstamped_total", "unsourced", "contract", "manual_stubs", "archived"):
                 getattr(a, name)
         self.assertEqual(lib.call_count, 1)
+
+    def reads_during(self, fields):
+        """{file name: how many times it was read} while `fields` are read off one Attention. The
+        read path itself is wrapped, so this counts real reads, whoever makes them."""
+        reads, real = {}, pathlib.Path.read_text
+
+        def counting(path, *a, **kw):
+            reads[path.name] = reads.get(path.name, 0) + 1
+            return real(path, *a, **kw)
+
+        with mock.patch.object(pathlib.Path, "read_text", counting):
+            a = self.att()
+            for name in fields:
+                getattr(a, name)
+        return reads
+
+    FIELDS = ("rechecks", "stale", "coverage", "unstamped", "unstamped_total", "unsourced")
+
+    def test_a_fact_file_is_read_once_for_every_field_that_reads_it(self):
+        self.make(section("Old", 200, recheck="true") + section("NoCmd", 200) + section("Bare", 1, source=False)
+                  + section("Unstamped", None), swept=ago(1))
+        self.git_commit()
+        (self.root / "extra.md").write_text(FM.replace("widgets", "extra") + "# Extra\n" + section("New", None))
+        reads = self.reads_during(self.FIELDS)
+        self.assertEqual((reads["widgets.md"], reads["extra.md"]), (1, 1))
+
+    def test_a_lease_the_library_cannot_use_does_not_read_a_fact_file_twice(self):
+        # coverage falls back to a sweep without a lease: the same parsed library, not another read
+        self.make(section("Old", 200, recheck="true"), extra="unasserted_ttl: 0d\n")
+        self.assertEqual(self.reads_during(self.FIELDS)["widgets.md"], 1)
 
     def test_a_field_is_not_worked_out_until_it_is_read(self):
         self.make(section("Old", 200, recheck="true"))

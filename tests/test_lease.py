@@ -8,7 +8,7 @@ Run by tests/run-checks with scripts/ on PYTHONPATH:
 import dataclasses, datetime, os, pathlib, tempfile, unittest
 from unittest import mock
 
-from kbengine import lease
+from kbengine import factfiles, lease
 
 FM = ("---\nname: {n}\ndescription: x.\nmemory_type: reference\ndomain: fx\nscope: general\n"
       "metadata:\n  type: topic\n  node_type: memory\n  created: 2026-09-22\ntags: [fx]\nkeywords: [fx]\n---\n")
@@ -46,7 +46,7 @@ class Lib(unittest.TestCase):
         (self.root / name).write_text(FM.format(n=pathlib.Path(name).stem) + "# T\n" + "".join(sections))
 
     def sweep(self, horizon=90, ttl=9):
-        return lease.sweep(self.root, horizon=horizon, unasserted_ttl=ttl)
+        return lease.sweep(factfiles.tree(self.root), horizon=horizon, unasserted_ttl=ttl)
 
     def stamp(self, got, heading):
         return next(s for s in got.stamps if s.heading == heading)
@@ -192,7 +192,7 @@ class Due(Lib):
 class Policy(Lib):
     def test_without_a_horizon_nothing_is_due_and_coverage_still_works(self):
         self.write("widgets.md", section("Old", 200, recheck="true"), section("Plain", 200))
-        got = lease.sweep(self.root)
+        got = lease.sweep(factfiles.tree(self.root))
         self.assertEqual((got.due, got.stale), ((), ()))
         self.assertEqual([s.due for s in got.stamps], [False, False])
         self.assertEqual([s.lease for s in got.stamps], [None, None])
@@ -203,12 +203,12 @@ class Policy(Lib):
         self.write("widgets.md", section("Old", 200))
         for ttl in (None, 0, 90, 120, "9d"):
             with self.subTest(ttl=ttl), self.assertRaises(ValueError) as e:
-                lease.sweep(self.root, horizon=90, unasserted_ttl=ttl)
+                lease.sweep(factfiles.tree(self.root), horizon=90, unasserted_ttl=ttl)
             self.assertIn("unasserted_ttl", str(e.exception))
 
     def test_a_short_lease_without_a_horizon_is_not_an_error(self):
         self.write("widgets.md", section("Old", 200))
-        self.assertEqual(lease.sweep(self.root, unasserted_ttl=None).due, ())
+        self.assertEqual(lease.sweep(factfiles.tree(self.root), unasserted_ttl=None).due, ())
 
     def test_an_unreadable_file_propagates(self):
         self.write("widgets.md", section("Old", 200))

@@ -14,7 +14,8 @@ Each field holds its value, or `Failed(reason)` when it could not be worked out.
 nothing here prints, and one failed field never hides another. A field is computed when first read,
 so a caller pays only for the categories it shows: the git history behind `unstamped`, the source
 stubs behind `manual_stubs` and the fact files behind `unsourced` are never read for a caller that
-does not ask.
+does not ask. The fact files are parsed as one factfiles.Tree, which `unstamped`, `unstamped_total`
+and `unsourced` share.
 
     packets          [(path, header)] of the review packets waiting on this library.
     sweep_covered    a kb-audit packet is waiting, so a sweep is already in hand. distill_covered: the same
@@ -40,8 +41,8 @@ does not ask.
     archived         the text of `archived:`, or None. read_only: registered as a consumer's copy (ADR-0020).
 
 rechecks, stale and coverage come from one kbengine.lease sweep, which owns the lease rules (#250).
-check-kb (the section readers) and kb-sources (manual stubs) are scripts, not modules yet: they are
-loaded here, in one place, on first use, rather than by each caller.
+kb-sources (manual stubs) is a script, not a module yet: it is loaded here, in one place, on first
+use, rather than by each caller.
 """
 import collections, importlib.machinery, importlib.util, pathlib, re, subprocess, sys
 from dataclasses import dataclass
@@ -131,13 +132,6 @@ def script(filename: str):
     return got
 
 
-def _check_kb():
-    try:
-        return script("check-kb")
-    except Exception:
-        raise RuntimeError("check-kb could not be loaded") from None
-
-
 def _try(fn, *args):
     try:
         return fn(*args)
@@ -151,25 +145,20 @@ def label(tree: pathlib.Path):
     return tree.parent.resolve().name if tree.name == "knowledge" else tree.name
 
 
-def body_of(text: str) -> str:
-    return text.split("---\n", 2)[2] if text.startswith("---\n") else text
-
-
 def git(root: pathlib.Path, *args, data=None):
     return subprocess.run(["git", "-C", str(root), *args], input=data, capture_output=True, timeout=60)
 
 
-def _unstamped_keys(root: pathlib.Path, check_kb) -> collections.Counter:
-    """Served sections' Source: lines with no stamp, by check-kb's own section reader (issue #29),
-    each as (heading, Source: line)."""
+def _unstamped_keys(tree: factfiles.Tree) -> collections.Counter:
+    """Served sections' Source: lines with no stamp (issue #29), each as (heading, Source: line), in
+    the fact files of `tree` (the golden set, queue, state leaves, routers and records are no fact's home)."""
     keys = collections.Counter()
-    for f, kind in factfiles.files(root):
-        if kind == "fact":       # the golden set, queue, state leaves, routers and records are no fact's home
-            keys.update(check_kb.unstamped_keys(body_of(f.read_text(errors="replace"))))
+    for f in tree.facts:
+        keys.update(factfiles.unstamped_keys(f.body_sections))
     return keys
 
 
-def _sweep_baseline(root: pathlib.Path, swept, now: collections.Counter, check_kb):
+def _sweep_baseline(root: pathlib.Path, swept, now: collections.Counter):
     """The unstamped sources as the last sweep left them (issue #142), or None when there is no
     sweep to compare with: never swept, or not in git. The sweep is the commit that last changed
     INDEX.md's last_swept line. A sweep not yet committed is compared with the files as they are,
@@ -189,13 +178,13 @@ def _sweep_baseline(root: pathlib.Path, swept, now: collections.Counter, check_k
     wanted = [n for n in names if n.endswith(".md") and n.startswith(prefix)
               and factfiles.kind_of(tuple(n[len(prefix):].split("/"))) == "fact"]
     out = git(root, "cat-file", "--batch", data="".join(f"{commit}:{n}\n" for n in wanted).encode()).stdout
-    keys, i = collections.Counter(), 0
-    for _ in wanted:   # each blob: "<sha> blob <size>\n<content>\n"
+    blobs, i = {}, 0
+    for n in wanted:   # each blob: "<sha> blob <size>\n<content>\n"
         nl = out.index(b"\n", i)
         size = int(out[i:nl].split()[2])
-        keys.update(check_kb.unstamped_keys(body_of(out[nl + 1:nl + 1 + size].decode(errors="replace"))))
+        blobs[n[len(prefix):]] = out[nl + 1:nl + 1 + size].decode(errors="replace")
         i = nl + 1 + size + 1
-    return keys
+    return _unstamped_keys(factfiles.tree_from(blobs))
 
 
 # ---------------------------------------------------------------------- Attention ----
@@ -226,7 +215,7 @@ class Attention:
         def read():
             if lib.horizon is not None and lib.unasserted_ttl is None:
                 raise ValueError(lib.problem("unasserted_ttl"))   # the library's reason, not the lease's
-            return lease.sweep(self.root, horizon=lib.horizon, unasserted_ttl=lib.unasserted_ttl)
+            return lease.sweep(self._tree, horizon=lib.horizon, unasserted_ttl=lib.unasserted_ttl)
         return _try(read)
 
     @cached_property
@@ -237,7 +226,7 @@ class Attention:
         if isinstance(got, Failed):
             # Coverage does not depend on the lease: a short lease the library cannot use fails
             # rechecks and stale, not what backs each section.
-            got = _try(lease.sweep, self.root)
+            got = _try(lease.sweep, self._tree)
         return got if isinstance(got, Failed) else got.coverage
 
     @cached_property
@@ -281,10 +270,17 @@ class Attention:
                                  if f.name != "INDEX.md" and not DISTILLED.search(f.read_text(errors="replace"))])
                     if edir.is_dir() else 0)
 
+    # -- the fact files, parsed once --
+    @cached_property
+    def _tree(self):
+        """The library's files as one factfiles.Tree. Building it reads nothing (and cannot fail: the
+        walk skips what it cannot list); each file is read the first time a field asks for it."""
+        return factfiles.tree(self.root)
+
     # -- Source: lines --
     @cached_property
     def _keys(self):
-        return _try(lambda: _unstamped_keys(self.root, _check_kb()))
+        return _try(_unstamped_keys, self._tree)
 
     @cached_property
     def unstamped_total(self):
@@ -299,7 +295,7 @@ class Attention:
         total, before, git_error = sum(now.values()), None, None
         if now:
             try:
-                before = _sweep_baseline(self.root, self.lib.last_swept_text, now, _check_kb())
+                before = _sweep_baseline(self.root, self.lib.last_swept_text, now)
             except Exception as e:
                 git_error = str(e)
         new = sum((now - before).values()) if before is not None else total
@@ -307,15 +303,9 @@ class Attention:
 
     @cached_property
     def unsourced(self):
-        """Sections with content and no Source: line, in fact files only, by check-kb's own rules
+        """Sections with content and no Source: line, in fact files only, by factfiles' rules
         (§6, issue #154). A sourceless section is never counted as unstamped."""
-        def count():
-            check_kb, n = _check_kb(), 0
-            for f, kind in factfiles.files(self.root):
-                if kind == "fact":
-                    n += len(check_kb.unsourced(body_of(f.read_text(errors="replace"))))
-            return n
-        return _try(count)
+        return _try(lambda: sum(len(factfiles.unsourced(f.body_sections)) for f in self._tree.facts))
 
     # -- the library's own declarations --
     @cached_property

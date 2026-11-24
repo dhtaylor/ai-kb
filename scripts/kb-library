@@ -52,6 +52,8 @@ Exit 0 on success, 1 on a refusal, 2 on a usage error.
 """
 import importlib.machinery, importlib.util, pathlib, re, subprocess, sys, tempfile
 
+from kbengine import factfiles
+
 ENGINE = pathlib.Path(__file__).resolve().parent.parent
 HOOKS = ENGINE / "library-hooks"
 
@@ -88,7 +90,7 @@ def link_count(path: pathlib.Path, lib: str) -> int:
     spec = importlib.util.spec_from_loader(loader.name, loader)
     xl = importlib.util.module_from_spec(spec)
     loader.exec_module(xl)
-    return sum(1 for f in path.rglob("*.md") if not xl.NON_KB & set(f.relative_to(path).parts)
+    return sum(1 for f in path.rglob("*.md") if not factfiles.EXCLUDED_DIRS & set(f.relative_to(path).parts)
                for link, span in xl.links(f.read_text(errors="replace"))
                if not span and link.partition(":")[0] == lib and ":" in link)
 

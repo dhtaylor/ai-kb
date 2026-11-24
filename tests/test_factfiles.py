@@ -5,6 +5,7 @@ Run by tests/run-checks with scripts/ on PYTHONPATH:
 They reach the reader through files() and sections() only: markdown in, sections out.
 """
 import pathlib, tempfile, unittest
+from unittest import mock
 
 from kbengine import factfiles
 
@@ -254,6 +255,106 @@ class Files(unittest.TestCase):
         self.assertEqual(factfiles.kind_of(("a", "b.md")), "fact")
         self.assertEqual(factfiles.kind_of(("INDEX.md",)), "router")
         self.assertIsNone(factfiles.kind_of((".git", "x.md")))
+
+
+class Trees(unittest.TestCase):
+    def lib(self, files):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        for p, text in files.items():
+            f = root / p
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text)
+        return root
+
+    def first(self, files):
+        return factfiles.tree(self.lib(files)).files[0]
+
+    def test_a_tree_lists_the_files_with_their_kinds_and_reads_nothing_yet(self):
+        root = self.lib({"INDEX.md": "# fx\n", "a.md": "# A\n", "documents/d.md": "x\n"})
+        with mock.patch.object(pathlib.Path, "read_text", side_effect=AssertionError("read early")):
+            t = factfiles.tree(root)
+        self.assertEqual([(f.path, f.kind) for f in t.files], [(root / "INDEX.md", "router"), (root / "a.md", "fact")])
+        self.assertEqual([f.path.name for f in t.facts], ["a.md"])
+
+    def test_a_file_is_read_and_parsed_once_however_often_it_is_asked(self):
+        f = self.first({"a.md": "# A\n\n## B\n"})
+        with mock.patch.object(pathlib.Path, "read_text", wraps=f.path.read_text) as read:
+            self.assertEqual((f.text, f.sections is f.sections), ("# A\n\n## B\n", True))
+            self.assertEqual([s.title for s in f.sections], ["", "A", "B"])
+        self.assertEqual(read.call_count, 1)
+
+    def test_body_sections_start_below_the_frontmatter(self):
+        text = "---\nname: a\n## not a heading, a comment\n---\n# A\n## B\n"
+        f = self.first({"a.md": text})
+        self.assertEqual([s.title for s in f.sections], ["", "not a heading, a comment", "A", "B"])
+        self.assertEqual([s.title for s in f.body_sections], ["", "A", "B"])
+        plain = self.first({"b.md": "# A\n"})
+        self.assertIs(plain.body_sections, plain.sections)
+
+    def test_tree_from_blobs_is_the_same_parser_over_text_not_on_disk(self):
+        text = "## A\nSource: s\n"
+        t = factfiles.tree_from({"sub/b.md": text, "INDEX.md": "# fx\n", "documents/d.md": "x\n", "a-golden.md": text})
+        self.assertEqual([(str(f.path), f.kind) for f in t.files],
+                         [("INDEX.md", "router"), ("a-golden.md", "golden"), ("documents/d.md", None), ("sub/b.md", "fact")])
+        self.assertIsNone(t.root)
+        disk = self.first({"b.md": text})
+        self.assertEqual(t.facts[0].sections, disk.sections)
+
+
+class Readers(unittest.TestCase):
+    def test_unstamped_keys_are_the_source_lines_with_no_stamp_of_their_own_in_served_sections(self):
+        secs = read("## A\nSource: one\nSource: two\nVerified: 2026-01-01 · by: a · method: m\n"
+                    "## B\nstatus: CONFLICTED\nSource: three\n## C\nSource: four\n")
+        self.assertEqual(factfiles.unstamped_keys(secs), [("## A", "Source: one"), ("## C", "Source: four")])
+
+    def test_unsourced_names_served_sections_with_content_and_no_source(self):
+        secs = read("# T\nintro\n## Bare\ntext\n## Cited\ntext\nSource: s\n## Gone\nstatus: CONFLICTED\ntext\n")
+        self.assertEqual(factfiles.unsourced(secs), ["Bare"])
+
+    def test_marked_sections_are_the_ones_the_marker_sits_directly_under(self):
+        secs = read("# T\n## A\nstatus: UNCORROBORATED\nclaim\n### Sub\nmore\n## B\nplain\n")
+        self.assertEqual(factfiles.marked_sections(secs), ["## A\nstatus: UNCORROBORATED\nclaim"])
+
+
+class Reachable(unittest.TestCase):
+    def reached(self, files):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = pathlib.Path(tmp.name)
+        for p, text in files.items():
+            f = root / p
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(text)
+        return {str(p.relative_to(root.resolve())) for p in factfiles.reachable(factfiles.tree(root))}
+
+    def test_a_file_is_reached_through_routers_only(self):
+        got = self.reached({
+            "INDEX.md": "[sub](sub/INDEX.md) [a](a.md) [web](http://x.invalid/y.md)\n",
+            "a.md": "[b](b.md)\n",              # a fact file's link is a cross-reference, not a route
+            "b.md": "x\n", "c.md": "x\n",
+            "sub/INDEX.md": "[leaf](leaf.md) [up](../a.md)\n", "sub/leaf.md": "x\n",
+            "lost/INDEX.md": "[l](l.md)\n", "lost/l.md": "x\n"})
+        self.assertEqual(got, {"INDEX.md", "a.md", "sub/INDEX.md", "sub/leaf.md"})
+
+    def test_a_root_index_the_tree_does_not_list_is_still_read_from_disk(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        (root / "INDEX.md").write_text("[a](a.md)\n")
+        (root / "a.md").write_text("x\n")
+        got = factfiles.reachable(factfiles.Tree(root, (factfiles.File(root / "a.md", "fact"),)))
+        self.assertEqual(got, {(root / "INDEX.md").resolve(), (root / "a.md").resolve()})
+
+    def test_a_router_that_is_not_utf8_does_not_crash_it(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        (root / "INDEX.md").write_bytes(b"\xff\xfe [a](a.md)\n")
+        (root / "a.md").write_text("x\n")
+        self.assertIn((root / "a.md").resolve(), factfiles.reachable(factfiles.tree(root)))
+
+    def test_nothing_is_reached_without_a_root_index(self):
+        self.assertEqual(self.reached({"a.md": "x\n"}), set())
 
 
 if __name__ == "__main__":
