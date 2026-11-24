@@ -1,6 +1,6 @@
 # ADR-0005: Currency cadence — TTLs, budgets, and the automation gate
 
-- **Status:** Accepted, amended 2026-10-02 and 2026-10-16 (see *What changed* below)
+- **Status:** Accepted, amended 2026-10-02 and 2026-10-16 (see *What changed* below), and 2026-11-23 by [ADR-0022](0022-evidence-not-identity-sets-the-lease.md)
 - **Date:** 2026-09-19
 - **Deciders:** Dandy Taylor
 - **Phase:** 1 (inventory, map & decide)

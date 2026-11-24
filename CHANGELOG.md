@@ -6,6 +6,12 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- A stamp's lease now follows its evidence, not who wrote it (ADR-0022, #233): an asserted stamp
+  stays fresh for the full horizon, every other stamp for the short lease, whoever wrote it.
+  **Due counts drop sharply on upgrade**: asserted stamps that sat on the short lease only because
+  they were `by: agent` are no longer due. **Before moving its engine pin past the release that
+  removes `check-stamps`, each library must delete the "Stamp honesty" step from its CI workflow**,
+  or its CI fails. The entries below give each change.
 - The session-start nudge and the weekly report lead with assertion coverage (#239, ADR-0022):
   per library, the sections with an asserted stamp over the sections that cite a source, as
   "assertion coverage 2 of 5 sourced sections". A lint-flagged assertion counts as unasserted. A
@@ -37,7 +43,7 @@ engine release it was last verified against in its own release notes.
 - A stamp's lease follows its evidence, not its `by:` (#238, ADR-0022). An asserted stamp (a
   `Recheck:` the assertion lint does not flag, attended or not) stays fresh for the full
   `freshness_horizon`. Every unasserted stamp, `by: human` included, falls due after the short
-  lease (`agent_ttl`, a tenth of the horizon by default), as does a lint-flagged assertion.
+  lease (`unasserted_ttl:` from contract 2.7, `agent_ttl` before it; a tenth of the horizon by default), as does a lint-flagged assertion.
   `kb-verify` names the lease of each due command and each stale fact, and the finding behind a
   short one. On upgrade, expect far fewer facts due for recheck: asserted stamps that were on the
   short lease only because they were `by: agent` are no longer due. A `by: human` stamp with no

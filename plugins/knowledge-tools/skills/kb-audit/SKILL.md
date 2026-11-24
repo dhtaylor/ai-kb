@@ -65,10 +65,12 @@ so it never shows as missing currency, and the file's `verified:` floor ignores 
 section can date a file whose other sections nobody sourced. `check-kb` names each one: it fails
 from contract 2.5 and warns below it (§6). Queue each named section, from its output.
 
-**Stale currency.** A stamp older than its domain's `freshness_horizon`. Agent-verified stamps
-expire at **one tenth** the human interval, or at the domain's `agent_ttl` if it declares one. High-blast-radius facts — deploy targets, environment
-routing, credential references — are stale the moment their last stamp was written by an agent,
-regardless of date.
+**Stale currency.** A stamp older than its lease, which the evidence behind it sets (CONVENTIONS §7). An
+asserted stamp (a passing `Recheck:` the assertion lint does not flag) stays fresh for the domain's
+`freshness_horizon`; an unasserted stamp, whoever wrote it, expires at **one tenth** of it, or at the
+domain's `unasserted_ttl` if it declares one. High-blast-radius facts — deploy targets, environment
+routing, credential references — follow the same rule, but changing one, or restamping one after a
+failed check, is an attended decision: queue it for the Arbiter, never for a restamp.
 
 **Index bloat.** A domain past roughly 15 topic files still flat. That is `kb-organize-domain`'s
 trigger; report it, do not reshape.
@@ -204,7 +206,7 @@ Each item carries:
      An **unsourced section** belongs here too, keyed by its heading (locus is the heading text):
      it is unknown with nothing cited to recheck against. Apply the high-blast-radius test as for
      an unstamped fact;
-  5. **stale fact** — past its domain horizon, agent stamps at one tenth the interval (or the domain's `agent_ttl`);
+  5. **stale fact** — past its lease: an asserted stamp past the horizon, an unasserted stamp past one tenth of it (or the domain's `unasserted_ttl`);
   6. **orphan** — real knowledge nothing can route to;
   7. **informational contradiction, uncorroborated claim, empty routed leaf, index bloat, scope
      misfiling, transient content**. Hash a `transient content` finding with the heading text as
