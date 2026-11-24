@@ -3,7 +3,8 @@ CONVENTIONS §10). Stdlib only. A record is one `- case: x` block of `key: value
 library's <domain>-golden.md.
 
 files(lib)                      the golden-set files of a library (sorted).
-load(lib)                       the records of the library's golden set. Raises NoGoldenSet.
+load(lib)                       the records of the library's golden set. Raises NoGoldenSet, which
+                                says the library holds none.
 parse(text)                     records from a golden set's text; unquote(v) reads one value.
 read_mapping(mapping, n)        {case number: transcript} from a Q<n>|<transcript> file.
 evidence_of(body, excerpt)      what backs the section holding an excerpt: check, word, unstamped, or
@@ -11,16 +12,15 @@ evidence_of(body, excerpt)      what backs the section holding an excerpt: check
 validate(root, r, where, reachable, marked)
                                 (defects, unchecked) of one record: case-type rules, alt_excerpt rules,
                                 the expected file and its excerpts, expected_evidence.
-grade(lib, r, cited, answer)    a Verdict of what an agent answered against one record.
+grade(lib, r, cited, answer)    a Verdict (passed, grounded, cited_ok, reasons) of what an agent
+                                answered against one record.
 EVIDENCE, DISPUTED, LEAD        the phrases: the evidence words retrieval uses (ADR-0022), the refusal of
                                 a CONFLICTED fact, and what an UNCORROBORATED answer must begin with.
 
 validate and grade resolve expected_file through kbengine.citations. Reachability, which needs the
 library's routers, and the UNCORROBORATED markers belong to check-kb: check-golden passes them in as
 `reachable(owner)` (the set of resolved files a router reaches) and `marked(text)` (the marked
-sections), and keeps the library-level checks. It was a pure move out of scripts/check-golden and
-scripts/grade-eval, which each parsed the records and loaded the other for the rest: its judgements
-and wording are unchanged.
+sections), and keeps the library-level checks.
 """
 import json, pathlib, re
 from dataclasses import dataclass, field

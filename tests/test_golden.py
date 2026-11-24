@@ -244,10 +244,19 @@ class Grading(Fixture):
         (self.root / "widgets.md").write_text("# W\n\nChanged.\n")
         v = golden.grade(self.root, self.rec, "widgets.md", FACT)
         self.assertEqual(v.reasons, ["excerpt not in the expected file — ORACLE ROT"])
+        self.assertFalse(v.passed)      # a grounded, correctly cited answer still fails
+        self.assertTrue(v.grounded and v.cited_ok)
 
     def test_either_alt_excerpt_may_be_quoted(self):
         rec = dict(self.rec, alt_excerpt=["The flag is on"])
         self.assertTrue(golden.grade(self.root, rec, "widgets.md", "the flag is on, yes").passed)
+
+    def test_an_answer_quoting_only_the_alt_excerpt_passes(self):
+        (self.root / "widgets.md").write_text(f"# W\n\n{FACT} It is enabled.\n")
+        rec = dict(self.rec, alt_excerpt=["It is enabled."])
+        v = golden.grade(self.root, rec, "widgets.md", "Yes: it is enabled")
+        self.assertEqual((v.passed, v.grounded, v.reasons), (True, True, []))
+        self.assertFalse(golden.grade(self.root, self.rec, "widgets.md", "Yes: it is enabled").passed)
 
     def test_an_uncorroborated_answer_must_lead_with_the_caveat(self):
         rec = dict(self.rec, case="uncorroborated")

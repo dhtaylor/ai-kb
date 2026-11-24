@@ -24,10 +24,10 @@ Exit 0 clean, 1 on any defect.
 """
 import importlib.machinery, importlib.util, pathlib, sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))   # found beside it, also when loaded as a module
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))   # found beside it; run-checks case #111 loads this script bare
 from kbengine import golden
 
-parse = golden.parse    # the golden-set parser is kbengine.golden's; a caller that loads this script reads it here
+parse = golden.parse    # kept for run-checks case #111, which loads this script bare and calls parse
 
 
 def load_check_kb():

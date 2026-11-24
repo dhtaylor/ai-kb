@@ -13,9 +13,6 @@ expected_target(lib, expected)      (root, path within it) of a golden record's 
 candidates(lib, cited)              every file a cited path may name: library-relative (x.md),
                                     library-prefixed (<lib>/x.md), kb-rooted (kb/<lib>/x.md) or absolute.
 resolves_to(lib, expected, cited)   whether any of the cited paths names the expected file.
-
-It was a pure move out of scripts/grade-eval, which grade-routing, kb-telemetry and kb-eval-sample
-loaded for it: its judgements are unchanged.
 """
 import functools, pathlib, re
 

@@ -6,7 +6,7 @@ The answer is the message of the agent's SubagentHandback call or, in a transcri
 text block: text written before a hand-back is preamble, and grading it fails a correct answer
 (issue #32). The cited files are the answer's last `Sources:` line, comma-separated; `Sources: none`,
 or no such line, cites nothing, and a note in parentheses on that line names no file. grade-eval,
-kb-telemetry and kb-eval-sample read answers through this. It was a pure move out of scripts/grade-eval.
+kb-telemetry and kb-eval-sample read answers through this.
 """
 import json, pathlib, re
 
