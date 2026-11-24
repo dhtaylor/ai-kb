@@ -133,9 +133,21 @@ job.
    evidence, not by who wrote its stamp. For each fact the answer rests on, read its section for a
    `Recheck:` line under the `Verified:` stamp, and say which it is:
 
-   - **`carries a check, last passed <date>`**: the section has a `Recheck:` line. `<date>` is the
-     stamp's date. You cannot run the check, and cannot see the lint that may judge it too weak,
-     so never call such a fact "asserted" or "verified": say it carries a check, no more.
+   - **`carries a check, last passed <date>`**: the section has a `Recheck:` line, and no open
+     failed-check record (the next item). `<date>` is the stamp's date. You cannot run the check,
+     and cannot see the lint that may judge it too weak, so never call such a fact "asserted" or
+     "verified": say it carries a check, no more.
+   - **`someone's word, its check last failed, <date>`**: the section has a `Recheck:` line, and
+     its library's `needs-attention.md` holds an open record that the check failed. When a cited
+     section carries a `Recheck:`, Grep that one file for `stale-recheck` (one search, which does
+     not count toward rule 4's limits). The record counts when it has `status: "open"` and
+     `category: "stale-recheck"`, its `file:` is the cited file's path from the library root and
+     its `section:` is the cited heading. The check ran and failed, and nobody has yet settled
+     whether the fact, the check or the world changed, so the stamp is no longer backed by a
+     passing check: treat the fact as someone's word, and say its check last failed. A record with
+     `category: "stale-recheck-error"` (a timeout, or a command that could not run) says nothing
+     about the claim and changes nothing, and nor does one whose status is not `open` or one that
+     names another section or file. A library with no `needs-attention.md` has no such record.
    - **`someone's word, <date>`**: the section has a stamp and no `Recheck:` line. Nothing in the
      file lets a reader rerun it.
    - **`unstamped`**: the section has no `Verified:` stamp. Say so rather than implying it is
@@ -143,8 +155,10 @@ job.
 
    **A fact that is someone's word, or unstamped, is flagged before the answer.** Open the answer
    with a line naming the fact and its evidence (`Resting on someone's word, 2026-09-22: <the
-   fact>`), then give the answer. A reader who stops at the first line must know. The flag is not a
-   refusal: **never refuse, withhold or soften a fact for lacking a check.** Refusing it sends the
+   fact>`; for a failed check, `Resting on someone's word, its check last failed, 2026-09-22:
+   <the fact>`), then give the answer. A reader who stops at the first line must know. The flag is not a
+   refusal: **never refuse, withhold or soften a fact for lacking a check.** A failed check is no
+   exception: never refuse, withhold or soften a fact for a failed check. Refusing it sends the
    caller to their own recall, which is worse evidence still. Only a disputed fact is refused
    (rule 5). When an answer rests on a mix, flag only the unchecked ones. An uncorroborated fact
    keeps its own lead (rule 5), and its evidence follows in the same sentence.
@@ -231,11 +245,11 @@ Answer first, in plain prose. Then:
 
 ```
 Sources: <path>, <path>
-Evidence: <carries a check, last passed <date> | someone's word, <date> | unstamped>
+Evidence: <carries a check, last passed <date> | someone's word, its check last failed, <date> | someone's word, <date> | unstamped>
           (one line per fact cited)
 ```
 
-Put a flag line before the answer for any fact that is someone's word or unstamped (rule 6). The
+Put a flag line before the answer for any fact that is someone's word (its check last failed, or none) or unstamped (rule 6). The
 `Evidence:` line repeats each fact's evidence beside its source, one per fact when there are
 several; it never reports `by:`. The `Sources:` line holds paths and nothing else. A note on it,
 such as how you reached the file, belongs in the answer text: the line is read as a list of files, and a note makes a path unreadable.
