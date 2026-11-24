@@ -1009,19 +1009,27 @@ case_run "failed recheck: an open stale-recheck-error leaves the stamp asserted"
 # These are the same kind of case as the Not covered here wording check below (#123): the instruction
 # is the thing under test, since an agent's answer cannot be run in the suite.
 KR="$ENGINE/plugins/knowledge-tools/agents/kb-retrieve.md"
-case_run "kb-retrieve: a section whose check last failed is stated as such" 0 "" -- grep -qF "its check last failed" "$KR"
+# the instructions wrap, so each phrase is looked for in the text with its line breaks folded into spaces
+krhas() { tr -s ' \n' '  ' < "$KR" | grep -qF -- "$1"; }
+case_run "kb-retrieve: a section whose check last failed is stated as such" 0 "" -- krhas "its check last failed"
 case_run "kb-retrieve: it looks for an open stale-recheck record in the library's needs-attention.md" 0 "" -- \
-  bash -c 'grep -F "needs-attention.md" "$1" | grep -qF "open record" && grep -qF "status: \"open\"" "$1"' _ "$KR"
+  krhas 'holds an open record that the check failed'
+case_run "kb-retrieve: ...with status open and category stale-recheck" 0 "" -- \
+  krhas 'has `status: "open"` and `category: "stale-recheck"`'
 case_run "kb-retrieve: a failed check is flagged before the answer, as someone's word" 0 "" -- \
-  grep -qF "Resting on someone's word, its check last failed" "$KR"
+  krhas "Resting on someone's word, its check last failed"
 case_run "kb-retrieve: a stale-recheck-error does not count as a failed check" 0 "" -- \
-  grep -qF 'category: "stale-recheck-error"' "$KR"
+  krhas 'category: "stale-recheck-error"'
 case_run "kb-retrieve: a failure counts only against the section's current stamp, by the record's stamp: line" 0 "" -- \
-  grep -qF "its \`stamp:\` equals the section's current \`Verified:\` line" "$KR"
+  krhas "its \`stamp:\` equals the section's current \`Verified:\` line"
+case_run "kb-retrieve: a stamp with no by: or method: is compared as agent / unknown" 0 "" -- \
+  krhas 'recorded as `by: agent · method: unknown`'
+case_run "kb-retrieve: the record's file: is relative to the library root, with /" 0 "" -- \
+  krhas 'path relative to the library root, with `/`'
 case_run "kb-retrieve: a section restamped since the failure is not reported as failed" 0 "" -- \
-  grep -qF 'has a newer `Verified:` line' "$KR"
+  krhas 'has a newer `Verified:` line'
 case_run "kb-retrieve: a failed check is never a reason to refuse" 0 "" -- \
-  grep -qF "never refuse, withhold or soften a fact for a failed check" "$KR"
+  krhas "never refuse, withhold or soften a fact for a failed check"
 # #201: only fact files hold assertions. A Recheck in an episodic note, a source stub or a router
 # is an example or a record, and was run.
 build_clean "$TMP/vnonfact"

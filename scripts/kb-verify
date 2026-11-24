@@ -288,10 +288,10 @@ def main(argv) -> int:
         findings = []
         for s, r in failed:
             category, detail = failure_detail(r)
-            file_rel = str(s.file.relative_to(root))
+            file_rel = lease.record_file(root, s.file)
             section = s.heading
             assertion = s.cmd
-            stamp = f"{s.date} · by: {s.by} · method: {s.method}"
+            stamp = lease.stamp_text(s.date, s.by, s.method)
             findings.append(queue.Finding(
                 category, (file_rel, section, assertion),
                 {"file": file_rel, "section": section, "assertion": assertion, "stamp": stamp,

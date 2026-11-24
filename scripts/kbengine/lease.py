@@ -13,6 +13,12 @@ plain numbers, not a Library: the caller says what the library declares (kb-veri
 INDEX.md; a test passes numbers). It takes no queue records: the library's queue is read here, so no
 caller can pass a stale list or re-derive the rule from one.
 
+stamp_text(date, by, method)    the stamp as kb-verify writes it into a queued record's `stamp:` field.
+record_file(root, path)         a fact file as the record's `file:` names it: relative to the root,
+                                with "/".
+Both are used by the writer (kb-verify) and by the reader here, so the two cannot drift apart; the reader
+also passes each through queue.stored, since the queue escapes, truncates and defangs what it writes.
+
     Leases.stamps      every stamp of the fact files, in file and line order.
     Leases.rechecks    those with a Recheck:, oldest first, however fresh (kb-verify --all).
     Leases.due         the rechecks past their lease, oldest first, uncapped, attended included.
@@ -21,25 +27,30 @@ caller can pass a stale list or re-derive the rule from one.
     Leases.weak        the WEAK warnings kb-verify prints; outside: the OUTSIDE ones.
 
     Stamp              file, heading, line (0-based, of the Verified: line), date, by, method, cmd (the
-                       Recheck: command or None), attended, lint (the kinds that demote it, a tuple:
-                       the lint's, then "failed-recheck"), asserted, age (days), lease (days),
-                       lease_label, due.
+                       Recheck: command or None), attended, lint (the lint's finding kinds, a tuple),
+                       failed (an open stale-recheck record covers this stamp), asserted, age (days),
+                       lease (days), lease_label, due.
 
-An asserted stamp is a passing Recheck:, attended or not, whoever wrote it. "Passing" means two things and
-no more: the lint does not flag the assertion, and the library's needs-attention.md holds no open
-stale-recheck record raised against this stamp (ADR-0022 decision 1, #264). A record is raised against a
-stamp when its file and section name the stamp's and its `stamp:` equals the stamp's own Verified: content,
-"<date> · by: <by> · method: <method>", as kb-verify writes it (by agent, method unknown when the stamp
-names none). A record with no `stamp:` (an older one) covers a stamp dated on or before the record's date,
-and one whose date cannot be read covers the stamp. So the demotion lasts only until the section is
-restamped: a newer stamp, such as an attended kb-verify --apply after a pass, is asserted at once, with the
-record still open as the Arbiter's decision. Nothing here closes a record. A stale-recheck-error record (a
-timeout, a command that would not run) does not demote, a record naming a file or heading that is not
-there matches nothing, and a queue that cannot be read demotes nothing (Attention reports it on its own).
-A demoting record adds the kind "failed-recheck" to the lint kinds of each Recheck: stamp it covers; it is
-no WEAK or OUTSIDE warning. An asserted stamp's lease is the full horizon; every other stamp's is the short
-lease, unasserted_ttl. It is due once its age exceeds its lease (age equal to the lease is not due). The
-lease label reads "full horizon", "short lease: <kinds>" or "short lease: no Recheck".
+An asserted stamp is a passing Recheck:, attended or not, whoever wrote it. "Passing" means two things
+and no more: the lint does not flag the assertion (lint is empty), and no open stale-recheck record in
+the library's needs-attention.md was raised against this stamp (failed is false; ADR-0022 decision 1,
+#264). A failed check is not a lint finding, so failed is a field of its own and lint holds the lint's
+kinds only.
+
+A record is raised against a stamp when its `file:` and `section:` name the stamp's and its `stamp:`
+equals stamp_text of it (by agent and method unknown when the stamp names none). A record with no
+`stamp:` (an older one) covers a stamp dated on or before the record's `date:`. A record whose date
+cannot be read covers nothing, as a queue that cannot be read demotes nothing (Attention reports an
+unreadable queue on its own). So the demotion lasts only until the section is restamped: a newer
+stamp, such as an attended kb-verify --apply after a pass, is asserted at once, with the record still
+open as the Arbiter's decision. Nothing here closes a record. A stale-recheck-error record (a timeout, a
+command that would not run) does not demote, and a record naming a file or heading that is not there
+matches nothing.
+
+An asserted stamp's lease is the full horizon; every other stamp's is the short lease, unasserted_ttl. It
+is due once its age exceeds its lease (age equal to the lease is not due). The lease label reads "full
+horizon", "short lease: <lint kinds>" with "failed-recheck" after them when failed, or "short lease: no
+Recheck".
 
 Without a horizon no lease applies: lease is None, due and stale are empty and every stamp's due is
 false, but coverage and the lint still work. A horizon with no usable unasserted_ttl (a whole number
@@ -73,6 +84,7 @@ class Stamp:
     cmd: object          # the Recheck: command, or None
     attended: bool
     lint: tuple          # the lint's finding kinds
+    failed: bool         # an open stale-recheck record covers this stamp
     asserted: bool
     age: int             # days
     lease: object        # days, or None without a horizon
@@ -91,39 +103,44 @@ class Leases:
     outside: tuple
 
 
-def _label(cmd, kinds: tuple, asserted: bool) -> str:
+def stamp_text(date, by, method) -> str:
+    """The stamp as kb-verify writes it into a queued record's `stamp:` field."""
+    return f"{date} · by: {by} · method: {method}"
+
+
+def record_file(root, path) -> str:
+    """A fact file as a queued record's `file:` names it: relative to the library root, with "/"."""
+    return pathlib.Path(path).relative_to(root).as_posix()
+
+
+def _label(cmd, kinds: tuple, failed: bool, asserted: bool) -> str:
     if asserted:
         return "full horizon"
+    kinds += ("failed-recheck",) if failed else ()
     return "short lease: " + ", ".join(kinds) if cmd else "short lease: no Recheck"
 
 
-FAILED = "failed-recheck"    # the kind a stale-recheck record adds to a stamp's lint kinds
-
-
 def _failed(tree) -> dict:
-    """{(library-relative file, heading): [(stamp line, date)]} for each open stale-recheck record in the
-    library's needs-attention.md (ADR-0022 decision 1, #264): the stamp the failure was raised against, in
-    the form kb-verify writes into `stamp:` (None for an older record with none), and the record's date.
-    stale-recheck-error does not count: a timeout or a command that would not run says nothing about the
-    claim. A queue that cannot be read demotes nothing: Attention reports an unreadable queue as its own
-    item, and the lease of every other stamp is still worth judging."""
-    qpath = tree.root and tree.root / "needs-attention.md"
+    """{(file, section): [(stamp, date)]} of each open stale-recheck record in the library's queue
+    (ADR-0022 decision 1, #264), as the queue reads them back. stale-recheck-error does not count: a
+    timeout or a command that would not run says nothing about the claim. A queue that cannot be read
+    demotes nothing: Attention reports it as its own item."""
     try:
-        text = qpath.read_text(errors="replace") if qpath and qpath.is_file() else ""
+        text = queue.read(tree.root)
     except OSError:
         return {}
     out = {}
-    for r in queue.open_findings(text):
+    for r in queue.open_findings(text or ""):
         if r.get("category") == "stale-recheck":
             out.setdefault((r.get("file"), r.get("section")), []).append((r.get("stamp"), r.get("date")))
     return out
 
 
 def _covers(records, row) -> bool:
-    """Whether an open record was raised against this stamp: its `stamp:` equals the stamp as kb-verify
-    writes it. A record with no `stamp:` falls back to its date: it covers a stamp dated on or before it.
-    A date that cannot be read covers the stamp."""
-    mine = f"{row['date']} · by: {row['by']} · method: {row['method']}"
+    """Whether an open record was raised against this stamp: its `stamp:` equals the stamp's text, or,
+    for a record with none, its date is on or after the stamp's. A date that cannot be read covers
+    nothing."""
+    mine = queue.stored(stamp_text(row["date"], row["by"], row["method"]), True)
     for stamp, date in records:
         if stamp:
             if stamp == mine:
@@ -133,7 +150,7 @@ def _covers(records, row) -> bool:
             if datetime.date.fromisoformat(date) >= row["date"]:
                 return True
         except (TypeError, ValueError):
-            return True
+            pass
     return False
 
 
@@ -151,7 +168,7 @@ def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
                  "date": datetime.date.fromisoformat(st.date), "by": st.by or "agent",
                  "method": st.method or "unknown", "cmd": st.recheck and st.recheck.cmd,
                  "attended": bool(st.recheck and st.recheck.attended)} for st in sec.stamps]))
-    failed = _failed(tree)
+    open_failed = _failed(tree)
     found = lint.assess(tree.root, [r for _, rows in parsed for r in rows if r["cmd"]])
 
     stamps, hit, sourced = [], 0, 0
@@ -159,14 +176,15 @@ def sweep(tree, *, horizon=None, unasserted_ttl=None) -> Leases:
         made = []
         for r in rows:
             kinds = tuple(found.findings.get((r["file"], r["line"]), ()))
-            if failed and r["cmd"] and _covers(failed.get((r["file"].relative_to(tree.root).as_posix(), r["heading"]), ()), r):
-                kinds += (FAILED,)
-            asserted = bool(r["cmd"]) and not kinds
+            key = (queue.stored(record_file(tree.root, r["file"]), False),
+                   queue.stored(r["heading"], True))
+            failed = bool(r["cmd"]) and _covers(open_failed.get(key, ()), r)
+            asserted = bool(r["cmd"]) and not kinds and not failed
             age = (today - r["date"]).days
             days = None if horizon is None else horizon if asserted else unasserted_ttl
             made.append(Stamp(r["file"], r["heading"], r["line"], r["date"], r["by"], r["method"],
-                              r["cmd"], r["attended"], kinds, asserted, age, days,
-                              None if horizon is None else _label(r["cmd"], kinds, asserted),
+                              r["cmd"], r["attended"], kinds, failed, asserted, age, days,
+                              None if horizon is None else _label(r["cmd"], kinds, failed, asserted),
                               days is not None and age > days))
         stamps += made
         if sec.sourced:

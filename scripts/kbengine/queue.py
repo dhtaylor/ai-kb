@@ -5,6 +5,8 @@ all of them (#202). Stdlib only.
 
 Finding(category, identity, fields, untrusted)   one finding to queue.
 append(root, findings, tool, dry_run=False)      write the ones not already queued -> Result.
+read(root)                                       the queue's text, or None when there is none.
+stored(value, untrusted)                         what a field's value reads back as.
 open_findings(text)                              the open records, one per id, the first winning.
 problems(text)                                   what the readers skip or double-count -> Problems.
 parse_records(text)                              every record, whatever its status.
@@ -55,15 +57,21 @@ def flatten(s: str) -> str:
     return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", " ", s)
 
 
-def scalar(value, untrusted: bool) -> str:
-    """A safe, single-line, double-quoted YAML-ish scalar. Untrusted values are additionally
-    truncated and have fence-breaking backtick runs neutralised, per the drift-signal schema."""
+def stored(value, untrusted: bool) -> str:
+    """What a field's value reads back as: single-line, and for an untrusted one truncated and with
+    fence-breaking backtick runs neutralised, per the drift-signal schema. `scalar` writes this; a reader
+    that compares a field with a value it holds (kbengine.lease) compares with this."""
     s = flatten("" if value is None else str(value))
     if untrusted:
         s = re.sub(r"`{3,}", "'''", s)
         if len(s) > MAX_LEN:
             s = s[:MAX_LEN] + " …[truncated]"
-    s = s.replace("\\", "\\\\").replace('"', '\\"')
+    return s
+
+
+def scalar(value, untrusted: bool) -> str:
+    """A safe, single-line, double-quoted YAML-ish scalar of `stored(value, untrusted)`."""
+    s = stored(value, untrusted).replace("\\", "\\\\").replace('"', '\\"')
     return f'"{s}"'
 
 
@@ -224,6 +232,13 @@ def parse_records(text: str):
     if cur:
         records.append(cur)
     return records
+
+
+def read(root):
+    """The text of the library's needs-attention.md, or None when it has none. An unreadable file raises
+    what reading it raises."""
+    path = pathlib.Path(root) / "needs-attention.md"
+    return path.read_text(errors="replace") if path.is_file() else None
 
 
 def open_findings(text: str):

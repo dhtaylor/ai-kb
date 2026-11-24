@@ -139,20 +139,21 @@ job.
      "verified": say it carries a check, no more.
    - **`someone's word, its check last failed, <date>`**: the section has a `Recheck:` line, and its
      library's `needs-attention.md` holds an open record that the check failed. When a cited section
-     carries a `Recheck:`, Grep that one file for `stale-recheck` (one search, which does not count
-     toward rule 4's limits). The record counts when it has `status: "open"` and `category:
-     "stale-recheck"`, its `file:` is the cited file's path from the library root, its `section:` is
-     the cited heading, and its `stamp:` equals the section's current `Verified:` line (everything
-     after `Verified:`, as `stamp:` writes it: `<date> · by: <by> · method: <method>`). A record
-     with no `stamp:` counts when its `date:` is on or after the stamp's date. A section restamped
-     since the failure has a newer `Verified:` line, so the record no longer counts against it,
-     though it stays open: say `carries a check`. The check ran and failed, and nobody has yet
-     settled whether the fact, the check or the world changed, so the stamp is no longer backed by a
-     passing check: treat the fact as someone's word, and say its check last failed. A record with
-     `category: "stale-recheck-error"` (a timeout, or a command that could not run) says nothing
-     about the claim and changes nothing, and nor does one whose status is not `open`, one raised
-     against an older stamp, or one that names another section or file. A library with no
-     `needs-attention.md` has no such record.
+     carries a `Recheck:`, Grep that one file for `stale-recheck`. The record counts when it has
+     `status: "open"` and `category: "stale-recheck"`, its `file:` is the cited file's path relative
+     to the library root, with `/`, its `section:` is the cited heading, and its `stamp:` equals the
+     section's current `Verified:` line (everything after `Verified:`, as `stamp:` writes it:
+     `<date> · by: <by> · method: <method>`). A stamp that names no `by:` or `method:` is recorded
+     as `by: agent · method: unknown`, so compare against that form. A record with no `stamp:`
+     counts when its `date:` is on or after the stamp's date. A section restamped since the failure
+     has a newer `Verified:` line, so the record no longer counts against it, though it stays open:
+     say `carries a check`. The check ran and failed, and nobody has yet settled whether the fact,
+     the check or the world changed, so the stamp is no longer backed by a passing check: treat the
+     fact as someone's word, and say its check last failed. A record with `category:
+     "stale-recheck-error"` (a timeout, or a command that could not run) says nothing about the
+     claim and changes nothing, and nor does one whose status is not `open`, one raised against an
+     older stamp, or one that names another section or file. A library with no `needs-attention.md`
+     has no such record.
    - **`someone's word, <date>`**: the section has a stamp and no `Recheck:` line. Nothing in the
      file lets a reader rerun it.
    - **`unstamped`**: the section has no `Verified:` stamp. Say so rather than implying it is

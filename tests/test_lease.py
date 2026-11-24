@@ -5,7 +5,7 @@ Libraries are built in a temp dir and the clock is pinned.
 Run by tests/run-checks with scripts/ on PYTHONPATH:
     PYTHONPATH=scripts python3 -m unittest discover -s tests -p 'test_*.py'
 """
-import dataclasses, datetime, os, pathlib, tempfile, unittest
+import dataclasses, datetime, os, pathlib, subprocess, sys, tempfile, unittest
 from unittest import mock
 
 from kbengine import factfiles, lease, queue
@@ -217,10 +217,10 @@ class FailedRecheck(Lib):
         self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
         got = self.sweep()
         s = self.stamp(got, "Pressure")
-        self.assertEqual((s.asserted, s.lease, s.due, s.lint, s.lease_label),
-                         (False, 9, True, ("failed-recheck",), "short lease: failed-recheck"))
+        self.assertEqual((s.asserted, s.lease, s.due, s.lint, s.failed, s.lease_label),
+                         (False, 9, True, (), True, "short lease: failed-recheck"))
         o = self.stamp(got, "Other")
-        self.assertEqual((o.asserted, o.lease, o.due, o.lint), (True, 90, False, ()))
+        self.assertEqual((o.asserted, o.lease, o.due, o.lint, o.failed), (True, 90, False, (), False))
         self.assertEqual(tuple(got.coverage), (1, 2))
         self.assertEqual([x.heading for x in got.due], ["Pressure"])
         self.assertEqual(got.weak, ())     # a failed check is a reason for the lease, not a printed lint warning
@@ -231,7 +231,8 @@ class FailedRecheck(Lib):
         self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
         got = self.sweep()
         s = self.stamp(got, "Pressure")
-        self.assertEqual((s.asserted, s.lease, s.due, s.lint, s.lease_label), (True, 90, False, (), "full horizon"))
+        self.assertEqual((s.asserted, s.lease, s.due, s.lint, s.failed, s.lease_label),
+                         (True, 90, False, (), False, "full horizon"))
         self.assertEqual(tuple(got.coverage), (2, 2))
         self.assertIn('status: "open"', (self.root / "needs-attention.md").read_text())
 
@@ -243,6 +244,13 @@ class FailedRecheck(Lib):
         self.assertEqual(tuple(self.sweep().coverage), (1, 2))
         self.queue(("stale-recheck", "widgets.md", "Pressure", "open"), stamp=None, date=ago(21))   # before the stamp
         self.assertEqual(tuple(self.sweep().coverage), (2, 2))
+
+    def test_a_record_date_that_cannot_be_read_demotes_nothing(self):
+        self.lib()
+        for date in ("not a date", "2026-13-45"):
+            with self.subTest(date=date):
+                self.queue(("stale-recheck", "widgets.md", "Pressure", "open"), stamp=None, date=date)
+                self.assertEqual(tuple(self.sweep().coverage), (2, 2))
 
     def test_the_stamp_is_compared_as_kb_verify_writes_it(self):
         # no by: or method: reads as agent / unknown; kb-verify queues what the sweep reads
@@ -290,7 +298,8 @@ class FailedRecheck(Lib):
     def test_a_flagged_assertion_keeps_its_lint_kinds_beside_the_failure(self):
         self.write("widgets.md", section("Flagged", 20, recheck=WEAK))
         self.queue(("stale-recheck", "widgets.md", "Flagged", "open"))
-        self.assertEqual(self.stamp(self.sweep(), "Flagged").lint, ("short-fragment", "failed-recheck"))
+        s = self.stamp(self.sweep(), "Flagged")
+        self.assertEqual((s.lint, s.failed, s.lease_label), (("short-fragment",), True, "short lease: short-fragment, failed-recheck"))
 
     def test_an_unreadable_queue_demotes_nothing_and_stops_nothing(self):
         # Attention reports an unreadable queue on its own; it is no reason to stop judging the leases.
@@ -311,6 +320,28 @@ class FailedRecheck(Lib):
         self.queue(("stale-recheck", "widgets.md", "Pressure", "open"))
         got = lease.sweep(factfiles.tree(self.root))
         self.assertEqual((tuple(got.coverage), got.due), ((1, 2), ()))
+
+
+class RoundTrip(Lib):
+    """kb-verify writes the record and the sweep reads it back: the one form of a stamp and of a record's
+    key, whatever the heading holds (#264)."""
+
+    HEADINGS = ("Pressure", "Heading with `` `` a backtick run ``` inside", "L" + "o" * 250 + "ng heading",
+                "Line one\tand a tab")
+
+    def test_a_record_kb_verify_wrote_is_matched_by_the_sweep(self):
+        (self.root / "INDEX.md").write_text(
+            "---\nname: fx-index\ndomain: fx\nscope: general\nfreshness_horizon: 90d\nverifier_budget: 9\n---\n# fx\n")
+        self.write("widgets.md", *(section(h, 20, recheck="false") for h in self.HEADINGS))
+        self.write("sub/deep.md", section("Deep", 20, recheck="false"))
+        env = {**os.environ, "KB_TODAY": TODAY.isoformat()}
+        script = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "kb-verify"
+        r = subprocess.run([sys.executable, str(script), str(self.root), "--all", "--yes"], env=env,
+                           capture_output=True, text=True)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertEqual(tuple(self.sweep().coverage), (0, len(self.HEADINGS) + 1))
+        self.assertEqual(sorted(s.heading for s in self.sweep().stamps if not s.asserted and s.failed),
+                         sorted((*self.HEADINGS, "Deep")))
 
 
 class Policy(Lib):
