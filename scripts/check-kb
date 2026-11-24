@@ -90,12 +90,13 @@ def sh_syntax_error(cmd: str):
     return (r.stderr.strip() or f"exit {r.returncode}") if r.returncode else None
 
 
-def orphans(root: pathlib.Path, files: list) -> list:
+def orphans(tree: factfiles.Tree) -> list:
     """Files not reachable from root/INDEX.md by following links out of routers."""
+    root, files = tree.root, [f.path for f in tree.files]
     entry = root / "INDEX.md"
     if not entry.exists():
         return [f"{root}: no INDEX.md at the root — nothing in it is reachable"]
-    reached = factfiles.reachable(factfiles.tree(root))
+    reached = factfiles.reachable(tree)
     return [f"{f}: orphan — no router reaches it from {entry}, so retrieval never will"
             for f in files
             if f.resolve() not in reached
@@ -104,7 +105,8 @@ def orphans(root: pathlib.Path, files: list) -> list:
 
 
 def main(root: pathlib.Path) -> int:
-    kinds = dict(factfiles.files(root))
+    tree = factfiles.tree(root)
+    kinds = {f.path: f.kind for f in tree.files}
     files = list(kinds)
     if not files:
         print(f"no markdown files under {root}")
@@ -297,7 +299,7 @@ def main(root: pathlib.Path) -> int:
             warnings.append(f"{qfile}: id {rid} appears at lines {', '.join(map(str, ns[:-1]))} and {ns[-1]}: "
                             f"one finding, so keep one record and delete the rest")
 
-    defects += orphans(root, files)
+    defects += orphans(tree)
 
     for n in notes:
         print(f"NOTE {n}")

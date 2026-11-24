@@ -255,6 +255,21 @@ class Unstamped(Fixture):
         self.assertEqual(self.att().unstamped, attention.Unstamped(0, 0, False, None))
 
 
+    def test_a_fact_file_that_cannot_be_read_fails_the_fields_that_need_it(self):
+        self.make(self.BODY)
+        real = pathlib.Path.read_text
+
+        def unreadable(path, *a, **kw):
+            if path.name == "widgets.md":
+                raise OSError("unreadable")
+            return real(path, *a, **kw)
+
+        with mock.patch.object(pathlib.Path, "read_text", unreadable):
+            a = self.att()
+            for got in (a.unstamped, a.unstamped_total, a.unsourced):
+                self.assertEqual(got, Failed("unreadable", "OSError"))
+
+
 class Unsourced(Fixture):
     def test_sections_with_content_and_no_source_line(self):
         self.make(section("Cited", 1) + section("Bare", 1, source=False) + section("Bare2", None, source=False))

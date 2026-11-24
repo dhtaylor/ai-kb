@@ -249,8 +249,9 @@ class File:
 
     @cached_property
     def body_sections(self):
-        """The sections of the text below the frontmatter, as check-kb's section rules read them.
-        The same as `sections` for a file with no frontmatter."""
+        """The sections of the text below the frontmatter, which is what Attention reads the unstamped
+        and unsourced sections from (as check-kb has always read them). The same as `sections`, and
+        not parsed again, for a file with no frontmatter."""
         body = body_of(self.text)
         return self.sections if body == self.text else tuple(sections(body))
 
@@ -274,7 +275,9 @@ def tree(root):
 
 def tree_from(blobs):
     """The Tree of file texts that are not on disk: {library-relative path: text}, a past commit's
-    files. Nothing is read, so nothing can fail here; the paths are classified as on disk."""
+    files. Nothing is read, so nothing can fail here; the paths are classified as on disk. For reading
+    sections only: each File.path is relative and Tree.root is None, so `reachable` and the lint
+    inside lease.sweep need a Tree from tree(root)."""
     return Tree(None, tuple(File(pathlib.Path(rel), kind_of(pathlib.PurePosixPath(rel).parts), text)
                             for rel, text in sorted(blobs.items())))
 
@@ -305,7 +308,9 @@ def marked_sections(secs):
 def reachable(tree):
     """Resolved paths of the files of `tree` reachable from its root INDEX.md by following links out
     of routers. Empty when the root has no INDEX.md. check-kb's orphan check and check-golden's
-    expected_file check ask the same question, so the answer lives here once."""
+    expected_file check ask the same question, so the answer lives here once. A router is read with
+    errors="replace", as every File is: an undecodable one no longer crashes the check, and a valid
+    UTF-8 one reads as it always did."""
     entry = tree.root / "INDEX.md"
     if not entry.exists():
         return set()
@@ -313,7 +318,8 @@ def reachable(tree):
     reached, todo = {entry.resolve()}, [entry.resolve()]
     while todo:
         router = todo.pop()
-        for _, target in ROUTER_LINK.findall(known[router].text):
+        text = known[router].text if router in known else router.read_text(errors="replace")
+        for _, target in ROUTER_LINK.findall(text):
             if target.startswith("http"):
                 continue
             t = (router.parent / target).resolve()

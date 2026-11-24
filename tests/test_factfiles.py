@@ -338,6 +338,21 @@ class Reachable(unittest.TestCase):
             "lost/INDEX.md": "[l](l.md)\n", "lost/l.md": "x\n"})
         self.assertEqual(got, {"INDEX.md", "a.md", "sub/INDEX.md", "sub/leaf.md"})
 
+    def test_a_root_index_the_tree_does_not_list_is_still_read_from_disk(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        (root / "INDEX.md").write_text("[a](a.md)\n")
+        (root / "a.md").write_text("x\n")
+        got = factfiles.reachable(factfiles.Tree(root, (factfiles.File(root / "a.md", "fact"),)))
+        self.assertEqual(got, {(root / "INDEX.md").resolve(), (root / "a.md").resolve()})
+
+    def test_a_router_that_is_not_utf8_does_not_crash_it(self):
+        root = pathlib.Path(tempfile.mkdtemp())
+        self.addCleanup(lambda: __import__("shutil").rmtree(root))
+        (root / "INDEX.md").write_bytes(b"\xff\xfe [a](a.md)\n")
+        (root / "a.md").write_text("x\n")
+        self.assertIn((root / "a.md").resolve(), factfiles.reachable(factfiles.tree(root)))
+
     def test_nothing_is_reached_without_a_root_index(self):
         self.assertEqual(self.reached({"a.md": "x\n"}), set())
 
