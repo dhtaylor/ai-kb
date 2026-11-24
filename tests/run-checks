@@ -1163,6 +1163,8 @@ case_run "unasserted_ttl: not shorter than the horizon is refused by kb-verify" 
   "$ENGINE/scripts/kb-verify" "$TMP/ttl-eq"
 case_run "unasserted_ttl: an invalid one is a kb-due warning, never a crash" 0 "unasserted_ttl" -- \
   "$ENGINE/scripts/kb-due" "$TMP/ttl-eq" --nudge
+case_run "unasserted_ttl: an invalid one still leaves assertion coverage in the nudge (#250)" 0 \
+  "ttl-eq: assertion coverage 0 of 1 sourced section;" -- "$ENGINE/scripts/kb-due" "$TMP/ttl-eq" --nudge
 ttl_lib "$TMP/ttl-eq-old" "agent_ttl: 90d" '"2.6"'
 case_run "agent_ttl: below 2.7, not shorter than the horizon still fails check-kb" 1 "agent_ttl" -- \
   "$ENGINE/scripts/check-kb" "$TMP/ttl-eq-old"

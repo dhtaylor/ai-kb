@@ -12,7 +12,8 @@ engine release it was last verified against in its own release notes.
   both take their due list, stale list, lease labels, warnings and coverage from it, and `kb-verify`'s own
   `asserted`, `is_due`, `due_sections` and `sections` are gone. `check-kb`'s "not CONFLICTED" section rule is
   named `served` in `factfiles`, beside `in_scope`. Behaviour and output are unchanged: `kb-verify`, `kb-due`
-  and `kb-report` print byte-for-byte what they printed.
+  and `kb-report` print byte-for-byte what they printed, except that a fact file that cannot be read now
+  reports its real exception type where it reported `RuntimeError`.
 - The golden set and citation resolution move out of the command-line scripts into three engine
   modules, `kbengine.golden`, `kbengine.citations` and `kbengine.transcripts` (#252, part of #254),
   ending the load cycle in which `check-golden` and `grade-eval` each loaded the other.

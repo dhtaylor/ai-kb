@@ -2,15 +2,12 @@
 and which reach outside the library, as structured findings and as the warnings kb-verify
 prints. Stdlib only.
 
-assess(root, sections)           Assessment(findings, weak, outside) from one run of the lint: what the
-                                 lease (kbengine.lease) reads.
-lint_findings(root, sections)    {(file, stamp line): [kind, ...]}, kind one of
-                                 short-fragment, reused-fragment, outside.
-weak_rechecks(root, sections)    the printed WEAK warnings.
-outside_rechecks(root, sections) the printed OUTSIDE warnings.
+assess(root, sections)   Assessment(findings, weak, outside) from one run of the lint: findings is
+                         {(file, stamp line): [kind, ...]}, kind one of short-fragment,
+                         reused-fragment, outside; weak and outside are the printed warnings. The
+                         lease (kbengine.lease) reads all three.
 
-A section is a dict with at least file, heading, line and cmd, as kb-verify's sections()
-builds it; the lint reads them and writes nothing. It was a pure move out of the script: its
+A section is a dict with at least file, heading, line and cmd, as kbengine.lease builds them; the lint reads them and writes nothing. It was a pure move out of the script: its
 judgements are unchanged.
 """
 import pathlib, re, shlex
@@ -127,11 +124,6 @@ def text_runs(pattern: str, mode: str) -> list:
         out.append(runs)
     return out
 
-def weak_rechecks(root: pathlib.Path, sections: list) -> list:
-    """The printed WEAK warnings, one per finding of _weak (below)."""
-    return [msg for _, _, msg in _weak(root, sections)]
-
-
 def _weak(root: pathlib.Path, sections: list) -> list:
     """(flagged sections, kind, message) per finding.
 
@@ -172,11 +164,6 @@ def _weak(root: pathlib.Path, sections: list) -> list:
     return out
 
 
-def outside_rechecks(root: pathlib.Path, sections: list) -> list:
-    """The printed OUTSIDE warnings, one per finding of _outside (below)."""
-    return [msg for _, _, msg in _outside(root, sections)]
-
-
 def _outside(root: pathlib.Path, sections: list) -> list:
     """(flagged sections, kind, message) per finding.
 
@@ -193,7 +180,7 @@ def _outside(root: pathlib.Path, sections: list) -> list:
 
 
 class Assessment(NamedTuple):
-    findings: dict       # as lint_findings gives it
+    findings: dict       # {(file, stamp line): [kind, ...]}
     weak: tuple          # the printed WEAK warnings
     outside: tuple       # the printed OUTSIDE warnings
 
@@ -206,10 +193,3 @@ def assess(root: pathlib.Path, sections: list) -> Assessment:
         for s in flagged:
             got.setdefault((s["file"], s["line"]), []).append(kind)
     return Assessment(got, tuple(m for _, _, m in weak), tuple(m for _, _, m in outside))
-
-
-def lint_findings(root: pathlib.Path, sections: list) -> dict:
-    """{(file, stamp line): [kind, ...]} for every section the assertion lint flags, kind one of
-    short-fragment, reused-fragment, outside (#235). The same findings the printed warnings
-    report, keyed so the lease and assertion coverage (ADR-0022) can tell which sections they cover."""
-    return assess(root, sections).findings

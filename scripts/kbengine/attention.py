@@ -234,6 +234,10 @@ class Attention:
         """Assertion coverage (#239, ADR-0022): sections with an asserted stamp over served sections
         with a Source: line, in fact files. A section is asserted when any of its stamps is."""
         got = self._leases
+        if isinstance(got, Failed):
+            # Coverage does not depend on the lease: a short lease the library cannot use fails
+            # rechecks and stale, not what backs each section.
+            got = _try(lease.sweep, self.root)
         return got if isinstance(got, Failed) else got.coverage
 
     @cached_property

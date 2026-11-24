@@ -66,8 +66,6 @@ class Stamp:
 
 @dataclass(frozen=True)
 class Leases:
-    horizon: object
-    unasserted_ttl: object
     stamps: tuple
     rechecks: tuple
     due: tuple
@@ -120,6 +118,6 @@ def sweep(root, *, horizon=None, unasserted_ttl=None) -> Leases:
             hit += any(s.asserted for s in made)
 
     rechecks = tuple(sorted((s for s in stamps if s.cmd), key=lambda s: s.date))
-    return Leases(horizon, unasserted_ttl, tuple(stamps), rechecks,
+    return Leases(tuple(stamps), rechecks,
                   tuple(s for s in rechecks if s.due), tuple(s for s in stamps if s.due and not s.cmd),
                   Coverage(hit, sourced), found.weak, found.outside)

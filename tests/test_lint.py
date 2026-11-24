@@ -33,7 +33,7 @@ class Findings(unittest.TestCase):
         found = [{"file": f, "heading": sec.title, "line": st.line - 1, "cmd": st.recheck and st.recheck.cmd}
                  for f in sorted(self.root.rglob("*.md"))
                  for sec in factfiles.sections(f.read_text()) for st in sec.stamps]
-        got = lint.lint_findings(self.root, [s for s in found if s["cmd"]])
+        got = lint.assess(self.root, [s for s in found if s["cmd"]]).findings
         return {s["heading"]: sorted(got.get((s["file"], s["line"]), [])) for s in found}
 
     def test_names_each_flagged_section_and_why(self):

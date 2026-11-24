@@ -52,8 +52,8 @@ Selection is by staleness, per §7 and ADR-0022: the evidence sets the lease, no
 asserted stamp (its Recheck is one the lint above does not flag) is due once older than the
 domain's freshness_horizon; any other is due once older than the short lease (unasserted_ttl)
 (a TENTH of the horizon unless the domain declares one). kbengine.lease (#250) makes that judgement
-and this script prints it. Each command names its lease, and the lint finding behind a short one. The domain's verifier_budget caps how many run per
-sweep, oldest first.
+and this script prints it. Each command names its lease, and the lint finding behind a short one.
+The domain's verifier_budget caps how many run per sweep, oldest first.
 
 THE QUEUE (Phase 5, plan §6 exit: "stale or drifted facts surface as a queue rather
 than rotting silently"): on every FAILED assertion run under --yes, kb-verify appends
