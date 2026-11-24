@@ -40,6 +40,16 @@ _Avoid_: sensitive fact, critical fact
 Anyone who uses a published library without knowing its author, so they can trust only evidence they could check for themselves.
 _Avoid_: user, reader (when a stranger to the author is meant)
 
+## Keeping libraries current
+
+**Nudge**:
+What the librarian is shown at session start: each library that needs attention and why, and nothing when nothing does.
+_Avoid_: alert, reminder
+
+**Decision**:
+Something the weekly report says only a person can settle, such as a review packet or a library behind the contract.
+_Avoid_: task, action item
+
 ## Testing retrieval
 
 **Golden set**:

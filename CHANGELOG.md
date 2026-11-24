@@ -6,6 +6,23 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+- What needs a person's attention is decided in one place (#253, part of #254). `Attention.items` is a
+  frozen, ordered list per library: coverage first, then review packets, a sweep due (unless a kb-audit
+  packet covers it), rechecks, stale facts, the queue and the records the reader could not read, notes to
+  distil (unless a kb-distill packet covers them), unstamped sources, unsourced sections, the contract
+  state and an archived library that is still registered. Each item says whether it is a decision, and a
+  field that failed is an item. `kb-due` and `kb-report` word the items and no longer test conditions to
+  find them, and `kb-due --summary` is counted from them. `kbengine.reports` owns where reports live, the
+  latest and whether it is current, so `kb-due` no longer loads the `kb-report` script. The `kb.nudge`
+  schedule moves out of `kb-session-start` into `kb-due --session`, and `--summary-out FILE` hands the
+  summary to the hook in a file, so the hook no longer matches `KB due — ` or works out the reports
+  folder; `kb-report` filters on `shelved` as `kb-due` does. GLOSSARY.md defines **Nudge** and
+  **Decision**. The output is unchanged: `kb-due` (plain, `--quiet`, `--nudge`, `--summary`), the weekly
+  report and `kb-session-start` print byte-for-byte what they printed, on the real registry and on fixtures
+  for each contract state, packet suppression, a read-only and an archived library, a library below full
+  coverage, and each `kb.nudge` setting. Three cases differ, all under a malformed `KB_TODAY`: the report
+  lists the read-only libraries as it lists every other library (it could not compute them), and the hook
+  with a `weekly:<day>` setting now stops with `kb-due`'s exit 2 where `date -d` read the word as a date.
 - A library is parsed once per sweep (#251, part of #254). `factfiles.tree(root)` returns the library's
   files, each read and parsed the first time it is asked for and never again, and `factfiles.tree_from(blobs)`
   builds the same value from git blobs, so the sweep baseline uses the same parser. `lease.sweep` now takes
