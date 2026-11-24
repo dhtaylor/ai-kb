@@ -36,8 +36,8 @@ Exit 0 clean, 1 on any defect.
 """
 import pathlib, re, sys
 
-NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
-          ".claude-plugin", ".claude", ".git"}
+from kbengine import factfiles
+
 VALID = re.compile(r"^(general|product:[a-z0-9][a-z0-9-]*|org:[a-z0-9][a-z0-9-]*|repo:[a-z0-9][a-z0-9-]*)$")
 # A relative link that climbs out of the library it is written in.
 ESCAPE = re.compile(r"\]\(\s*(\.\./[^)]*)\)|\[\[\s*(\.\.[^\]]*)\]\]")
@@ -129,7 +129,7 @@ def main(roots) -> int:
         label = root.name or root.resolve().name   # a trailing slash leaves .name empty
         for f in sorted(root.rglob("*.md")):
             rel = f.relative_to(root)
-            if NON_KB & set(rel.parts):
+            if factfiles.EXCLUDED_DIRS & set(rel.parts):
                 continue
             total += 1
             text = f.read_text(errors="replace")

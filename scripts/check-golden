@@ -4,7 +4,7 @@
 Verifies that a library's golden set is a working oracle: every record is
 well-formed, every expected_file exists, and every expected_excerpt is actually
 present in the file it names, and every expected_file is REACHABLE from the library's
-root INDEX.md by router links (check-kb's own reachability, imported, not copied). Retrieval
+root INDEX.md by router links (factfiles.reachable, the same rule check-kb's orphan check uses). Retrieval
 descends routers and never searches, so a file no router reaches cannot be routed to — and
 check-kb's orphan check exempts documents/ and the golden set, which would otherwise be
 places a record could hide. A cross-root case may name its expected_file in another library
@@ -22,26 +22,12 @@ fire alarm.
 Usage: check-golden <library-root>
 Exit 0 clean, 1 on any defect.
 """
-import importlib.machinery, importlib.util, pathlib, sys
+import pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))   # found beside it; run-checks case #111 loads this script bare
-from kbengine import golden
+from kbengine import factfiles, golden
 
 parse = golden.parse    # kept for run-checks case #111, which loads this script bare and calls parse
-
-
-def load_check_kb():
-    """Import the extensionless sibling script check-kb as a module (the SourceFileLoader pattern
-    kb-due uses for kb-verify), so reachability has one implementation. This is the one script load
-    left: moving reachable, kb_files and marked_sections into the engine overlaps #251 (one parse of a
-    library per sweep), so it waits for that."""
-    path = pathlib.Path(__file__).resolve().parent / "check-kb"
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader("check_kb", str(path))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod
 
 
 def main(root: pathlib.Path) -> int:
@@ -58,13 +44,13 @@ def main(root: pathlib.Path) -> int:
     text = gf.read_text()
     records = golden.parse(text)
     defects, counts = [], {c: 0 for c in golden.VALID_CASES}
-    ckb = load_check_kb()
-    reached = {root.resolve(): ckb.reachable(root, ckb.kb_files(root))}
+    tree = factfiles.tree(root)
+    reached = {root.resolve(): factfiles.reachable(tree)}
     unchecked = []
 
     def reachable(owner):
         if owner not in reached:
-            reached[owner] = ckb.reachable(owner, ckb.kb_files(owner))
+            reached[owner] = factfiles.reachable(factfiles.tree(owner))
         return reached[owner]
 
     if not records:
@@ -73,7 +59,8 @@ def main(root: pathlib.Path) -> int:
     for i, r in enumerate(records, 1):
         if r.get("case") in golden.VALID_CASES:
             counts[r["case"]] += 1
-        found, skipped = golden.validate(root, r, f"{gf.name} record {i}", reachable, ckb.marked_sections)
+        found, skipped = golden.validate(root, r, f"{gf.name} record {i}", reachable,
+                                         lambda text: factfiles.marked_sections(factfiles.sections(text)))
         defects += found
         unchecked += skipped
 
@@ -85,8 +72,8 @@ def main(root: pathlib.Path) -> int:
     if counts["uncorroborated"] == 0:
         # Required only where the library holds one: a caveat invented to fill a slot tests a
         # fiction, so a library with no marker needs neither a case nor a reason.
-        holding = [f.name for f in ckb.kb_files(root)
-                   if f != gf and ckb.marked_sections(f.read_text(errors="replace"))]
+        holding = [f.path.name for f in tree.files
+                   if f.path != gf and factfiles.marked_sections(f.sections)]
         if holding:
             defects.append(f"{gf.name}: no uncorroborated case, but {', '.join(sorted(holding))} "
                            f"holds a section marked UNCORROBORATED — nothing proves it is served "

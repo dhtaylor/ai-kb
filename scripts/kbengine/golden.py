@@ -18,7 +18,7 @@ EVIDENCE, DISPUTED, LEAD        the phrases: the evidence words retrieval uses (
                                 a CONFLICTED fact, and what an UNCORROBORATED answer must begin with.
 
 validate and grade resolve expected_file through kbengine.citations. Reachability, which needs the
-library's routers, and the UNCORROBORATED markers belong to check-kb: check-golden passes them in as
+library's routers, and the UNCORROBORATED markers belong to factfiles: check-golden passes them in as
 `reachable(owner)` (the set of resolved files a router reaches) and `marked(text)` (the marked
 sections), and keeps the library-level checks.
 """

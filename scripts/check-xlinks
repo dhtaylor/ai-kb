@@ -45,11 +45,10 @@ import importlib.machinery, importlib.util, pathlib, re, sys
 
 from kbengine import factfiles
 
-# episodic/ is NOT excluded: a session note is a routed, citable file, and a fact
-# in one library legitimately cites one in another. Excluding it here called such
-# a citation dead while check-kb, which does not exclude it, called it live.
-NON_KB = {"documents", "plugins", "scripts", ".github", ".githooks",
-          ".claude-plugin", ".claude", ".git"}
+# Folders that are not the knowledge base: factfiles.EXCLUDED_DIRS. episodic/ is NOT among them:
+# a session note is a routed, citable file, and a fact in one library legitimately cites one in
+# another. Excluding it here called such a citation dead while check-kb, which does not exclude
+# it, called it live.
 PLACEHOLDER = re.compile(r"[<>]")
 # The form itself, as written in prose that explains it — the contract, kb-init's
 # router text, a skill's instructions. Naming a library "library" is not allowed
@@ -76,7 +75,7 @@ def links(text):
 
 def slugs_of(lib: pathlib.Path):
     return {f.stem for f in lib.rglob("*.md")
-            if not NON_KB & set(f.relative_to(lib).parts) and f.name != "INDEX.md"}
+            if not factfiles.EXCLUDED_DIRS & set(f.relative_to(lib).parts) and f.name != "INDEX.md"}
 
 
 def links_in(tree: pathlib.Path, label: str, index, dead, warn, ctx=None):
@@ -87,7 +86,7 @@ def links_in(tree: pathlib.Path, label: str, index, dead, warn, ctx=None):
     declared, origins = ctx.get("declared", {}), ctx.get("origins")
     ok = 0
     for f in sorted(tree.rglob("*.md")):
-        if NON_KB & set(f.relative_to(tree).parts):
+        if factfiles.EXCLUDED_DIRS & set(f.relative_to(tree).parts):
             continue
         for link, in_span in links(f.read_text(errors="replace")):
             if ":" not in link or PLACEHOLDER.search(link) or link in EXAMPLES:

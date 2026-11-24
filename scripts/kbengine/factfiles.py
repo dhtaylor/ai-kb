@@ -5,9 +5,15 @@ so a fence, a stamp or a fact file means one thing in all of them (#201). Stdlib
 files(root)     every markdown file under root that is part of the knowledge base, with its kind.
 kind_of(parts)  the same classification for a library-relative path, for paths not on disk.
 sections(text)  the sections of one file: headings, status, Source: lines, stamps, Rechecks.
+tree(root)      a Tree: the library's files, each read and parsed once, when first asked for it.
+tree_from(blobs)  the same Tree from file texts that are not on disk (a past commit's blobs). One
+                parser, two inputs: a working tree and git blobs.
+unstamped_keys, unsourced, marked_sections   what a file's sections say about its Source: lines and
+                markers (check-kb's rules, §6, §7, §8); reachable   the files a library's routers reach.
 """
 import os, pathlib, re
 from dataclasses import dataclass, field
+from functools import cached_property
 
 # Folders that are not the knowledge base: decision records, the behaviour plugin, tooling and CI
 # config. Ordinary files with no frontmatter contract; they are pruned, never walked.
@@ -31,6 +37,7 @@ CONFLICTED = re.compile(r"^\s*status:\s*CONFLICTED\b")
 UNCORROBORATED = re.compile(r"^\s*status:\s*UNCORROBORATED\b")
 # Indented, a stamp looks stamped and certifies nothing, and its Recheck never runs (§7).
 INDENTED = re.compile(r"^\s+(Verified|Recheck)(?:\s*\(attended\))?:")
+ROUTER_LINK = re.compile(r"\[([^\]]+)\]\(([^)#]+\.md)\)")
 
 
 # ---------------------------------------------------------------------------- files ----
@@ -214,3 +221,104 @@ def sections(text):
         if at not in claimed:
             sec.orphan_rechecks.append(rc)
     return out
+
+
+def body_of(text):
+    """`text` without its frontmatter; the whole text when it has none."""
+    return text.split("---\n", 2)[2] if text.startswith("---\n") else text
+
+
+# ---------------------------------------------------------------------------- trees ----
+@dataclass(frozen=True)
+class File:
+    """One file of a library. Its text is read, and parsed into sections, the first time either is
+    asked for, and never again: a reader that wants only the fact files reads only those. `source` is
+    the text when it did not come from `path`."""
+    path: pathlib.Path
+    kind: str
+    source: str = None
+
+    @cached_property
+    def text(self):
+        return self.source if self.source is not None else self.path.read_text(errors="replace")
+
+    @cached_property
+    def sections(self):
+        """The sections of the whole text, as the lease reads them: line numbers are the file's."""
+        return tuple(sections(self.text))
+
+    @cached_property
+    def body_sections(self):
+        """The sections of the text below the frontmatter, as check-kb's section rules read them.
+        The same as `sections` for a file with no frontmatter."""
+        body = body_of(self.text)
+        return self.sections if body == self.text else tuple(sections(body))
+
+
+@dataclass(frozen=True)
+class Tree:
+    """A library's files in path order. `root` is None for a tree built from blobs."""
+    root: pathlib.Path
+    files: tuple
+
+    @property
+    def facts(self):
+        return tuple(f for f in self.files if f.kind == "fact")
+
+
+def tree(root):
+    """The Tree of the library at `root`: files(root), nothing read yet."""
+    root = pathlib.Path(root)
+    return Tree(root, tuple(File(p, kind) for p, kind in files(root)))
+
+
+def tree_from(blobs):
+    """The Tree of file texts that are not on disk: {library-relative path: text}, a past commit's
+    files. Nothing is read, so nothing can fail here; the paths are classified as on disk."""
+    return Tree(None, tuple(File(pathlib.Path(rel), kind_of(pathlib.PurePosixPath(rel).parts), text)
+                            for rel, text in sorted(blobs.items())))
+
+
+def unstamped_keys(secs):
+    """(heading, Source: line) for each Source: line in a served section (not CONFLICTED, §8) with
+    no Verified: stamp of its own: unknown, not fresh (§7). One per source, not per section (§6
+    stacks one stamp per source; #64). kb-due compares these with the last sweep's to name only
+    new ones (#142)."""
+    return [(s.heading, src.text) for s in secs if s.served
+            for src in s.sources if src.stamp is None]
+
+
+def unsourced(secs):
+    """Headings of served sections that hold content and no Source: line (§6, issue #154). They
+    are unchecked, and the verified: floor never sees them. Exempt: the intro under a level-1 title,
+    a heading with only subheadings under it, and a CONFLICTED section, which is not served."""
+    return [s.title for s in secs if s.unsourced]
+
+
+def marked_sections(secs):
+    """The text of each section an UNCORROBORATED marker sits directly under (§8: a marker applies
+    to the heading it sits under, never to the headings enclosing it). check-golden reads an
+    uncorroborated case's excerpt through this, so the case tests the claim that is marked."""
+    return [s.text for s in secs if s.uncorroborated]
+
+
+def reachable(tree):
+    """Resolved paths of the files of `tree` reachable from its root INDEX.md by following links out
+    of routers. Empty when the root has no INDEX.md. check-kb's orphan check and check-golden's
+    expected_file check ask the same question, so the answer lives here once."""
+    entry = tree.root / "INDEX.md"
+    if not entry.exists():
+        return set()
+    known = {f.path.resolve(): f for f in tree.files}
+    reached, todo = {entry.resolve()}, [entry.resolve()]
+    while todo:
+        router = todo.pop()
+        for _, target in ROUTER_LINK.findall(known[router].text):
+            if target.startswith("http"):
+                continue
+            t = (router.parent / target).resolve()
+            if t in known and t not in reached:
+                reached.add(t)
+                if t.name == "INDEX.md":
+                    todo.append(t)
+    return reached

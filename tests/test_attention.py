@@ -2,7 +2,7 @@
 
 Run by tests/run-checks with scripts/ on PYTHONPATH:
     PYTHONPATH=scripts python3 -m unittest discover -s tests -p 'test_*.py'
-Libraries are built in a temp dir, dated from today; kb-verify, check-kb and kb-sources are the real
+Libraries are built in a temp dir, dated from today; kb-verify and kb-sources are the real
 scripts. Each category is asserted on the structured result; nothing is printed.
 """
 import datetime, os, pathlib, subprocess, tempfile, unittest
@@ -253,13 +253,6 @@ class Unstamped(Fixture):
     def test_none_when_everything_is_stamped(self):
         self.make(section("Stamped", 1), swept=ago(1))
         self.assertEqual(self.att().unstamped, attention.Unstamped(0, 0, False, None))
-
-    def test_check_kb_that_will_not_load_fails_the_fields_that_need_it(self):
-        self.make(self.BODY)
-        with mock.patch.dict(attention._scripts, {"check-kb": ImportError("gone")}):
-            a = self.att()
-            for got in (a.unstamped, a.unstamped_total, a.unsourced):
-                self.assertEqual(got, Failed("check-kb could not be loaded", "RuntimeError"))
 
 
 class Unsourced(Fixture):

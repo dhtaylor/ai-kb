@@ -2014,9 +2014,9 @@ build_clean "$NFX/kb/calm-empty" --swept "$KB_TODAY" --stamp "$KB_TODAY"
 sed -i '/^## Limits/,$d' "$NFX/kb/calm-empty/widgets.md"
 case_run "nudge: a calm library with nothing sourced (0 of 0) prints nothing (#239)" 0 "" -- \
   bash -c '[ -z "$(HOME="$2" "$1" "$3" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome" "$NFX/kb/calm-empty"
-# Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
-# count (issue #30). One warning; the rest intact. The recheck count no longer needs check-kb: its
-# horizon and short lease are read through kbengine (#203).
+# Without check-kb beside it, kb-due loses nothing: every category is read through kbengine, the
+# recheck count since #203 and the unstamped and unsourced counts since #251 (issue #30 was the
+# warning kb-due printed when check-kb would not load).
 mkdir -p "$TMP/due-nockb"
 for f in kb-due kb-verify kb-watch; do cp "$ENGINE/scripts/$f" "$TMP/due-nockb/$f"; done
 cp -r "$ENGINE/scripts/kbengine" "$TMP/due-nockb/kbengine"   # kb-verify imports it; check-kb is what is left out
@@ -2026,8 +2026,8 @@ case_run "nudge: without check-kb the recheck count is still computed, through k
   "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
 case_run "nudge: ...and is no warning that it could not be (#203)" 1 "" -- \
   bash -c '"$1" "$2" --nudge 2>&1 | grep -qF "could not compute facts due for recheck"' _ "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due"
-case_run "nudge: without check-kb the unstamped count is a one-line warning" 0 "could not count unstamped sections" -- \
-  "$TMP/due-nockb/kb-due" "$NFX/kb/recheck-due" --nudge
+case_run "nudge: without check-kb the unstamped count is still computed, through kbengine (#251)" 0 "2 unstamped sources (never verified)" -- \
+  "$TMP/due-nockb/kb-due" "$NFX/kb/unstamped-due" --nudge
 
 # A kb_contract the engine cannot read: the nudge says so in one line. It crashed instead (#203).
 build_clean "$NFX/kb/contract-banana" --contract 'banana'

@@ -88,7 +88,7 @@ def link_count(path: pathlib.Path, lib: str) -> int:
     spec = importlib.util.spec_from_loader(loader.name, loader)
     xl = importlib.util.module_from_spec(spec)
     loader.exec_module(xl)
-    return sum(1 for f in path.rglob("*.md") if not xl.NON_KB & set(f.relative_to(path).parts)
+    return sum(1 for f in path.rglob("*.md") if not xl.factfiles.EXCLUDED_DIRS & set(f.relative_to(path).parts)
                for link, span in xl.links(f.read_text(errors="replace"))
                if not span and link.partition(":")[0] == lib and ":" in link)
 
