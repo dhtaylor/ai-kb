@@ -14,7 +14,7 @@ keywords: [conventions, INDEX, router, slug, scope, verified, CONFLICTED, proven
 ---
 # Knowledge Conventions
 
-**Contract version 2.6** (§14). A library declares the version it was built to in its root `INDEX.md`
+**Contract version 2.7** (§14). A library declares the version it was built to in its root `INDEX.md`
 (§3); what each version adds is in §14. Supersedes [knowledge-conventions-v1](documents/legacy/knowledge-conventions-v1.md) (the inherited work-system contract, preserved at
 `documents/legacy/knowledge-conventions-v1.md`). v1 governed a single-root, annotation-only KB; v2 folds in
 the scope tiers, cross-root resolution, currency stamping, and retrieval contract required by the
@@ -222,8 +222,10 @@ sweep_interval: <N>d          # how long a kb-audit sweep stays good for. 30d fo
                               # from the horizon: a 90d horizon would imply a 9d nag.
 vendors: [<vendor>, ...]      # a comparative product library only (§1): the vendors its
                               # product:<category> compares. At least two; check-scope checks it.
-agent_ttl: <N>d               # optional: how long an agent stamp stays fresh. Default a tenth of
-                              # the horizon; check-kb fails one not shorter than the horizon (§7).
+unasserted_ttl: <N>d          # optional, contract 2.7: the short lease of an unasserted stamp, one
+                              # with no passing Recheck: behind it, whoever wrote it. Default a
+                              # tenth of the horizon, at least 1d; check-kb fails one not shorter
+                              # than the horizon (§7). Below 2.7 the field is agent_ttl: (§14).
 kb_contract: "<MAJOR.MINOR>"  # optional: the contract version (§14) this library was built to.
                               # Absent is read as 2.0. Quoted, always: a YAML reader turns a bare
                               # 2.10 into the number 2.1. check-kb fails a bare or malformed one.
@@ -890,3 +892,13 @@ Migrating from 2.5: run `check-kb`, which warns about each unlisted library belo
 under `links_to:` with the git remote you cloned it from, or its absolute path if it is local-only
 (§5). Then declare `kb_contract: "2.6"`. A
 library with no cross-library links changes only the declaration.
+
+### 2.7
+
+A library names its short lease `unasserted_ttl:` in its root `INDEX.md` (§3): how long an unasserted
+stamp stays fresh, a tenth of the horizon by default, and shorter than the horizon (ADR-0022).
+`check-kb` fails an `agent_ttl:` from this version, and the message names `unasserted_ttl:`; below it
+`agent_ttl:` is still read, and a declared `unasserted_ttl:` is a warning.
+
+Migrating from 2.6: rename `agent_ttl:` to `unasserted_ttl:` in the root `INDEX.md`, keeping its value,
+and declare `kb_contract: "2.7"`. A library that declares no `agent_ttl:` changes only the declaration.

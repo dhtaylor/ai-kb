@@ -7,6 +7,7 @@ known_contracts()           {(major, minor): what it adds} for every version §1
 contract_version(declared)  a declared `kb_contract:` as (major, minor); ValueError if malformed.
 contract_status(declared)   (state, version, newest, newer) for a declared `kb_contract:`.
 supported_majors()          the majors this engine serves, as "2.x and 1.x" for a message.
+rules_version(status)       the version whose rules a library is checked by, from its contract_status.
 fmt(version)                (2, 6) as "2.6".
 
 The engine is the one these files sit in (scripts/kbengine/ is two levels below it), so a fixture
@@ -93,6 +94,13 @@ def contract_status(declared, engine=None) -> tuple:
 
 def supported_majors(engine=None) -> str:
     return " and ".join(f"{m}.x" for m in sorted(_supported(known_contracts(engine))))
+
+
+def rules_version(status: tuple) -> tuple:
+    """The version whose rules check a library, from its contract_status (ADR-0016): the version it
+    declares, or the newest the engine knows when it declares one ahead, unsupported or malformed."""
+    state, version, newest, _newer = status
+    return newest if state in ("ahead", "unsupported", "malformed") else version
 
 
 def fmt(v: tuple) -> str:

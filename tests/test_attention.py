@@ -123,9 +123,9 @@ class Rechecks(Fixture):
         due = self.att().rechecks.due
         self.assertEqual([(s["heading"], s["lint"]) for s in due], [("Weak", ["short-fragment"])])
 
-    def test_a_declared_agent_ttl_is_the_short_lease_of_a_flagged_assertion(self):
+    def test_a_declared_unasserted_ttl_is_the_short_lease_of_a_flagged_assertion(self):
         weak = "curl -fsSL https://example.com/a | grep -qF 'Widgets'"
-        self.make(section("Within", 20, recheck=weak) + section("Past", 40, recheck=weak), extra="agent_ttl: 30d\n")
+        self.make(section("Within", 20, recheck=weak) + section("Past", 40, recheck=weak), extra="unasserted_ttl: 30d\n")
         self.assertEqual([s["heading"] for s in self.att().rechecks.due], ["Past"])
 
     def test_without_a_horizon_nothing_is_due_and_nothing_failed(self):
@@ -134,11 +134,11 @@ class Rechecks(Fixture):
         self.assertEqual(a.rechecks.due, [])
         self.assertEqual(a.stale, [])
 
-    def test_an_agent_ttl_that_cannot_be_used_fails_both_without_raising(self):
-        self.make(section("Old", 200, recheck="true"), extra="agent_ttl: 90d\n")
+    def test_an_unasserted_ttl_that_cannot_be_used_fails_both_without_raising(self):
+        self.make(section("Old", 200, recheck="true"), extra="unasserted_ttl: 90d\n")
         a = self.att()
         self.assertIsInstance(a.rechecks, Failed)
-        self.assertIn("agent_ttl", a.rechecks.reason)
+        self.assertIn("unasserted_ttl", a.rechecks.reason)
         self.assertEqual(a.rechecks.kind, "ValueError")
         self.assertEqual(a.stale, a.rechecks)
 
