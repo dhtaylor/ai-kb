@@ -39,25 +39,16 @@ Usage: kb-telemetry [--since YYYY-MM-DD] [--until YYYY-MM-DD] [--window Nd] [--l
   Defaults: the last 28 days, in 7-day windows; every library; $CLAUDE_CONFIG_DIR/projects, else ~/.claude/projects.
 Schedulable (#95): exit 0, or 2 on a usage error.
 """
-import datetime, importlib.machinery, importlib.util, json, pathlib, re, statistics, sys
+import datetime, json, pathlib, re, statistics, sys
 
-from kbengine import env
+from kbengine import citations, env, transcripts
 
-SCRIPTS = pathlib.Path(__file__).resolve().parent
 EVAL = re.compile(r"^kb-eval\b|\b(eval|trial)\b", re.I)
 PROTOCOL = re.compile(r"(^INDEX\.md$|contradictions\.md$|open-questions\.md$|^needs-attention\.md$)")
 COLUMNS = ("tokens", "seconds", "steps", "wasted", "protocol")
 NOT_FOUND = re.compile(r"^[\s>*_]*fact not found\b", re.I | re.M)
 LIMIT = "(search limit reached)"
 SPECIALIST = re.compile(r"^\s*SPECIALIST:\s*(\S+)\s*$", re.M)
-
-
-def load(name, filename):
-    sys.dont_write_bytecode = True
-    loader = importlib.machinery.SourceFileLoader(name, str(SCRIPTS / filename))
-    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader(loader.name, loader))
-    loader.exec_module(mod)
-    return mod
 
 
 def ts(s):
@@ -76,7 +67,7 @@ def runs(projects: pathlib.Path):
             yield t, m
 
 
-def measure(transcript: pathlib.Path, ge, libs: dict):
+def measure(transcript: pathlib.Path, libs: dict):
     """One run's measures, or None when the transcript holds no API response."""
     usage, calls, seen, first, start, question = {}, [], set(), None, None, None
     for line in transcript.read_text(errors="replace").splitlines():
@@ -107,12 +98,12 @@ def measure(transcript: pathlib.Path, ge, libs: dict):
     def owner(f: pathlib.Path):
         return next((n for n, root in libs.items() if root == f or root in f.parents), None)
 
-    answer = ge.transcript_answer(transcript)
+    answer = transcripts.transcript_answer(transcript)
     cited = set()
     for c in (answer[0].split(",") if answer else []):
         c = c.strip()
         for root in libs.values():
-            hit = next((f.resolve() for f in ge.candidates(root, c) if f.is_file()), None) if c else None
+            hit = next((f.resolve() for f in citations.candidates(root, c) if f.is_file()), None) if c else None
             if hit:
                 cited.add(hit); break
 
@@ -145,11 +136,10 @@ def measure(transcript: pathlib.Path, ge, libs: dict):
 
 def collect(projects: pathlib.Path, since, until, include_evals=False, library=None):
     """(measured runs in [since, until], eval runs left out). kb-report reads the week through this."""
-    ge = load("grade_eval", "grade-eval")
-    libs = {n: pathlib.Path(p).resolve() for n, p in ge.installed()[0].items()}
+    libs = {n: pathlib.Path(p).resolve() for n, p in citations.installed().items()}
     measured, evals = [], 0
     for t, meta in runs(projects):
-        r = measure(t, ge, libs)
+        r = measure(t, libs)
         if r is None or not (since <= r["start"].date() <= until):
             continue
         if EVAL.search(str(meta.get("description", ""))) and not include_evals:
