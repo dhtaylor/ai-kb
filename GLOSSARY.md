@@ -17,7 +17,7 @@ A stamp backed by a passing check that anyone can rerun, kept beside the claim i
 _Avoid_: verified stamp, human stamp
 
 **Assertion coverage**:
-The share of a library's sections that carry asserted stamps; the measure of how far that library can be trusted by a stranger.
+The share of a library's sourced sections that carry asserted stamps; the measure of how far that library can be trusted by a stranger.
 _Avoid_: freshness, verification rate
 
 **Horizon**:

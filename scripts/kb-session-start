@@ -143,7 +143,7 @@ ${nudge_line}"
 [ -n "$nudge_warn" ] && nudge_line="
 WARNING: ${nudge_warn}"
 [ -n "$due" ] && due="
-Due for a librarian's attention — nothing printed here means nothing is due:
+Due for a librarian's attention — nothing printed here means nothing is due and every sourced section is asserted:
 ${due}"
 
 msg=""

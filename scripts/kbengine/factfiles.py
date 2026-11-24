@@ -114,6 +114,21 @@ class Section:
     indented: list = field(default_factory=list)         # (line, "Verified" | "Recheck") read as nothing
 
     @property
+    def in_scope(self) -> bool:
+        """A section a reader is served: below the title, and not CONFLICTED. Sourced, unsourced and
+        assertion coverage all start from it, so they cannot disagree about which sections count."""
+        return self.level >= 2 and not self.conflicted
+
+    @property
+    def sourced(self) -> bool:
+        return self.in_scope and bool(self.sources)
+
+    @property
+    def unsourced(self) -> bool:
+        """Content and no Source: line (§6, #154)."""
+        return self.in_scope and self.has_content and not self.sources
+
+    @property
     def status(self):
         return "CONFLICTED" if self.conflicted else "UNCORROBORATED" if self.uncorroborated else "served"
 

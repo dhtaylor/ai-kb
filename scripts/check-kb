@@ -98,7 +98,7 @@ def unsourced(body: str) -> list:
     are unchecked, and derived_floor never sees them. Exempt: the intro under a level-1 title,
     a heading with only subheadings under it, and a CONFLICTED section, which is not served."""
     return [s.title for s in factfiles.sections(body)
-            if s.level >= 2 and s.has_content and not s.sources and not s.conflicted]
+            if s.unsourced]
 
 
 ENGINE = pathlib.Path(__file__).resolve().parent.parent

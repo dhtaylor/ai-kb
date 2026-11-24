@@ -17,7 +17,8 @@ WHAT IT READS, from each tree's INDEX.md:
                             nag and a 14d project a 1.4d one, surprising in both
                             directions. Default when absent: 30d.
 
-SILENCE IS THE POINT. Nothing due prints nothing (exit 0) in --quiet or --nudge: a
+SILENCE IS THE POINT. Nothing due prints nothing (exit 0) in --quiet or --nudge (and, in --nudge, every
+sourced section asserted, #239): a
 reminder that fires every session is ignored by the time it matters.
 
 --NUDGE (Phase 5): the owner's cadence decision for kb-audit AND kb-distill is "surfaced
@@ -27,8 +28,9 @@ reports, per tree, everything a librarian should act on:
 
 Each tree's line leads with its assertion coverage (#239, ADR-0022): "assertion coverage 2 of 5 sourced
 sections", asserted sections over sourced ones, a lint-flagged assertion counted as unasserted. Zero
-is stated as 0 of N, never a warning. Coverage is a measure, not something due, so a tree with
-nothing due still prints nothing.
+is stated as 0 of N, never a warning. Coverage is a measure, not something due, but a tree below full
+coverage is named even when nothing is due; only a tree with nothing due and every sourced section
+asserted (or none sourced) prints nothing.
 
   1. sweep due            — --quiet's own check, unchanged. Left out of the nudge while a pending kb-audit
                              packet covers it (the packet is already named), and the notes in 4 while a
@@ -88,7 +90,7 @@ Exit 0 always: being due is a nudge, never a failure.
 import importlib.machinery, importlib.util, pathlib, shlex, sys
 
 from kbengine import attention, clock, contract, registry
-from kbengine.attention import Failed, label
+from kbengine.attention import Failed, describe_coverage, label
 
 
 # -------------------------------------------------------------------- --nudge ----
@@ -126,11 +128,6 @@ def summary_line(counts: list) -> str:
             more = f", +{len(items) - 3} more" if len(items) > 3 else ""
             out.append(f"{heading}: {', '.join(items[:3])}{more}")
     return "KB due — " + " · ".join(out) if out else ""
-
-
-def coverage_text(cov) -> str:
-    """Assertion coverage in words: zero is stated like any other number, never a warning (#239)."""
-    return f"assertion coverage {cov.asserted} of {plural(cov.sourced, 'sourced section')}"
 
 
 def nudge_for(att, retire=None):
@@ -234,8 +231,8 @@ def nudge_for(att, retire=None):
     cov = att.coverage   # ADR-0022: where trust is thin leads the line, before what is due (#239)
     if isinstance(cov, Failed):
         warnings.append(f"{lbl}: could not work out assertion coverage ({cov.reason}) — skipped")
-    elif parts:   # a library with nothing due still prints nothing: silence is the point
-        parts.insert(0, coverage_text(cov))
+    elif parts or cov.asserted < cov.sourced:   # below full coverage is named even when nothing is due
+        parts.insert(0, describe_coverage(cov))
     line = f"{lbl}: " + "; ".join(parts) if parts else None
     return line, warnings, counts
 

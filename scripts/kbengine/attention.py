@@ -78,6 +78,18 @@ class Coverage(NamedTuple):
     sourced: int         # served sections with a Source: line
 
 
+class Swept(NamedTuple):
+    with_check: list     # sections that carry a Recheck:, each with its lint findings
+    stamped: list        # every stamped section
+
+
+def describe_coverage(cov: Coverage) -> str:
+    """Assertion coverage in words, for the nudge and the report alike: zero is a number like any
+    other, never a warning (#239)."""
+    n = cov.sourced
+    return f"assertion coverage {cov.asserted} of {n} sourced section{'' if n == 1 else 's'}"
+
+
 class Unstamped(NamedTuple):
     total: int           # every Source: line with no stamp
     new: int             # the ones not already there at the last sweep; the total when there is none
@@ -220,12 +232,15 @@ class Attention:
 
     @cached_property
     def _sections(self):
-        """kb-verify's one pass over the fact files: every Recheck: section with its lint findings,
-        every stamped section, and the Recheck: ones again. The leases are not asked for here
-        (all_sections), so a library with no horizon still has what coverage needs (#239)."""
+        """The one pass over the fact files (#239): a `Swept(with_check, stamped)` of the sections that
+        carry a Recheck:, oldest stamp first and each with its lint findings, and of every stamped
+        section. No lease is applied here, so a library with no horizon has what coverage needs."""
         lib = self.lib
-        return _try(lambda: script("kb-verify").due_sections(
-            self.root, lib.horizon or 1, lib.unasserted_ttl or 1, all_sections=True))
+        def read():
+            _due, stamped, with_check = script("kb-verify").due_sections(
+                self.root, lib.horizon or 1, lib.unasserted_ttl or 1, all_sections=True)
+            return Swept(with_check, stamped)
+        return _try(read)
 
     def _load_due(self):
         lib = self.lib
@@ -237,8 +252,9 @@ class Attention:
         if isinstance(got, Failed):
             raise RuntimeError(got.reason)
         verify = script("kb-verify")
-        due = [s for s in got[0] if verify.is_due(s, lib.horizon, lib.unasserted_ttl)]   # still oldest first
-        return due, got[1]
+        due = [s for s in sorted(got.with_check, key=lambda s: s["date"])
+               if verify.is_due(s, lib.horizon, lib.unasserted_ttl)]   # oldest first
+        return due, got.stamped
 
     @cached_property
     def coverage(self):
@@ -249,13 +265,13 @@ class Attention:
             if isinstance(got, Failed):
                 raise RuntimeError(got.reason)
             verify = script("kb-verify")
-            asserted = {(s["file"], s["line"]) for s in got[2] if verify.asserted(s)}
+            asserted = {(s["file"], s["line"]) for s in got.with_check if verify.asserted(s)}
             sourced = hit = 0
             for f, kind in factfiles.files(self.root):
                 if kind != "fact":
                     continue
                 for sec in factfiles.sections(f.read_text(errors="replace")):
-                    if sec.level >= 2 and sec.sources and not sec.conflicted:
+                    if sec.sourced:
                         sourced += 1
                         hit += any((f, st.line - 1) in asserted for st in sec.stamps)
             return Coverage(hit, sourced)

@@ -1742,6 +1742,7 @@ NFX="$TMP/nudge-fx"; mkdir -p "$NFX/kb"
 build_clean "$NFX/kb/nothing-due" --swept "$KB_TODAY" --stamp "$KB_TODAY"
 # The fact must really be fresh: build_clean's literal 2026-09-22 stamp ages past the 9d short lease,
 # and this case passed only because the nudge ignored stale facts with no Recheck (issue #63).
+printf 'Recheck: true\n' >> "$NFX/kb/nothing-due/widgets.md"   # asserted: full coverage, so still silent (#239)
 HOME="$TMP/nfxhome" "$ENGINE/scripts/kb-library" add "$NFX/kb/nothing-due" >/dev/null   # installed = registered
 case_run "nudge: nothing due anywhere prints nothing" 0 "" -- \
   bash -c '[ -z "$(HOME="$2" "$1" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome"
@@ -1988,8 +1989,20 @@ case_run "nudge: no assertions reads 0 of N, plainly, and is no failure (#239)" 
 case_run "nudge: coverage comes before the due rechecks (#239)" 0 \
   "recheck-due: assertion coverage 1 of 2 sourced sections; 1 fact due for recheck" -- \
   "$ENGINE/scripts/kb-due" "$NFX/kb/recheck-due" --nudge
-case_run "nudge: coverage alone does not break the silence of a library with nothing due (#239)" 0 "" -- \
+# A calm library below full coverage is still named; one at full coverage (nothing-due, whose one
+# section is asserted) and one with nothing sourced stay silent.
+build_clean "$NFX/kb/calm-low" --swept "$KB_TODAY" --stamp "$KB_TODAY"
+case_run "nudge: a calm library below full coverage prints its coverage line (#239)" 0 \
+  "calm-low: assertion coverage 0 of 1 sourced section" -- \
+  "$ENGINE/scripts/kb-due" "$NFX/kb/calm-low" --nudge
+case_run "nudge: ...and only that, nothing else is due (#239)" 1 "" -- \
+  bash -c '"$1" "$2" --nudge | grep -F "calm-low:" | grep -qF ";"' _ "$ENGINE/scripts/kb-due" "$NFX/kb/calm-low"
+case_run "nudge: a calm library at full coverage prints nothing (#239)" 0 "" -- \
   bash -c '[ -z "$(HOME="$2" "$1" "$3" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome" "$NFX/kb/nothing-due"
+build_clean "$NFX/kb/calm-empty" --swept "$KB_TODAY" --stamp "$KB_TODAY"
+sed -i '/^## Limits/,$d' "$NFX/kb/calm-empty/widgets.md"
+case_run "nudge: a calm library with nothing sourced (0 of 0) prints nothing (#239)" 0 "" -- \
+  bash -c '[ -z "$(HOME="$2" "$1" "$3" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$TMP/nfxhome" "$NFX/kb/calm-empty"
 # Without check-kb beside it, kb-due loses only the categories that use its rules: the unstamped
 # count (issue #30). One warning; the rest intact. The recheck count no longer needs check-kb: its
 # horizon and short lease are read through kbengine (#203).
@@ -2133,6 +2146,7 @@ done
 cp -r "$ENGINE/scripts/kbengine" "$SFX2/scripts/kbengine"   # check-kb and kb-due import it
 cp "$ENGINE/CONVENTIONS.md" "$SFX2/CONVENTIONS.md"
 build_clean "$SFX2/kb/libclean" --swept "$KB_TODAY" --stamp "$KB_TODAY"   # really fresh (#63)
+printf 'Recheck: true\n' >> "$SFX2/kb/libclean/widgets.md"   # asserted, so nothing is due or below full coverage (#239)
 SHOME2="$TMP/session-home2"; HOME="$SHOME2" "$ENGINE/scripts/kb-library" add "$SFX2/kb/libclean" >/dev/null
 case_run "kb-session-start: nudge block absent when nothing is due" 1 "" -- \
   bash -c 'cd "$1" && env -i KB_TODAY=$KB_TODAY HOME="$2" PATH="$PATH" "$3" | grep -qF "Due for a librarian"' _ \
@@ -4686,6 +4700,7 @@ case_run "kb-init: a stale contract version is caught" 1 "writes 2.0" -- init_co
 # The suite runs on KB_TODAY. These run with it unset, so the engine reads the real calendar, to
 # catch a script that only works when it is told the day (or that ignores the real one).
 RCL="$TMP/realclock"; build_clean "$RCL/lib" --swept "$(date +%F)" --stamp "$(date +%F)"
+printf 'Recheck: true\n' >> "$RCL/lib/widgets.md"   # asserted: full coverage, so silent (#239)
 case_run "real clock: a library stamped and swept today is not due" 0 "" -- \
   bash -c '[ -z "$(env -u KB_TODAY HOME="$3" KB_PACKETS="$3/packets" "$1" "$2" --nudge)" ]' _ "$ENGINE/scripts/kb-due" "$RCL/lib" "$RCL/home"
 case_run "real clock: ...and check-kb finds no stamp dated in the future" 0 "clean" -- \

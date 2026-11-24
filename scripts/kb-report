@@ -114,9 +114,7 @@ def coverage_for(att) -> str:
     cov = att.coverage
     if isinstance(cov, Failed):
         return f"{attention.label(att.tree)}: assertion coverage could not be worked out ({cov.reason})."
-    n = cov.sourced
-    return (f"{attention.label(att.tree)}: assertion coverage {cov.asserted} of "
-            f"{n} sourced section{'' if n == 1 else 's'}")
+    return f"{attention.label(att.tree)}: {attention.describe_coverage(cov)}"
 
 
 def decisions_for(att, names: dict, gaps=None) -> list:
