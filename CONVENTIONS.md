@@ -847,8 +847,8 @@ must or may hold changes; an editorial change to this file does not change it.
   before it.
 - Rules apply by the declared version: a rule from a newer version is a warning, not a failure, so
   upgrading the engine never fails a library that was valid when it was built. A library **behind**
-  the newest version is told, by `check-kb` and the session-start nudge, what the newer versions
-  add. One **ahead** by a minor is checked by the newest rules the engine knows. One whose major the
+  the newest version is told, by `check-kb`, what the newer versions
+  add; it is not a decision in the weekly report or a clause in the nudge, since the engine serves it. One **ahead** by a minor is checked by the newest rules the engine knows. One whose major the
   engine does not support, or whose version cannot be read, is not served.
 - The versions an engine knows are the headings below; what each adds is its first paragraph.
 

@@ -49,7 +49,7 @@ rechecks, stale and coverage come from one kbengine.lease sweep, which owns the 
 
 items (#253). Which of the fields above need saying, and when, is decided here and nowhere else: a
 packet suppresses the sweep or the notes it covers, a failed field is an item of its own, and the four
-contract states that need telling (behind, ahead, unsupported, malformed) are one item. kb-due words the
+contract states that need telling (ahead, unsupported, malformed) are one item; behind is not one (#263). kb-due words the
 items tersely and kb-report imperatively, and neither tests a condition to find them. An Item holds its
 kind, `n` (how many, and what `says` is made of), whether it is a `decision` (something only a person can
 settle: the weekly report lists these, the nudge lists everything), and `detail`: the field's value, or
@@ -66,7 +66,7 @@ its Failed. The kinds, in order:
     distill           episodic notes to distil, and no kb-distill packet covers them. decision.
     unstamped         Source: lines with no stamp; also present, with n of 0, when only the git comparison failed.
     unsourced         sections with content and no Source: line.
-    contract          behind, ahead, unsupported or malformed. decision.
+    contract          ahead, unsupported or malformed (not behind: ADR-0016 serves it). decision.
     archived          declares `archived:` and is registered, so is still served and can be removed.
 
 A field that failed is its Failed in an item of its kind (n of 0), a decision when the kind is one.
@@ -406,7 +406,7 @@ class Attention:
         us = self.unsourced
         say("unsourced", us, 0 if isinstance(us, Failed) else us, False)
         found = self.contract
-        if isinstance(found, Failed) or found.state in ("behind", "ahead", "unsupported", "malformed"):
+        if isinstance(found, Failed) or found.state in ("ahead", "unsupported", "malformed"):
             say("contract", found, 1)
         if self.archived and self.registered:   # served whatever it declares (#141)
             out.append(Item("archived", 1, False, self.archived))

@@ -47,7 +47,7 @@ What the librarian is shown at session start: each library that needs attention 
 _Avoid_: alert, reminder
 
 **Decision**:
-Something the weekly report says only a person can settle, such as a review packet or a library behind the contract.
+Something the weekly report says only a person can settle, such as a review packet or a library ahead of the engine's contract.
 _Avoid_: task, action item
 
 ## Testing retrieval
