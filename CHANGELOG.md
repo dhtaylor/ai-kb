@@ -6,6 +6,29 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+## v0.6.0 — 2026-11-25
+
+Changes since v0.5.0. A minor release: stamps' leases follow evidence (ADR-0022), and contract 2.7 is
+added. This engine still serves libraries that declare `kb_contract` 2.0 to 2.7 (ADR-0016).
+
+**Before you upgrade:**
+- **Coming from v0.4.0 or earlier?** Read v0.5.0's upgrade note below too: it moves the folders the
+  engine reads if `XDG_STATE_HOME` or `XDG_CONFIG_HOME` was set (ADR-0021).
+- **What you will see.** Asserted stamps get the full horizon, so due rechecks drop sharply (#238).
+  The session-start nudge and the weekly report lead with assertion coverage (#239). A failed check
+  demotes its stamp to the short lease until a passing restamp (#264). That includes a check that
+  failed only because a site was unreachable: a `curl | grep` assertion cannot tell a fetch failure
+  from a changed page, so one bad hour costs those facts their coverage until the next attended run.
+- **Each library: move its CI engine pin to v0.6.0 and delete its "Stamp honesty" step, in the same
+  change.** `check-stamps` is retired (#240), so a library pinned to v0.6.0 that keeps the step fails
+  CI there. A library that copied `documents/library-guardrails.yml` has the step; the template
+  no longer does.
+- **Contract 2.7 is optional.** A library on 2.6 or earlier is still served and is not something to
+  decide (#263). A library that raises `kb_contract` to "2.7" must rename `agent_ttl:` to
+  `unasserted_ttl:`, or `check-kb` fails it (#236).
+- **Nothing else needs action.** The `kb-due` and `kb-session-start` changes (#253) move the nudge
+  schedule into `kb-due --session`, with no change to settings or output; `kb.nudge` works as before.
+
 - A library behind on a supported contract is no longer something that needs attention (#263). The engine
   serves every minor of a supported major (ADR-0016), so a library built to 2.6 on an engine that knows 2.7
   has nothing to decide, yet it counted as a decision in `kb-report` and added a clause to its line in the
