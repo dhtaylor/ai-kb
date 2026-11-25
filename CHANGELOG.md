@@ -20,6 +20,22 @@ engine release it was last verified against in its own release notes.
   twenty-eight; the `kb-due` docstring no longer says "the six" categories and its "silence" sentence says
   one thing; README no longer states an ADR range that goes stale; ADR-0017 carries a dated note that
   since ADR-0022 a stamp's author sets no lease, while attended decisions stay unautomated.
+- A failed recheck makes a stamp unasserted until it is settled (#264, ADR-0022 decision 1). A section
+  with an open `stale-recheck` record in its library's `needs-attention.md` takes the short lease and
+  leaves assertion coverage. `kbengine.lease` reads that queue itself, in the sweep (Attention still
+  reads it separately for its own counts). `kb-verify` (the lease label reads `short lease:
+  failed-recheck`), the nudge, `--summary` and the weekly report all take the demotion from the sweep's
+  result, and none re-derives it. The demotion lasts only while the record was raised against the
+  section's current stamp: its `stamp:` must equal the stamp's content after `Verified:`. A passing
+  attended `kb-verify --apply` restamps the section, which is then asserted again at once while the
+  record stays open for the Arbiter. Nothing in the engine closes a record. A record with no `stamp:`
+  covers a stamp dated on or before its date. A `stale-recheck-error` (a timeout, or a command that
+  could not run) demotes nothing, nor does an unreadable queue or an unreadable record date.
+  `kb-retrieve` says a cited section's check last failed by the same rule, flags the fact as someone's
+  word before the answer, and still refuses on dispute only. CONVENTIONS §7 defines "passing". No
+  contract version changes: a library holds what it always did. Output is unchanged for a library with
+  no open `stale-recheck` record. On one that has one, only that section's lease and the coverage count
+  change.
 - What needs a person's attention is decided in one place (#253, part of #254). `Attention.items` is a
   frozen, ordered list per library: coverage first, then review packets, a sweep due (unless a kb-audit
   packet covers it), rechecks, stale facts, the queue and the records the reader could not read, notes to
