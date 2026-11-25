@@ -16,7 +16,9 @@ added. This engine still serves libraries that declare `kb_contract` 2.0 to 2.7 
   engine reads if `XDG_STATE_HOME` or `XDG_CONFIG_HOME` was set (ADR-0021).
 - **What you will see.** Asserted stamps get the full horizon, so due rechecks drop sharply (#238).
   The session-start nudge and the weekly report lead with assertion coverage (#239). A failed check
-  demotes its stamp to the short lease until a passing restamp (#264).
+  demotes its stamp to the short lease until a passing restamp (#264). That includes a check that
+  failed only because a site was unreachable: a `curl | grep` assertion cannot tell a fetch failure
+  from a changed page, so one bad hour costs those facts their coverage until the next attended run.
 - **Each library: move its CI engine pin to v0.6.0 and delete its "Stamp honesty" step, in the same
   change.** `check-stamps` is retired (#240), so a library pinned to v0.6.0 that keeps the step fails
   CI there. A library that copied `documents/library-guardrails.yml` has the step; the template
