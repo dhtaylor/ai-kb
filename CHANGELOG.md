@@ -6,6 +6,22 @@ engine release it was last verified against in its own release notes.
 
 ## Unreleased
 
+## v0.6.1 — 2026-11-25
+
+Changes since v0.6.0. A patch release: no script, skill, agent or contract changes. This engine
+still serves libraries that declare `kb_contract` 2.0 to 2.7 (ADR-0016).
+
+**Before you upgrade:** nothing in the engine needs action. A library that pins engine v0.6.0 in CI
+can move its pin to v0.6.1 or leave it. Use ai-kb-architecture v0.6.1 with this release, not v0.6.0:
+the library's v0.6.0 tag still pins engine v0.5.0 in its CI and declares contract 2.6, because it
+was tagged before its move to v0.6.0 merged.
+
+- ADR-0019's release day gains a step, now step 4: after the engine is tagged, the reference
+  library's release pull request pins its CI to the new tag and merges once that CI passes, and the
+  library is tagged at that commit. The library's CI clones the engine by tag, so the commit tagged
+  at v0.6.0 could not yet pin it. Preflight also checks that the library's release pull request
+  differs from the checked commit only by its pin and what moves with it.
+
 ## v0.6.0 — 2026-11-25
 
 Changes since v0.5.0. A minor release: stamps' leases follow evidence (ADR-0022), and contract 2.7 is
