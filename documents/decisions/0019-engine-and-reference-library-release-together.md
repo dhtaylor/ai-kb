@@ -1,10 +1,17 @@
 # ADR-0019: The engine and its reference library release together, under one tag
 
-- **Status:** Accepted
+- **Status:** Accepted, amended 2026-11-25 (see the note under the title)
 - **Date:** 2026-11-06
 - **Deciders:** Dandy Taylor
 - **Amends:** [0015](0015-releases-and-pinning.md), "A library release records the engine it was
   verified against", for ai-kb-architecture only. Every other library keeps its own version.
+
+> **Amended 2026-11-25.** Release day gains a step, now step 4, and step 5 tags the commit it
+> produces. The library's CI clones the engine by tag, and that tag does not exist until step 3, so
+> the library commit the fresh-clone check passed still pins the previous engine. At v0.6.0 the
+> library was tagged at that commit: its tag pinned engine v0.5.0, kept the "Stamp honesty" step and
+> declared the old contract, and the move to v0.6.0 landed on `main` after the tag. v0.6.1 is the
+> first release made with the amended steps. The decision is otherwise unchanged.
 
 ## Context and problem statement
 
@@ -24,6 +31,7 @@ those rules, the two releases have never shared a number:
 | 2026-11-12 | v0.4.0 | v0.4.0 |
 | 2026-11-23 | v0.5.0 | v0.5.0 |
 | 2026-11-25 | v0.6.0 | v0.6.0 |
+| 2026-11-25 | v0.6.1 | v0.6.1 |
 
 The owner treats the two as one release package. Two version numbers for one package make a reader
 ask which library goes with which engine, and the only answer is a line in the release notes.
@@ -53,12 +61,18 @@ that fails, and checks that nothing moved since the fresh-clone check:
 
 1. **Preflight.** Both `main` branches are still the commits the fresh-clone check passed. Neither
    repository has tag `vX.Y.Z` yet. Both working trees are clean. The release pull request is green
-   and its head is the checked commit.
+   and its head is the checked commit. The library's release pull request is open, and it differs
+   from the library commit the fresh-clone check passed only by what step 4 needs the tag for: its
+   CI engine pin, and whatever that release's upgrade note says moves with the pin.
 2. **Merge the engine's release pull request** and confirm the merged tree matches the checked head.
 3. **Tag the engine `vX.Y.Z`** and publish its GitHub release from the CHANGELOG's `vX.Y.Z` section.
-4. **Tag ai-kb-architecture `vX.Y.Z`** at its verified commit, with the message "verified against
-   ai-kb vX.Y.Z". Publish its GitHub release from its library notes.
-5. **Cross-link the two releases.** The engine's notes name the library release, and the library's
+4. **Pin the library to the new tag.** Its release pull request moves its CI to clone engine
+   `vX.Y.Z`, now that the tag exists. Merge it once that CI passes. That run, against the published
+   tag, is what "verified against ai-kb vX.Y.Z" rests on. If it fails, stop: the engine is released
+   and the library is not, until a fix merges.
+5. **Tag ai-kb-architecture `vX.Y.Z`** at the commit step 4 merged, never before it, with the
+   message "verified against ai-kb vX.Y.Z". Publish its GitHub release from its library notes.
+6. **Cross-link the two releases.** The engine's notes name the library release, and the library's
    notes name the engine release.
 
 ## Consequences
