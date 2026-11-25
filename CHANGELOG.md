@@ -12,6 +12,8 @@ Changes since v0.5.0. A minor release: stamps' leases follow evidence (ADR-0022)
 added. This engine still serves libraries that declare `kb_contract` 2.0 to 2.7 (ADR-0016).
 
 **Before you upgrade:**
+- **Coming from v0.4.0 or earlier?** Read v0.5.0's upgrade note below too: it moves the folders the
+  engine reads if `XDG_STATE_HOME` or `XDG_CONFIG_HOME` was set (ADR-0021).
 - **What you will see.** Asserted stamps get the full horizon, so due rechecks drop sharply (#238).
   The session-start nudge and the weekly report lead with assertion coverage (#239). A failed check
   demotes its stamp to the short lease until a passing restamp (#264).
